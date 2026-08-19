@@ -8,3 +8,4 @@ bcrypt==4.2.1
 PyJWT==2.10.1
 python-multipart==0.0.19
 websockets==14.1
+httpx==0.28.1

@@ -123,7 +123,7 @@ export default function ChatTab() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Message the peloton…"
+          placeholder="Message the peloton — @mention a rider"
           className="flex-1 bg-bg-primary border border-border-subtle rounded-full px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-volt/60"
           data-testid="chat-input"
         />

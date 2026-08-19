@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 2: Verified NEW push-notification behavior end-to-end. Backend Expo push register/unregister/test endpoints, idempotent upsert on (user_id, expo_push_token), auto-cleanup of DeviceNotRegistered tokens (real HTTP roundtrip to https://exp.host/--/api/v2/push/send with fake ExponentPushToken[TEST-DEVICE-abcdefghij]), auth guards on all 3 push endpoints, and targeted chat.mention WS routing (only mentioned user receives it; self-mention & unknown handle are no-ops). Coffee round still broadcasts coffee.round + chat.message to all connected clients. Frontend: notifications bell (data-testid=notifications-toggle) toggles to volt-yellow enabled state after grant_permissions, chat-input placeholder updated to 'Message the peloton — @mention a rider', and window.Notification is fired for both coffee.round and chat.mention when document is hidden. Regression flows (login, rides list, RSVP, chat, riders, coffee round) still green. 15/15 backend tests pass, all frontend assertions pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_push_and_mentions.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "send_expo_push relies on ordinal ordering of tickets vs. batch messages, which matches Expo's documented behavior — OK, but consider logging the full ticket response for debugging in production.",
+    "CORS is allow_origins=['*'] with allow_credentials=False — fine for a public demo, tighten for prod.",
+    "push_test returns {ok:false, detail:'No registered devices'} with HTTP 200; consider 404 for stricter semantics (minor)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_push_and_mentions.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100%"},
+  "test_credentials": "jb@glcc.club/president123, aroha@glcc.club/cycle123, sam@glcc.club/cycle123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing seeded users. Test push token 'ExponentPushToken[TEST-DEVICE-abcdefghij]' is auto-cleaned by Expo DeviceNotRegistered path.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Push infra is verified. If future iterations touch send_expo_push, re-run /app/backend/tests/test_push_and_mentions.py — it covers idempotency, validation, auth guards, real Expo call + DeviceNotRegistered cleanup, and @mention WS routing between two live WebSocket connections. Frontend browser-notification test requires page.context.grant_permissions(['notifications'], origin=REACT_APP_BACKEND_URL) BEFORE navigation, plus page.add_init_script that shims window.Notification and forces document.visibilityState='hidden'. Trigger the event as a DIFFERENT user (broadcast_except excludes the sender)."
+}

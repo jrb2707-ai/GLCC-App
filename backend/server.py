@@ -2,13 +2,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import re
 import asyncio
 import json
 import secrets
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Annotated
 
 import bcrypt
+import httpx
 import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -24,6 +27,11 @@ DB_NAME = os.environ["DB_NAME"]
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL_MIN = 60 * 24 * 7  # 7 days for a mobile app
+
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN") or None
+
+log = logging.getLogger("glcc.push")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -150,6 +158,7 @@ async def decode_token_ws(token: str) -> Optional[dict]:
 # ---------- WebSocket Manager ----------
 class ConnectionManager:
     def __init__(self):
+        # list of {"ws", "user"} — plus we track by user_id for targeted sends
         self.active: List[Dict[str, Any]] = []
         self.lock = asyncio.Lock()
 
@@ -162,18 +171,113 @@ class ConnectionManager:
         async with self.lock:
             self.active = [c for c in self.active if c["ws"] is not websocket]
 
+    async def _send(self, ws: WebSocket, payload: str) -> bool:
+        try:
+            await ws.send_text(payload)
+            return True
+        except Exception:
+            return False
+
     async def broadcast(self, event: dict):
         payload = json.dumps(event, default=str)
         stale = []
         for c in list(self.active):
-            try:
-                await c["ws"].send_text(payload)
-            except Exception:
+            ok = await self._send(c["ws"], payload)
+            if not ok:
+                stale.append(c["ws"])
+        for ws in stale:
+            await self.disconnect(ws)
+
+    async def send_user(self, user_id: str, event: dict):
+        payload = json.dumps(event, default=str)
+        stale = []
+        for c in list(self.active):
+            if str(c["user"].get("_id")) == str(user_id):
+                ok = await self._send(c["ws"], payload)
+                if not ok:
+                    stale.append(c["ws"])
+        for ws in stale:
+            await self.disconnect(ws)
+
+    async def broadcast_except(self, exclude_user_id: str, event: dict):
+        payload = json.dumps(event, default=str)
+        stale = []
+        for c in list(self.active):
+            if str(c["user"].get("_id")) == str(exclude_user_id):
+                continue
+            ok = await self._send(c["ws"], payload)
+            if not ok:
                 stale.append(c["ws"])
         for ws in stale:
             await self.disconnect(ws)
 
 manager = ConnectionManager()
+
+
+# ---------- Expo Push ----------
+async def send_expo_push(tokens: List[str], title: str, body: str, data: Optional[dict] = None) -> None:
+    """Send Expo Push messages in batches of 100. Removes DeviceNotRegistered tokens."""
+    tokens = [t for t in tokens if t and t.startswith("ExponentPushToken[")]
+    if not tokens:
+        return
+    messages = [
+        {"to": t, "title": title, "body": body, "data": data or {}, "sound": "default"}
+        for t in tokens
+    ]
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if EXPO_ACCESS_TOKEN:
+        headers["Authorization"] = f"Bearer {EXPO_ACCESS_TOKEN}"
+    async with httpx.AsyncClient(timeout=15.0) as h:
+        for start in range(0, len(messages), 100):
+            batch = messages[start : start + 100]
+            try:
+                r = await h.post(EXPO_PUSH_URL, json=batch, headers=headers)
+                r.raise_for_status()
+                payload = r.json()
+            except Exception as exc:
+                log.warning("Expo push failed: %s", exc)
+                continue
+            tickets = payload.get("data", [])
+            if isinstance(tickets, dict):
+                tickets = [tickets]
+            for token, ticket in zip([m["to"] for m in batch], tickets):
+                if ticket.get("status") == "error":
+                    err = (ticket.get("details") or {}).get("error")
+                    log.warning("Expo ticket error token=%s err=%s", token[-8:], err)
+                    if err == "DeviceNotRegistered":
+                        await db.push_tokens.delete_many({"expo_push_token": token})
+
+
+async def push_to_users(user_ids: List[str], title: str, body: str, data: Optional[dict] = None) -> None:
+    if not user_ids:
+        return
+    docs = await db.push_tokens.find({"user_id": {"$in": list(map(str, user_ids))}}).to_list(None)
+    tokens = [d["expo_push_token"] for d in docs]
+    if tokens:
+        await send_expo_push(tokens, title, body, data)
+
+
+async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: Optional[dict] = None) -> None:
+    docs = await db.push_tokens.find({"user_id": {"$ne": str(exclude_user_id)}}).to_list(None)
+    tokens = [d["expo_push_token"] for d in docs]
+    if tokens:
+        await send_expo_push(tokens, title, body, data)
+
+
+# ---------- Mention parsing ----------
+MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z][A-Za-z0-9_\-\.]*)")
+
+async def resolve_mentions(text: str) -> List[dict]:
+    """Return list of mentioned user docs. Matches on first-token lowercase of the rider's name."""
+    handles = {m.lower() for m in MENTION_RE.findall(text or "")}
+    if not handles:
+        return []
+    users: List[dict] = []
+    async for u in db.users.find({"status": "approved"}):
+        first = (u.get("name") or "").strip().split(" ")[0].lower()
+        if first and first in handles:
+            users.append(u)
+    return users
 
 # ---------- Models ----------
 class RegisterIn(BaseModel):
@@ -206,6 +310,14 @@ class CoffeeRoundIn(BaseModel):
 
 class ChatMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=800)
+
+class PushRegisterIn(BaseModel):
+    expo_push_token: str = Field(min_length=20)
+    platform: str = Field(pattern="^(ios|android|web)$")
+    project_id: Optional[str] = None
+
+class PushUnregisterIn(BaseModel):
+    expo_push_token: str = Field(min_length=20)
 
 class RideCreateIn(BaseModel):
     day: str
@@ -422,6 +534,13 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(get_current_user)
     payload_round = serialize_round(doc)
     await manager.broadcast({"type": "coffee.round", "round": payload_round})
     await manager.broadcast({"type": "chat.message", "message": serialize_message(system_msg)})
+    # Fire-and-forget Expo push to everyone except sender
+    asyncio.create_task(push_to_all_except(
+        str(user["_id"]),
+        "Coffee round ☕",
+        f"{user.get('name')} is buying — {coffee}",
+        {"type": "coffee.round", "round_id": str(result.inserted_id)},
+    ))
     return payload_round
 
 # ---------- Chat ----------
@@ -435,10 +554,11 @@ async def list_messages(user: dict = Depends(get_current_user)):
 
 @api.post("/chat/messages")
 async def post_message(body: ChatMessageIn, user: dict = Depends(get_current_user)):
+    text = body.text.strip()
     doc = {
         "user_id": str(user["_id"]),
         "name": user.get("name"),
-        "text": body.text.strip(),
+        "text": text,
         "system": False,
         "created_at": now_utc(),
     }
@@ -446,7 +566,72 @@ async def post_message(body: ChatMessageIn, user: dict = Depends(get_current_use
     doc["_id"] = r.inserted_id
     payload = serialize_message(doc)
     await manager.broadcast({"type": "chat.message", "message": payload})
+
+    # Resolve @mentions (skip self-mention)
+    mentioned = await resolve_mentions(text)
+    mention_user_ids = [str(m["_id"]) for m in mentioned if str(m["_id"]) != str(user["_id"])]
+    if mention_user_ids:
+        preview = text[:140]
+        # Targeted WS event (browser fallback)
+        for uid in mention_user_ids:
+            await manager.send_user(uid, {
+                "type": "chat.mention",
+                "message_id": payload["id"],
+                "from": user.get("name"),
+                "text": preview,
+            })
+        asyncio.create_task(push_to_users(
+            mention_user_ids,
+            f"{user.get('name')} mentioned you",
+            preview,
+            {"type": "chat.mention", "message_id": payload["id"]},
+        ))
     return payload
+
+# ---------- Push tokens ----------
+@api.post("/push/register")
+async def push_register(body: PushRegisterIn, user: dict = Depends(get_current_user)):
+    if not body.expo_push_token.startswith("ExponentPushToken["):
+        raise HTTPException(status_code=400, detail="Invalid Expo push token")
+    ts = now_utc()
+    await db.push_tokens.update_one(
+        {"user_id": str(user["_id"]), "expo_push_token": body.expo_push_token},
+        {
+            "$set": {
+                "platform": body.platform,
+                "project_id": body.project_id,
+                "updated_at": ts,
+                "last_error": None,
+            },
+            "$setOnInsert": {"created_at": ts},
+        },
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.delete("/push/unregister")
+async def push_unregister(body: PushUnregisterIn, user: dict = Depends(get_current_user)):
+    result = await db.push_tokens.delete_one(
+        {"user_id": str(user["_id"]), "expo_push_token": body.expo_push_token}
+    )
+    return {"ok": True, "deleted": result.deleted_count > 0}
+
+
+@api.post("/push/test")
+async def push_test(user: dict = Depends(get_current_user)):
+    """Send a test push to the current user's registered devices."""
+    docs = await db.push_tokens.find({"user_id": str(user["_id"])}).to_list(None)
+    tokens = [d["expo_push_token"] for d in docs]
+    if not tokens:
+        return {"ok": False, "detail": "No registered devices"}
+    await send_expo_push(
+        tokens,
+        "GLCC test ping",
+        "If you can read this, push is wired ✅",
+        {"type": "test"},
+    )
+    return {"ok": True, "sent": len(tokens)}
 
 # ---------- Weather (static demo) ----------
 @api.get("/weather")
@@ -531,6 +716,8 @@ async def seed():
     await db.rides.create_index("sort_key")
     await db.messages.create_index("created_at")
     await db.coffee_rounds.create_index("created_at")
+    await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
+    await db.push_tokens.create_index("expo_push_token")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "jb@glcc.club").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "president123")

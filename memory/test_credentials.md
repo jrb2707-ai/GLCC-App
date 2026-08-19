@@ -23,5 +23,14 @@ Backend seeded these accounts on startup. All passwords are for development only
 - `POST /api/auth/login` — returns `{ token, user }`
 - `GET  /api/auth/me` — requires `Authorization: Bearer <token>`
 
+## Push Notification Endpoints (Expo Push)
+- `POST   /api/push/register` — body `{ expo_push_token, platform, project_id? }` (auth required). `expo_push_token` must start with `ExponentPushToken[`.
+- `DELETE /api/push/unregister` — body `{ expo_push_token }` (auth required)
+- `POST   /api/push/test` — sends a test ping to the caller's registered devices
+
+### Push Triggers
+- **Coffee round** — every `POST /api/coffee/rounds` fires an Expo push to *all users except the sender*, plus the existing WebSocket broadcast. Web preview uses `new Notification(...)` (bell icon in the app header must be enabled).
+- **Chat @mention** — `POST /api/chat/messages` with text containing `@firstname` (case-insensitive, matches the rider's first name) triggers a targeted `chat.mention` WebSocket event to that rider and an Expo push to their devices. Self-mentions are skipped.
+
 ## WebSocket
-- `wss://<host>/api/ws?token=<JWT>` — broadcasts `chat.message`, `coffee.round`, `ride.updated`, `rider.updated`, `rider.pending`.
+- `wss://<host>/api/ws?token=<JWT>` — broadcasts `chat.message`, `chat.mention` (targeted), `coffee.round`, `ride.updated`, `rider.updated`, `rider.pending`.

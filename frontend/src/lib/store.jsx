@@ -8,6 +8,36 @@ export const useAuth = () => useContext(AuthCtx);
 const EventsCtx = createContext(null);
 export const useEvents = () => useContext(EventsCtx);
 
+// ---- Browser Notifications (Expo Push fallback for web preview) ----
+export function browserPushSupported() {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+export function browserPushPermission() {
+  if (!browserPushSupported()) return "unsupported";
+  return Notification.permission;
+}
+
+export async function requestBrowserPush() {
+  if (!browserPushSupported()) return "unsupported";
+  if (Notification.permission === "default") {
+    return await Notification.requestPermission();
+  }
+  return Notification.permission;
+}
+
+export function fireBrowserNotification(title, body, tag) {
+  if (!browserPushSupported()) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    // Skip if the tab is focused — the in-app toast is enough.
+    if (typeof document !== "undefined" && document.visibilityState === "visible") return;
+    new Notification(title, { body, tag, icon: "/favicon.ico" });
+  } catch (e) {
+    // ignore
+  }
+}
+
 export function AppProviders({ children }) {
   const [user, setUser] = useState(null);
   const [booted, setBooted] = useState(false);
@@ -49,6 +79,19 @@ export function AppProviders({ children }) {
             toast(`☕ ${data.round.rider_name} is buying a round`, {
               description: data.round.coffee,
             });
+            fireBrowserNotification(
+              "Coffee round ☕",
+              `${data.round.rider_name} — ${data.round.coffee}`,
+              "coffee-round"
+            );
+          }
+          if (data.type === "chat.mention") {
+            toast(`@${data.from} mentioned you`, { description: data.text });
+            fireBrowserNotification(
+              `${data.from} mentioned you`,
+              data.text,
+              "chat-mention"
+            );
           }
           if (data.type === "rider.pending") {
             toast(`New rider pending approval`, { description: data.rider.name });

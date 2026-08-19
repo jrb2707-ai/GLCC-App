@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bike, Coffee, Users, MessageSquare, LogOut } from "lucide-react";
-import { useAuth } from "../lib/store";
+import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff } from "lucide-react";
+import { useAuth, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { toast } from "sonner";
 import RidesTab from "./tabs/RidesTab";
 import CoffeeTab from "./tabs/CoffeeTab";
 import RidersTab from "./tabs/RidersTab";
@@ -17,6 +18,32 @@ const TABS = [
 export default function HomeShell() {
   const [tab, setTab] = useState("rides");
   const { user, logout } = useAuth();
+  const [perm, setPerm] = useState(browserPushPermission());
+
+  useEffect(() => {
+    setPerm(browserPushPermission());
+  }, []);
+
+  async function togglePush() {
+    if (!browserPushSupported()) {
+      toast.error("Your browser doesn't support notifications");
+      return;
+    }
+    if (perm === "granted") {
+      toast("Notifications are on — silence them from your browser settings");
+      return;
+    }
+    const next = await requestBrowserPush();
+    setPerm(next);
+    if (next === "granted") {
+      toast("Push notifications enabled", { description: "Coffee rounds and @mentions will ping you" });
+    } else if (next === "denied") {
+      toast.error("Notifications blocked — enable them in browser settings");
+    }
+  }
+
+  const bellEnabled = perm === "granted";
+  const BellIcon = bellEnabled ? Bell : BellOff;
 
   return (
     <div className="relative h-full w-full flex flex-col" data-testid="home-shell">
@@ -31,13 +58,27 @@ export default function HomeShell() {
             </span>
           )}
         </div>
-        <button
-          onClick={logout}
-          className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-text-secondary hover:text-accent-volt"
-          data-testid="logout-button"
-        >
-          <LogOut className="w-3.5 h-3.5" /> Exit
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={togglePush}
+            title={bellEnabled ? "Notifications on" : "Enable notifications"}
+            className={`p-1.5 rounded-full transition ${
+              bellEnabled
+                ? "text-accent-volt bg-accent-volt/10 border border-accent-volt/30"
+                : "text-text-secondary hover:text-accent-volt border border-transparent"
+            }`}
+            data-testid="notifications-toggle"
+          >
+            <BellIcon className="w-4 h-4" />
+          </button>
+          <button
+            onClick={logout}
+            className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-text-secondary hover:text-accent-volt"
+            data-testid="logout-button"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Exit
+          </button>
+        </div>
       </div>
 
       {/* Content */}
