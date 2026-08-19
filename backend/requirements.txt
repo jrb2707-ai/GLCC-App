@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+motor==3.6.0
+pymongo==4.9.2
+pydantic==2.10.3
+python-dotenv==1.0.1
+bcrypt==4.2.1
+PyJWT==2.10.1
+python-multipart==0.0.19
+websockets==14.1

@@ -1,0 +1,103 @@
+{
+  "project_identity": {
+    "name": "GLCC - Grey Lynn Cycle Club",
+    "tagline": "GLCC — Grey Lynn Cycle Club — 4th best cycle club in Grey Lynn",
+    "theme_archetype": "High-Contrast Kinetic Athleticism + Urban Kiwi Cafe Culture",
+    "emotional_tone": "Energetic, precise, tongue-in-cheek community pride, high-visibility tactical dark/light hybrid",
+    "target_platform": "Mobile Web App (React Native / Expo web preview with safe areas, native bottom tabs, bottom sheets)"
+  },
+  "color_system": {
+    "mode": "Dark Tactical Base with Vivid Hi-Vis Accents",
+    "palette": {
+      "background_primary": "#0D1117",
+      "background_secondary": "#161B22",
+      "background_card": "#21262D",
+      "border_subtle": "#30363D",
+      "border_active": "#58A6FF",
+      "accent_hivis_volt": "#D4FF00",
+      "accent_hivis_orange": "#FF5722",
+      "accent_coffee_roast": "#E67E22",
+      "text_primary": "#F0F6FC",
+      "text_secondary": "#8B949E",
+      "text_muted": "#6E7681",
+      "status_going_green": "#2EA043",
+      "status_maybe_amber": "#D29922",
+      "status_cant_red": "#F85149"
+    },
+    "surface_treatment": {
+      "nav_header": "backdrop-blur-xl bg-[#0D1117]/85 border-b border-[#30363D]",
+      "bottom_tab_bar": "backdrop-blur-2xl bg-[#161B22]/95 border-t border-[#30363D]",
+      "ride_card": "bg-[#161B22] border border-[#30363D] hover:border-[#D4FF00]/50 transition-all rounded-2xl p-5 shadow-lg",
+      "coffee_hero_card": "relative overflow-hidden bg-gradient-to-br from-[#2C1E18] to-[#0D1117] border border-[#E67E22]/30 rounded-3xl p-6"
+    }
+  },
+  "typography": {
+    "font_families": {
+      "heading": "Barlow Condensed, Outfit, sans-serif",
+      "body": "Inter, DM Sans, sans-serif",
+      "mono_stats": "JetBrains Mono, Source Code Pro, monospace"
+    },
+    "scale": {
+      "h1_hero": "text-4xl font-extrabold tracking-tight uppercase",
+      "h2_section": "text-2xl font-bold tracking-tight uppercase",
+      "h3_card_title": "text-xl font-bold tracking-normal",
+      "body_base": "text-base leading-relaxed font-normal",
+      "caption_mono": "text-xs font-mono uppercase tracking-widest text-[#8B949E]"
+    }
+  },
+  "layout_and_navigation": {
+    "structure": "Mobile-First Bottom Tab Container (Rides | Coffee | Riders | Chat)",
+    "safe_areas": "Top header with weather status widget + profile drawer toggle; Bottom fixed tab bar with safe-area padding",
+    "bento_grid_specs": {
+      "dashboard_mode": "High Density Single & Double Column Grid (gap-4)",
+      "card_padding": "p-5 internal padding strictly required to prevent text-border collision"
+    }
+  },
+  "image_urls": {
+    "espresso_hero": "https://images.unsplash.com/photo-1613856204847-7f0060f81b3e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwyfHxlc3ByZXNzbyUyMGN1cCUyMGNhZmUlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc4NzE4MDk3MXww&ixlib=rb-4.1.0&q=85",
+    "peloton_header": "https://images.unsplash.com/photo-1758300620054-f42cf6e5458f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHw0fHxyb2FkJTIwY3ljbGlzdCUyMGdyb3VwJTIwcGVsb3RvbnxlbnwwfHx8fDE3ODcxODA5NzF8MA&ixlib=rb-4.1.0&q=85",
+    "cyclist_close_up": "https://images.pexels.com/photos/18513892/pexels-photo-18513892.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "cafe_round_bg": "https://images.pexels.com/photos/33833717/pexels-photo-33833717.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "auckland_city_vibe": "https://images.pexels.com/photos/2130162/pexels-photo-2130162.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  },
+  "component_specifications": {
+    "rides_tab": {
+      "cards": "Display Day/Date badge, Ride Name, Distance (km), Elevation (m), Pace (28-31 kph), Cafe stop, Count going avatar stack",
+      "ride_detail_modal": "Stylized SVG Route map elevation profile, Meet time, Departure location pin, RSVP button trio (Going / Maybe / Can't), Cafe 'Send a Coffee Round' quick action, Going Riders grid"
+    },
+    "coffee_order_tab": {
+      "hero": "Dramatic dark coffee image background with 'SEND A ROUND' CTA, 'I'm at the Café' geolocation ping",
+      "drink_selector": "Interactive quick grid with options (Flat White, Oat FW, Long Black, Espresso, Cappuccino, Cold Brew)",
+      "live_feed": "Real-time stream of recent bought rounds with buyer avatar, timestamp, drink name, and cheer counter"
+    },
+    "riders_tab": {
+      "admin_bar": "'View As' persona switcher (El Presidente / Ride Captain / Member / Guest) + 'Register Rider' button",
+      "pending_approval": "High-visibility banner for pending riders with 1-click Approve/Deny buttons",
+      "directory": "Grid of Rider Cards (Photo avatar, Name, Role badge e.g. 'Ride Captain', Coffee preference, Admin badge)"
+    },
+    "chat_tab": {
+      "header": "Live Auckland Weather Header widget ('14°C · Partly cloudy · Auckland')",
+      "messages": "Differentiated system coffee-round announcement cards + user message bubbles with timestamp & avatar",
+      "input": "Sticky bottom chat input with image attachment & send button"
+    },
+    "toast_notifications": {
+      "style": "Sliding top banner dark card with Hi-Vis Volt badge ('GLCC · now') powered by Sonner"
+    }
+  },
+  "motion_and_microinteractions": {
+    "library": "framer-motion + lucide-react icons",
+    "transitions": "Spring animations for tab switches, press state scale (scale: 0.97) on primary CTA buttons, smooth height transitions for ride detail expansion",
+    "prefers_reduced_motion": "Respect system accessibility settings"
+  },
+  "testing_and_accessibility": {
+    "data_testid_rule": "ALL interactive components, buttons, tab bars, input fields, RSVP controls, admin action triggers MUST include explicit kebab-case `data-testid` attributes (e.g. data-testid=\"tab-rides\", data-testid=\"rsvp-going-button\", data-testid=\"coffee-send-round-button\")",
+    "contrast_standard": "All text elements meet WCAG AA (4.5:1+) against dark backgrounds using bright contrast values (#F0F6FC for headers, #D4FF00 for primary accents)."
+  },
+  "instructions_to_main_agent": [
+    "Build a mobile-first UI with responsive container frames (max-w-md mx-auto relative min-h-screen bg-[#0D1117]) that feels like a native iOS/Android cycling app.",
+    "Do NOT use generic light beige or plain Inter white defaults. Follow the Dark Tactical Athletic + Volt Accent identity strictly.",
+    "Ensure WebSockets or mock real-time events propagate instant UI updates across Chat and Coffee feed.",
+    "Include 'View as' switcher to test Admin vs Member roles smoothly.",
+    "Apply `data-testid` to every button, card, input, and modal trigger."
+  ]
+}

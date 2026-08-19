@@ -1,0 +1,26 @@
+{
+  "summary": "First-finish smoke test of GLCC mobile web app. Backend REST + WebSocket verified, then UI smoke-tested through auth, rides, RSVP, coffee round, chat, riders + pending approval. All acceptance criteria pass.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login with jb@glcc.club/president123 returns JWT + user",
+    "POST /api/auth/login with wrong password returns 401 {detail:'Invalid email or password'} and UI surfaces exact string in [data-testid=auth-error]",
+    "POST /api/auth/register creates new rider, returns token; new rider appears in /api/riders 'pending' list",
+    "GET /api/rides returns 5 seeded rides (Zone 2 Friday, Struggle Street, Cafe Cruise, Chaingang Tuesday, Hill Reps Waiatarua). UI renders 5 ride-card-* tiles",
+    "POST /api/rides/{id}/rsvp {status:'going'} persists (verified via GET, rsvps object contains {user_id:'going'}). UI RSVP-going click works",
+    "POST /api/chat/messages returns message; GET /api/chat/messages lists it; UI chat-input + chat-send appends visible message",
+    "POST /api/coffee/rounds creates round AND auto-posts a matching system chat message ('☕ JB is buying a round — Flat White'); UI coffee modal + option + send flow works, coffee-round-* tiles appear",
+    "GET /api/weather returns Auckland 14°C Partly cloudy; UI Chat tab shows 'Auckland' header",
+    "GET /api/riders returns 5 approved + pending. UI shows 5 rider-card-*, EL PREZ badge on JB, ADMIN badge on Aroha (visible in screenshot; badges rendered via CSS uppercase from source 'El Prez'/'Admin')",
+    "Profile modal opens on rider tap (data-testid=profile-modal)",
+    "Pending approval block visible with 1 pending rider (Test Rider) and approve-{id} button",
+    "WebSocket wss://<host>/api/ws?token=<JWT> connects, emits 'hello' event on open",
+    "WS broadcasts 'chat.message' on POST /api/chat/messages",
+    "WS broadcasts BOTH 'coffee.round' and 'chat.message' on POST /api/coffee/rounds"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Substring check 'EL PREZ'/'ADMIN' via page.text_content('body') returned False, but the screenshot confirms both badges render correctly — source text is lowercase and rendered via CSS text-transform:uppercase. Not a bug. Real-time WS broadcasts verified end-to-end without needing retry."
+}

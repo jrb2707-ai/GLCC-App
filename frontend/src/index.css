@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #05070b;
+}
+
+body {
+  font-family: "Inter", "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #f0f6fc;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-heading {
+  font-family: "Barlow Condensed", "Outfit", sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.font-mono-stat {
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: 0.02em;
+}
+
+/* Hide scrollbars inside the phone frame */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Subtle grain overlay */
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.25) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+/* Route map hatch pattern */
+.route-hatch {
+  background-image: repeating-linear-gradient(
+      135deg,
+      rgba(212, 255, 0, 0.08) 0px,
+      rgba(212, 255, 0, 0.08) 2px,
+      transparent 2px,
+      transparent 12px
+    ),
+    linear-gradient(160deg, #0f1a12 0%, #0d1117 100%);
+}
+
+/* Volt glow ring */
+.volt-ring {
+  box-shadow: 0 0 0 1px rgba(212, 255, 0, 0.35), 0 0 24px rgba(212, 255, 0, 0.18);
+}
+
+/* Toast slide */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-slide-down {
+  animation: slide-down 220ms ease-out;
+}
+
+@keyframes pulse-volt {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 255, 0, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(212, 255, 0, 0);
+  }
+}
+.pulse-volt {
+  animation: pulse-volt 1.8s infinite;
+}
