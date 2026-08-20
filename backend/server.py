@@ -155,6 +155,95 @@ async def decode_token_ws(token: str) -> Optional[dict]:
     except Exception:
         return None
 
+# ---------- Weather (OpenWeather) ----------
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
+WEATHER_LAT = os.environ.get("WEATHER_LAT", "-36.8485")
+WEATHER_LON = os.environ.get("WEATHER_LON", "174.7633")
+_weather_cache = {"data": None, "at": None}
+_WEATHER_TTL = timedelta(minutes=10)
+
+
+def _wind_dir(deg: float) -> str:
+    dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+    idx = int((deg % 360) / 22.5 + 0.5) % 16
+    return dirs[idx]
+
+
+def _describe_wind(kph: float) -> str:
+    if kph < 5: return "calm"
+    if kph < 12: return "light"
+    if kph < 20: return "moderate"
+    if kph < 30: return "brisk"
+    return "strong"
+
+
+async def _fetch_openweather() -> Optional[dict]:
+    if not OPENWEATHER_API_KEY:
+        return None
+    base = "https://api.openweathermap.org/data/2.5"
+    params = {"lat": WEATHER_LAT, "lon": WEATHER_LON, "units": "metric", "appid": OPENWEATHER_API_KEY}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as h:
+            cur_r = await h.get(f"{base}/weather", params=params)
+            cur_r.raise_for_status()
+            cur = cur_r.json()
+            fc_r = await h.get(f"{base}/forecast", params={**params, "cnt": 2})
+            fc_r.raise_for_status()
+            fc = fc_r.json()
+    except Exception as exc:
+        log.warning("OpenWeather fetch failed: %s", exc)
+        return None
+
+    main = cur.get("main", {})
+    weather_arr = cur.get("weather", [{}])
+    wind = cur.get("wind", {})
+    wind_ms = wind.get("speed") or 0
+    wind_kph = round(wind_ms * 3.6)
+    wind_deg = wind.get("deg") or 0
+    condition = (weather_arr[0].get("description") or "").strip().capitalize()
+    icon = weather_arr[0].get("icon")
+
+    pops = [entry.get("pop", 0) for entry in fc.get("list", [])[:2]]
+    rain_chance = round(max(pops) * 100) if pops else 0
+
+    return {
+        "location": cur.get("name") or "Auckland",
+        "temp_c": round(main.get("temp", 0)),
+        "feels_like_c": round(main.get("feels_like", 0)),
+        "humidity": main.get("humidity"),
+        "condition": condition or "Unknown",
+        "icon": icon,
+        "wind": f"{_describe_wind(wind_kph)} {_wind_dir(wind_deg)}",
+        "wind_kph": wind_kph,
+        "rain_chance": rain_chance,
+        "source": "openweather",
+    }
+
+
+async def get_weather() -> dict:
+    now = now_utc()
+    cached = _weather_cache["data"]
+    at = _weather_cache["at"]
+    if cached and at and (now - at) < _WEATHER_TTL:
+        return cached
+    fresh = await _fetch_openweather()
+    if fresh:
+        _weather_cache["data"] = fresh
+        _weather_cache["at"] = now
+        return fresh
+    # Fallback: last cached, else safe static
+    return cached or {
+        "location": "Auckland",
+        "temp_c": 14,
+        "condition": "Partly cloudy",
+        "wind": "light SW",
+        "wind_kph": 10,
+        "rain_chance": 10,
+        "source": "fallback",
+    }
+
+
 # ---------- WebSocket Manager ----------
 class ConnectionManager:
     def __init__(self):
@@ -636,13 +725,7 @@ async def push_test(user: dict = Depends(get_current_user)):
 # ---------- Weather (static demo) ----------
 @api.get("/weather")
 async def weather():
-    return {
-        "location": "Auckland",
-        "temp_c": 14,
-        "condition": "Partly cloudy",
-        "wind": "light SW",
-        "rain_chance": 10,
-    }
+    return await get_weather()
 
 # ---------- WebSocket ----------
 @app.websocket("/api/ws")
