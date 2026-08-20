@@ -1,18 +1,97 @@
 import React, { useState } from "react";
 import { useAuth } from "../lib/store";
-import { COFFEES, IMG } from "../lib/util";
-import { formatDetail } from "../lib/api";
+import { COFFEES } from "../lib/util";
+import { api, formatDetail } from "../lib/api";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
+
+function ForgotPasswordModal({ initialEmail, onClose }) {
+  const [email, setEmail] = useState(initialEmail || "");
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!email.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await api.post("/auth/forgot-password", { email: email.trim() });
+      setSent(true);
+    } catch (er) {
+      toast.error(formatDetail(er));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="absolute inset-0 z-40 bg-black/70 flex items-end" data-testid="forgot-password-modal">
+      <div className="w-full bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
+        <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Forgot password</div>
+        <h3 className="font-heading text-2xl font-black uppercase mt-1">Reset by email</h3>
+        {sent ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-text-secondary leading-relaxed" data-testid="forgot-sent-message">
+              If <span className="text-text-primary font-semibold">{email}</span> is on file, a reset link is on its way. Check your inbox (and spam) — the link expires in 60 minutes.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl bg-accent-volt text-black font-bold uppercase tracking-widest text-xs"
+              data-testid="forgot-done"
+            >
+              Got it
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="mt-4 space-y-3">
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Enter the email you signed up with and we&apos;ll send you a link to set a new password.
+            </p>
+            <input
+              type="email"
+              required
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-bg-primary border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-volt/60"
+              data-testid="forgot-email"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-3 rounded-xl"
+                data-testid="forgot-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !email.trim()}
+                className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-3 rounded-xl disabled:opacity-50"
+                data-testid="forgot-submit"
+              >
+                {submitting ? "Sending…" : "Send link"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AuthScreen() {
   const { login, register } = useAuth();
   const [mode, setMode] = useState("login"); // login | register
-  const [email, setEmail] = useState("jb@glcc.club");
-  const [password, setPassword] = useState("president123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [coffee, setCoffee] = useState("Medium Flat White");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
@@ -147,6 +226,17 @@ export default function AuthScreen() {
             {loading ? "…" : mode === "login" ? "Enter Clubhouse" : "Request to Join"}
           </button>
 
+          {mode === "login" && (
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              className="w-full text-center text-[11px] uppercase tracking-widest font-mono-stat text-text-secondary hover:text-brand-accent underline underline-offset-4"
+              data-testid="forgot-password-link"
+            >
+              Forgot password?
+            </button>
+          )}
+
           {mode === "register" && (
             <p className="text-[10px] text-text-muted uppercase tracking-widest font-mono-stat text-center">
               An admin will approve your rider profile
@@ -154,6 +244,9 @@ export default function AuthScreen() {
           )}
         </form>
       </div>
+      {forgotOpen && (
+        <ForgotPasswordModal initialEmail={email} onClose={() => setForgotOpen(false)} />
+      )}
     </div>
   );
 }

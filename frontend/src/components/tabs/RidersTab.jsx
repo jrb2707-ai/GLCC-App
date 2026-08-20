@@ -4,8 +4,174 @@ import { useAuth, useEvents } from "../../lib/store";
 import { COFFEES } from "../../lib/util";
 import Avatar from "../Avatar";
 import { resizeAvatarFile } from "../../lib/image";
-import { Check, X, Shield, Trash2, UserPlus, Camera } from "lucide-react";
+import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail } from "lucide-react";
 import { toast } from "sonner";
+
+function ChangeEmailBlock() {
+  const { user, refreshMe } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (submitting || !current || !newEmail.trim()) return;
+    setSubmitting(true);
+    try {
+      await api.post("/auth/change-email", { current_password: current, new_email: newEmail.trim() });
+      toast("Email updated");
+      setCurrent(""); setNewEmail("");
+      setOpen(false);
+      await refreshMe();
+    } catch (e) {
+      toast.error(formatDetail(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-2 w-full flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold text-text-secondary border border-border-subtle rounded-xl py-2.5 hover:border-accent-volt/40 hover:text-brand-accent"
+        data-testid="change-email-open"
+      >
+        <Mail className="w-3.5 h-3.5" /> Change email
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-2 bg-bg-primary border border-border-subtle rounded-xl p-3" data-testid="change-email-block">
+      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">Change email</div>
+      <div className="text-[11px] text-text-secondary">Current: <span className="text-text-primary">{user.email || "—"}</span></div>
+      <input
+        type="password"
+        placeholder="Current password"
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+        className="w-full bg-bg-secondary border border-border-subtle rounded-lg px-3 py-2 text-sm"
+        data-testid="change-email-current-password"
+      />
+      <input
+        type="email"
+        placeholder="New email"
+        value={newEmail}
+        onChange={(e) => setNewEmail(e.target.value)}
+        className="w-full bg-bg-secondary border border-border-subtle rounded-lg px-3 py-2 text-sm"
+        data-testid="change-email-new"
+      />
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={() => { setOpen(false); setCurrent(""); setNewEmail(""); }}
+          className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2 rounded-lg"
+          data-testid="change-email-cancel"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={submitting || !current || !newEmail.trim()}
+          className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2 rounded-lg disabled:opacity-50"
+          data-testid="change-email-submit"
+        >
+          {submitting ? "…" : "Update"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChangePasswordBlock() {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (submitting) return;
+    if (next.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (next !== confirm) {
+      toast.error("Passwords don't match");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post("/auth/change-password", { current_password: current, new_password: next });
+      toast("Password updated");
+      setCurrent(""); setNext(""); setConfirm("");
+      setOpen(false);
+    } catch (e) {
+      toast.error(formatDetail(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-3 w-full flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold text-text-secondary border border-border-subtle rounded-xl py-2.5 hover:border-accent-volt/40 hover:text-brand-accent"
+        data-testid="change-password-open"
+      >
+        <KeyRound className="w-3.5 h-3.5" /> Change password
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2 bg-bg-primary border border-border-subtle rounded-xl p-3" data-testid="change-password-block">
+      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">Change password</div>
+      <input
+        type="password"
+        placeholder="Current password"
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+        className="w-full bg-bg-secondary border border-border-subtle rounded-lg px-3 py-2 text-sm"
+        data-testid="change-current-password"
+      />
+      <input
+        type="password"
+        placeholder="New password (min 8)"
+        value={next}
+        onChange={(e) => setNext(e.target.value)}
+        className="w-full bg-bg-secondary border border-border-subtle rounded-lg px-3 py-2 text-sm"
+        data-testid="change-new-password"
+      />
+      <input
+        type="password"
+        placeholder="Confirm new password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        className="w-full bg-bg-secondary border border-border-subtle rounded-lg px-3 py-2 text-sm"
+        data-testid="change-confirm-password"
+      />
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={() => { setOpen(false); setCurrent(""); setNext(""); setConfirm(""); }}
+          className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2 rounded-lg"
+          data-testid="change-password-cancel"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={submitting || !current || !next}
+          className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2 rounded-lg disabled:opacity-50"
+          data-testid="change-password-submit"
+        >
+          {submitting ? "…" : "Update"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ProfileModal({ rider, onClose, onSaved }) {
   const { user, refreshMe } = useAuth();
@@ -189,6 +355,13 @@ function ProfileModal({ rider, onClose, onSaved }) {
           </button>
         </div>
 
+        {isMe && user.status === "approved" && (
+          <>
+            <ChangeEmailBlock />
+            <ChangePasswordBlock />
+          </>
+        )}
+
         {user.is_admin && !isMe && (
           <div className="mt-5 pt-4 border-t border-border-subtle">
             <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">Admin actions</div>
@@ -201,6 +374,26 @@ function ProfileModal({ rider, onClose, onSaved }) {
               {isPresident && rider.is_admin && !rider.is_president && (
                 <button onClick={() => act("remove_admin")} className="text-xs uppercase tracking-widest bg-bg-primary border border-border-subtle text-text-secondary px-3 py-2 rounded-lg" data-testid="admin-remove">
                   Remove admin
+                </button>
+              )}
+              {rider.email && rider.status !== "invited" && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data } = await api.post("/riders/reset-password", { target_id: rider.id });
+                      if (data.email_sent) {
+                        toast("Reset link sent", { description: `Emailed to ${data.sent_to}` });
+                      } else {
+                        toast.error("Email service unavailable", { description: "Check Resend configuration" });
+                      }
+                    } catch (e) {
+                      toast.error(formatDetail(e));
+                    }
+                  }}
+                  className="text-xs uppercase tracking-widest bg-bg-primary border border-border-subtle text-text-secondary px-3 py-2 rounded-lg hover:border-accent-volt/40 hover:text-brand-accent"
+                  data-testid="admin-reset-password"
+                >
+                  <KeyRound className="inline w-3 h-3 mr-1" /> Send reset link
                 </button>
               )}
               {!rider.is_president && (

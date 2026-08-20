@@ -1,12 +1,36 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 import { AppProviders, useAuth } from "./lib/store";
 import PhoneFrame from "./components/PhoneFrame";
 import AuthScreen from "./components/AuthScreen";
 import HomeShell from "./components/HomeShell";
+import ResetPasswordScreen from "./components/ResetPasswordScreen";
+
+function useResetToken() {
+  const [state, setState] = useState(() => {
+    if (typeof window === "undefined") return { token: null };
+    const url = new URL(window.location.href);
+    if (url.pathname === "/reset-password" && url.searchParams.get("token")) {
+      return { token: url.searchParams.get("token") };
+    }
+    return { token: null };
+  });
+  const clear = () => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", "/");
+    }
+    setState({ token: null });
+  };
+  return [state.token, clear];
+}
 
 function Gate() {
   const { user, booted } = useAuth();
+  const [resetToken, clearReset] = useResetToken();
+  useEffect(() => {}, []);
+  if (resetToken) {
+    return <ResetPasswordScreen token={resetToken} onDone={clearReset} />;
+  }
   if (!booted) {
     return (
       <div className="relative h-full w-full overflow-hidden" data-testid="app-loading">

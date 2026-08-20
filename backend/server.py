@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 import bcrypt
 import httpx
 import jwt
+import resend
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, status
@@ -34,6 +35,14 @@ ACCESS_TOKEN_TTL_MIN = 60 * 24 * 7  # 7 days for a mobile app
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN") or None
+
+# ---------- Resend Email ----------
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "no-reply@greylynncc.com")
+PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "https://greylynncc.com").rstrip("/")
+PASSWORD_RESET_TTL_MIN = 60  # 1-hour token expiry
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 log = logging.getLogger("glcc.push")
 
@@ -434,6 +443,24 @@ class PushRegisterIn(BaseModel):
 class PushUnregisterIn(BaseModel):
     expo_push_token: str = Field(min_length=20)
 
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=20)
+    password: str = Field(min_length=8)
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+
+class ChangeEmailIn(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_email: EmailStr
+
+class AdminResetPasswordIn(BaseModel):
+    target_id: str
+
 class RideCreateIn(BaseModel):
     day: str
     date: str
@@ -449,6 +476,11 @@ class RideCreateIn(BaseModel):
 # ---------- App ----------
 app = FastAPI(title="GLCC API")
 api = APIRouter(prefix="/api")
+
+# Kubernetes liveness/readiness probe — must return 200 at root path.
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -787,6 +819,147 @@ async def login(body: LoginIn):
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return serialize_rider(user)
+
+
+# ---------- Password reset (Resend email) ----------
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+async def _send_reset_email(*, to_email: str, name: str, link: str) -> bool:
+    """Send the reset email via Resend. Returns True on success, False otherwise. Never raises."""
+    if not RESEND_API_KEY:
+        log.warning("RESEND_API_KEY not set — skipping email send")
+        return False
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#0b0d10;padding:32px 16px;color:#e6edf3">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;background:#12151a;border-radius:20px;border:1px solid #2a2e36">
+        <tr><td style="padding:28px 28px 8px 28px">
+          <div style="font-family:Impact,'Arial Black',sans-serif;font-size:32px;letter-spacing:2px;color:#D4FF00">GLCC</div>
+          <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#8b949e;margin-top:2px">Grey Lynn Cycle Club</div>
+        </td></tr>
+        <tr><td style="padding:20px 28px">
+          <h1 style="font-size:22px;color:#e6edf3;margin:0 0 8px 0">Reset your password</h1>
+          <p style="color:#c9d1d9;line-height:1.5;margin:0 0 20px 0">Kia ora {name or 'rider'} — tap the button below to set a new password for your GLCC account. This link expires in {PASSWORD_RESET_TTL_MIN} minutes.</p>
+          <a href="{link}" style="display:inline-block;background:#D4FF00;color:#0b0d10;font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:13px;padding:14px 24px;border-radius:12px;text-decoration:none">Reset password</a>
+          <p style="color:#8b949e;font-size:12px;line-height:1.5;margin:24px 0 0 0">If the button doesn&#39;t work, paste this link into your browser:<br><a href="{link}" style="color:#D4FF00;word-break:break-all">{link}</a></p>
+          <p style="color:#8b949e;font-size:12px;line-height:1.5;margin:20px 0 0 0">Didn&#39;t request this? Ignore this email — your password stays the same.</p>
+        </td></tr>
+        <tr><td style="padding:16px 28px 28px 28px;border-top:1px solid #2a2e36">
+          <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#6e7681">GLCC · 4th best cycle club in Grey Lynn</div>
+        </td></tr>
+      </table>
+    </div>"""
+    text = f"Reset your GLCC password: {link} (expires in {PASSWORD_RESET_TTL_MIN} minutes). If you didn't request this, ignore this email."
+    params = {
+        "from": f"GLCC <{SENDER_EMAIL}>",
+        "to": [to_email],
+        "subject": "Reset your GLCC password",
+        "html": html,
+        "text": text,
+    }
+    try:
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        log.info("resend reset email sent: %s", result.get("id") if isinstance(result, dict) else result)
+        return True
+    except Exception as e:
+        log.error("resend send failed: %s", e)
+        return False
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordIn):
+    """Always returns success to prevent email enumeration. Emails are sent only for real,
+    non-invited users with a password_hash on file."""
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    generic_ok = {"ok": True, "message": "If that email is on file, a reset link is on its way."}
+    if not user or not user.get("password_hash"):
+        return generic_ok
+    # Invalidate any pending reset tokens for this user
+    await db.password_resets.delete_many({"user_id": str(user["_id"])})
+    raw_token = secrets.token_urlsafe(32)
+    await db.password_resets.insert_one({
+        "user_id": str(user["_id"]),
+        "token_hash": _hash_token(raw_token),
+        "expires_at": now_utc() + timedelta(minutes=PASSWORD_RESET_TTL_MIN),
+        "used_at": None,
+        "created_at": now_utc(),
+    })
+    link = f"{PUBLIC_APP_URL}/reset-password?token={raw_token}"
+    # Fire-and-forget email so the response stays fast + timing-safe
+    asyncio.create_task(_send_reset_email(to_email=email, name=user.get("name") or "", link=link))
+    return generic_ok
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordIn):
+    row = await db.password_resets.find_one({"token_hash": _hash_token(body.token)})
+    if not row or row.get("used_at") is not None:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has already been used")
+    expires_at = row.get("expires_at")
+    if isinstance(expires_at, datetime):
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now_utc():
+            raise HTTPException(status_code=400, detail="This reset link has expired — request a new one")
+    try:
+        oid = ObjectId(row["user_id"])
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+    await db.users.update_one({"_id": oid}, {"$set": {"password_hash": hash_password(body.password)}})
+    await db.password_resets.update_one({"_id": row["_id"]}, {"$set": {"used_at": now_utc()}})
+    # Nuke any other unused tokens for that user
+    await db.password_resets.delete_many({"user_id": row["user_id"], "used_at": None})
+    return {"ok": True}
+
+@api.post("/auth/change-password")
+async def change_password(body: ChangePasswordIn, user: dict = Depends(require_approved)):
+    if not user.get("password_hash") or not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from the current one")
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.new_password)}})
+    return {"ok": True}
+
+@api.post("/auth/change-email")
+async def change_email(body: ChangeEmailIn, user: dict = Depends(require_approved)):
+    if not user.get("password_hash") or not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    new_email = body.new_email.lower().strip()
+    if new_email == (user.get("email") or "").lower():
+        raise HTTPException(status_code=400, detail="This is already your email")
+    clash = await db.users.find_one({"email": new_email, "_id": {"$ne": user["_id"]}})
+    if clash:
+        raise HTTPException(status_code=400, detail="That email is already in use")
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"email": new_email}})
+    updated = await db.users.find_one({"_id": user["_id"]})
+    await manager.broadcast({"type": "rider.updated", "rider": serialize_rider(updated)})
+    return {"ok": True, "user": serialize_rider(updated, viewer=updated)}
+
+@api.post("/riders/reset-password")
+async def admin_reset_password(body: AdminResetPasswordIn, admin: dict = Depends(require_admin)):
+    """Admin sends a password-reset email to a rider on their behalf."""
+    try:
+        oid = ObjectId(body.target_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rider id")
+    target = await db.users.find_one({"_id": oid})
+    if not target:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    if not target.get("email"):
+        raise HTTPException(status_code=400, detail="This rider has no email on file yet — ask them to self-register first")
+    await db.password_resets.delete_many({"user_id": str(oid)})
+    raw_token = secrets.token_urlsafe(32)
+    await db.password_resets.insert_one({
+        "user_id": str(oid),
+        "token_hash": _hash_token(raw_token),
+        "expires_at": now_utc() + timedelta(minutes=PASSWORD_RESET_TTL_MIN),
+        "used_at": None,
+        "created_at": now_utc(),
+        "created_by_admin": str(admin["_id"]),
+    })
+    link = f"{PUBLIC_APP_URL}/reset-password?token={raw_token}"
+    sent = await _send_reset_email(to_email=target["email"], name=target.get("name") or "", link=link)
+    return {"ok": True, "email_sent": sent, "sent_to": target["email"]}
+
 
 # ---------- Riders ----------
 @api.get("/riders")
@@ -1143,6 +1316,9 @@ async def seed():
     await db.coffee_rounds.create_index("created_at", expireAfterSeconds=3600)
     await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
     await db.push_tokens.create_index("expo_push_token")
+    # Auto-delete used/expired password reset tokens
+    await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_resets.create_index("token_hash", unique=True)
 
     admin_email = os.environ.get("ADMIN_EMAIL", "jb@glcc.club").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Roenick2707")
