@@ -211,7 +211,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
       const body = isMe
         ? { name, bio, coffee, photo }
-        : { name, role, bio, coffee, photo };
+        : { name, role, bio, photo };
       const { data } = await api.patch(url, body);
       if (isMe) await refreshMe();
       onSaved(data);
@@ -315,24 +315,26 @@ function ProfileModal({ rider, onClose, onSaved }) {
               className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm resize-none"
               data-testid="profile-bio"
             />
-            <div>
-              <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted mb-1">Coffee</div>
-              <div className="grid grid-cols-2 gap-2">
-                {COFFEES.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCoffee(c)}
-                    className={`text-left px-3 py-2 rounded-lg border text-xs ${
-                      coffee === c
-                        ? "bg-accent-volt/15 border-accent-volt text-brand-accent"
-                        : "bg-bg-primary border-border-subtle text-text-secondary"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
+            {isMe && (
+              <div>
+                <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted mb-1">Coffee</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {COFFEES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCoffee(c)}
+                      className={`text-left px-3 py-2 rounded-lg border text-xs ${
+                        coffee === c
+                          ? "bg-accent-volt/15 border-accent-volt text-brand-accent"
+                          : "bg-bg-primary border-border-subtle text-text-secondary"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

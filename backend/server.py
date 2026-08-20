@@ -1013,7 +1013,8 @@ async def admin_update_rider(rider_id: str, body: ProfileUpdateIn, admin: dict =
         oid = ObjectId(rider_id)
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid rider id")
-    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "role", "bio", "coffee", "photo"}}
+    # Coffee is personal — admins can update name/role/bio/photo but not another rider's coffee order.
+    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "role", "bio", "photo"}}
     if not update:
         target = await db.users.find_one({"_id": oid})
         return serialize_rider(target)
