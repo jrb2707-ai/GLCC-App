@@ -77,7 +77,7 @@ export default function App() {
           GLCC · 4th best cycle club in Grey Lynn
         </div>
       </div>
-      <div className="sm:hidden">
+      <div className="sm:hidden min-h-screen w-full" style={{ background: "var(--glcc-shell-bg)" }}>
         <PhoneFrame>
           <Gate />
         </PhoneFrame>

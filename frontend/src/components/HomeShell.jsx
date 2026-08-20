@@ -55,7 +55,7 @@ export default function HomeShell() {
       <div className="pt-9 pb-3 px-5 flex items-center justify-between border-b border-border-subtle bg-bg-primary/80 backdrop-blur">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent-pink" />
-          <span className="font-heading text-xl font-black uppercase tracking-wider">GLCC</span>
+          <span className="font-heading text-xl font-black uppercase tracking-wider">GLCC.</span>
           {user?.is_admin && (
             <span className="ml-1 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30">
               {user.is_president ? "El Prez" : "Admin"}

@@ -147,9 +147,13 @@ export function AppProviders({ children }) {
 
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
-    setToken(data.token);
-    setUser(data.user);
-    connectWs(data.token);
+    // Only auto-login approved users. Pending users should see the
+    // dedicated "awaiting approval" screen before entering the club.
+    if (data.user?.status !== "pending") {
+      setToken(data.token);
+      setUser(data.user);
+      connectWs(data.token);
+    }
     return data.user;
   };
 
