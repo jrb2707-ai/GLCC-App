@@ -9,8 +9,33 @@ function Gate() {
   const { user, booted } = useAuth();
   if (!booted) {
     return (
-      <div className="h-full w-full flex items-center justify-center text-text-secondary" data-testid="app-loading">
-        <div className="font-mono-stat text-xs uppercase tracking-widest">Warming up the peloton…</div>
+      <div className="relative h-full w-full overflow-hidden" data-testid="app-loading">
+        <img
+          src="https://images.unsplash.com/photo-1758300620054-f42cf6e5458f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHw0fHxyb2FkJTIwY3ljbGlzdCUyMGdyb3VwJTIwcGVsb3RvbnxlbnwwfHx8fDE3ODcxODA5NzF8MA&ixlib=rb-4.1.0&q=85"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-30"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-bg-primary/85 to-bg-primary" />
+        <div className="relative h-full w-full flex flex-col items-center justify-center px-8 text-center">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="inline-block w-3 h-3 rounded-full bg-accent-volt pulse-volt" />
+            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt">
+              Grey Lynn Cycle Club
+            </span>
+          </div>
+          <div className="font-heading text-[72px] leading-none font-black uppercase text-text-primary">
+            GLCC
+          </div>
+          <p className="mt-2 text-text-secondary text-xs max-w-[240px]">
+            4th best cycle club in Grey Lynn.
+          </p>
+          <div className="mt-10 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 rounded-full border-2 border-accent-volt/30 border-t-accent-volt animate-spin" />
+            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-text-muted">
+              Warming up the peloton…
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
