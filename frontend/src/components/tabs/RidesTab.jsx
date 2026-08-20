@@ -114,6 +114,7 @@ export default function RidesTab({ onNavigate }) {
     try {
       const { data } = await api.post("/coffee/rounds", { ride_id: ride.id });
       toast(`Round sent — ${data.coffee}`, { description: `for ${ride.cafe || "the group"}` });
+      if (onNavigate) onNavigate("coffee");
     } catch (e) {
       toast.error(formatDetail(e));
     }
@@ -202,7 +203,7 @@ export default function RidesTab({ onNavigate }) {
             </div>
             <div className="font-heading text-xl font-bold mt-1">{open.cafe}</div>
             <button
-              onClick={() => onNavigate && onNavigate("coffee")}
+              onClick={() => sendRound(open)}
               className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2"
               data-testid="cafe-send-round-button"
             >
