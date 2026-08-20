@@ -19,19 +19,19 @@ function Gate() {
         <div className="relative h-full w-full flex flex-col items-center justify-center px-8 text-center">
           <div className="flex items-center gap-2 mb-3">
             <span className="inline-block w-3 h-3 rounded-full bg-accent-volt pulse-volt" />
-            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt">
+            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-white">
               Grey Lynn Cycle Club
             </span>
           </div>
-          <div className="font-heading text-[72px] leading-none font-black uppercase text-text-primary">
+          <div className="font-heading text-[72px] leading-none font-black uppercase text-white">
             GLCC
           </div>
-          <p className="mt-2 text-text-secondary text-xs max-w-[240px]">
+          <p className="mt-2 text-white text-xs max-w-[240px]">
             4th best cycle club in Grey Lynn.
           </p>
           <div className="mt-10 flex flex-col items-center gap-3">
             <div className="w-8 h-8 rounded-full border-2 border-accent-volt/30 border-t-accent-volt animate-spin" />
-            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-text-muted">
+            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-white">
               Warming up the peloton…
             </div>
           </div>
