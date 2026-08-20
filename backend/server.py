@@ -6,9 +6,12 @@ import re
 import asyncio
 import json
 import secrets
+import hashlib
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Annotated
+from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 import bcrypt
 import httpx
@@ -17,6 +20,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, BeforeValidator, EmailStr, Field, ConfigDict
@@ -98,6 +102,9 @@ def serialize_ride(doc: dict) -> dict:
         "cafe": doc.get("cafe"),
         "pace": doc.get("pace", "28–31 kph"),
         "rsvps": doc.get("rsvps", {}),  # {user_id: "going"|"maybe"|"no"}
+        "source": doc.get("source", "manual"),
+        "strava_event_id": doc.get("strava_event_id"),
+        "strava_url": doc.get("strava_url"),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -432,6 +439,239 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- Strava Integration ----------
+STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID", "")
+STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET", "")
+STRAVA_CLUB_ID = os.environ.get("STRAVA_CLUB_ID", "50775")
+STRAVA_STATE_SECRET = os.environ.get("STRAVA_STATE_SECRET", "change-me")
+STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
+STRAVA_API = "https://www.strava.com/api/v3"
+APP_URL = os.environ.get("APP_URL", "").rstrip("/")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", APP_URL).rstrip("/")
+
+
+def _strava_state(app_user_id: str) -> str:
+    nonce = secrets.token_urlsafe(24)
+    sig = hashlib.sha256(f"{nonce}|{app_user_id}|{STRAVA_STATE_SECRET}".encode()).hexdigest()
+    return f"{nonce}.{app_user_id}.{sig}"
+
+
+def _verify_strava_state(state: str) -> Optional[str]:
+    try:
+        nonce, app_user_id, sig = state.rsplit(".", 2)
+        expected = hashlib.sha256(f"{nonce}|{app_user_id}|{STRAVA_STATE_SECRET}".encode()).hexdigest()
+        if secrets.compare_digest(expected, sig):
+            return app_user_id
+    except ValueError:
+        pass
+    return None
+
+
+def _now_ts() -> int:
+    return int(now_utc().timestamp())
+
+
+async def get_strava_access_token() -> str:
+    """Load stored token, refresh if expiring in <1h. Raises 409 if not connected."""
+    doc = await db.strava_tokens.find_one({"_id": "club"})
+    if not doc or not doc.get("refresh_token"):
+        raise HTTPException(status_code=409, detail="Strava is not connected")
+    if doc.get("access_token") and doc.get("expires_at", 0) > _now_ts() + 3600:
+        return doc["access_token"]
+    async with httpx.AsyncClient(timeout=20) as h:
+        r = await h.post(STRAVA_TOKEN_URL, data={
+            "client_id": STRAVA_CLIENT_ID,
+            "client_secret": STRAVA_CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": doc["refresh_token"],
+        })
+    if r.status_code in (400, 401):
+        raise HTTPException(status_code=401, detail="Strava authorization expired; please reconnect")
+    r.raise_for_status()
+    data = r.json()
+    await db.strava_tokens.update_one(
+        {"_id": "club"},
+        {"$set": {
+            "access_token": data["access_token"],
+            "expires_at": data.get("expires_at", _now_ts() + data.get("expires_in", 21600)),
+            "refresh_token": data.get("refresh_token", doc["refresh_token"]),
+            "updated_at": now_utc(),
+        }},
+    )
+    return data["access_token"]
+
+
+def _event_to_ride(ev: dict) -> dict:
+    """Convert a Strava group_event into our ride shape."""
+    event_id = str(ev.get("id"))
+    occ = (ev.get("upcoming_occurrences") or [None])[0]
+    day = date_str = time_str = None
+    if occ:
+        try:
+            dt = datetime.fromisoformat(occ.replace("Z", "+00:00"))
+            tz = ev.get("zone")
+            if tz:
+                try:
+                    dt = dt.astimezone(ZoneInfo(tz))
+                except Exception:
+                    pass
+            day = dt.strftime("%a").upper()
+            date_str = dt.strftime("%-d %b") if hasattr(dt, "strftime") else None
+            time_str = dt.strftime("%-I:%M %p")
+        except Exception:
+            pass
+    route = ev.get("route") or {}
+    route_id = route.get("id") if isinstance(route, dict) else None
+    # Distance (metres) & elevation (metres) from route if available
+    distance = None
+    elevation = None
+    if isinstance(route, dict):
+        d = route.get("distance")
+        e = route.get("elevation_gain")
+        if isinstance(d, (int, float)) and d > 0:
+            distance = f"{round(d / 1000)} km"
+        if isinstance(e, (int, float)) and e > 0:
+            elevation = f"{round(e)} m"
+    strava_url = (
+        f"https://www.strava.com/clubs/{STRAVA_CLUB_ID}/group_events/{event_id}"
+    )
+    return {
+        "strava_event_id": event_id,
+        "source": "strava",
+        "day": day,
+        "date": date_str,
+        "time": time_str,
+        "name": ev.get("title") or "Strava club ride",
+        "distance": distance,
+        "elevation": elevation,
+        "location": ev.get("address"),
+        "route": route.get("name") if isinstance(route, dict) and route.get("name") else strava_url,
+        "strava_url": strava_url,
+        "cafe": None,
+        "pace": None,
+        "updated_at": now_utc(),
+        "sort_key": occ or f"z-{event_id}",
+    }
+
+
+async def sync_club_events() -> dict:
+    token = await get_strava_access_token()
+    async with httpx.AsyncClient(timeout=30) as h:
+        r = await h.get(
+            f"{STRAVA_API}/clubs/{STRAVA_CLUB_ID}/group_events",
+            params={"upcoming": "true", "per_page": 200},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    if r.status_code == 401:
+        raise HTTPException(status_code=401, detail="Strava authorization expired; please reconnect")
+    if r.status_code == 429:
+        raise HTTPException(status_code=429, detail="Strava rate limit hit, try again shortly")
+    r.raise_for_status()
+    events = r.json() if isinstance(r.json(), list) else []
+    ids: List[str] = []
+    upserted = 0
+    for ev in events:
+        ride = _event_to_ride(ev)
+        ids.append(ride["strava_event_id"])
+        await db.rides.update_one(
+            {"strava_event_id": ride["strava_event_id"]},
+            {"$set": ride, "$setOnInsert": {"rsvps": {}, "created_at": now_utc()}},
+            upsert=True,
+        )
+        upserted += 1
+    deleted = 0
+    if ids:
+        res = await db.rides.delete_many({"source": "strava", "strava_event_id": {"$nin": ids}})
+        deleted = res.deleted_count
+    await db.strava_meta.update_one(
+        {"_id": "club"},
+        {"$set": {"last_sync_at": now_utc(), "event_count": len(events)}},
+        upsert=True,
+    )
+    # Push updated ride list to WS clients
+    await manager.broadcast({"type": "rides.synced", "count": len(events), "deleted": deleted})
+    return {"synced": upserted, "deleted": deleted, "total": len(events)}
+
+
+@api.get("/strava/status")
+async def strava_status(user: dict = Depends(get_current_user)):
+    token_doc = await db.strava_tokens.find_one({"_id": "club"}, {"refresh_token": 1})
+    meta = await db.strava_meta.find_one({"_id": "club"})
+    return {
+        "connected": bool(token_doc and token_doc.get("refresh_token")),
+        "last_sync_at": meta.get("last_sync_at").isoformat() if meta and meta.get("last_sync_at") else None,
+        "event_count": (meta or {}).get("event_count", 0),
+        "club_id": STRAVA_CLUB_ID,
+    }
+
+
+@api.get("/strava/connect")
+async def strava_connect(admin: dict = Depends(require_admin)):
+    if not STRAVA_CLIENT_ID or not STRAVA_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Strava is not configured")
+    if not APP_URL:
+        raise HTTPException(status_code=500, detail="APP_URL not set for OAuth callback")
+    params = {
+        "client_id": STRAVA_CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": f"{APP_URL}/api/strava/callback",
+        "approval_prompt": "auto",
+        "scope": "read",
+        "state": _strava_state(str(admin["_id"])),
+    }
+    return {"url": f"https://www.strava.com/oauth/authorize?{urlencode(params)}"}
+
+
+@app.get("/api/strava/callback")
+async def strava_callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+    redirect = f"{FRONTEND_URL or APP_URL}/?strava=denied"
+    if error:
+        return RedirectResponse(redirect)
+    if not code or not state or not _verify_strava_state(state):
+        return RedirectResponse(f"{FRONTEND_URL or APP_URL}/?strava=error")
+    try:
+        async with httpx.AsyncClient(timeout=20) as h:
+            r = await h.post(STRAVA_TOKEN_URL, data={
+                "client_id": STRAVA_CLIENT_ID,
+                "client_secret": STRAVA_CLIENT_SECRET,
+                "code": code,
+                "grant_type": "authorization_code",
+            })
+        r.raise_for_status()
+        data = r.json()
+        scope = data.get("scope") or ""
+        await db.strava_tokens.update_one(
+            {"_id": "club"},
+            {"$set": {
+                "refresh_token": data["refresh_token"],
+                "access_token": data.get("access_token"),
+                "expires_at": data.get("expires_at", _now_ts() + data.get("expires_in", 21600)),
+                "scope": scope,
+                "athlete_id": (data.get("athlete") or {}).get("id"),
+                "updated_at": now_utc(),
+            }},
+            upsert=True,
+        )
+        # Immediate first sync in background
+        asyncio.create_task(sync_club_events())
+        return RedirectResponse(f"{FRONTEND_URL or APP_URL}/?strava=connected")
+    except Exception as exc:
+        log.exception("Strava callback failed: %s", exc)
+        return RedirectResponse(f"{FRONTEND_URL or APP_URL}/?strava=error")
+
+
+@api.post("/strava/sync")
+async def strava_sync_now(admin: dict = Depends(require_admin)):
+    result = await sync_club_events()
+    return result
+
+
+@api.post("/strava/disconnect")
+async def strava_disconnect(admin: dict = Depends(require_admin)):
+    await db.strava_tokens.delete_many({"_id": "club"})
+    return {"ok": True}
+
 
 # ---------- Health ----------
 @api.get("/")
@@ -789,6 +1029,7 @@ SEED_RIDES = [
 async def seed():
     await db.users.create_index("email", unique=True)
     await db.rides.create_index("sort_key")
+    await db.rides.create_index("strava_event_id", unique=True, sparse=True)
     await db.messages.create_index("created_at")
     await db.coffee_rounds.create_index("created_at")
     await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
@@ -857,7 +1098,27 @@ async def seed():
 @app.on_event("startup")
 async def on_startup():
     await seed()
+    # Hourly Strava sync loop (silently skips if not connected)
+    async def _sync_loop():
+        # Small initial delay to let the app finish booting
+        await asyncio.sleep(20)
+        while True:
+            try:
+                await sync_club_events()
+            except HTTPException:
+                pass  # not connected or auth expired
+            except Exception as exc:
+                log.warning("Strava sync loop error: %s", exc)
+            await asyncio.sleep(3600)
+    app.state.strava_task = asyncio.create_task(_sync_loop())
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    task = getattr(app.state, "strava_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except Exception:
+            pass
     client.close()

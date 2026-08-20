@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
 import Avatar from "../Avatar";
-import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route } from "lucide-react";
+import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import StravaPanel from "../StravaPanel";
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: "bg-status-going/20 text-status-going border-status-going/40" },
@@ -145,8 +146,20 @@ export default function RidesTab() {
 
         <div className="mt-4 flex items-center gap-2 text-xs text-text-secondary">
           <MapPin className="w-3.5 h-3.5 text-accent-volt" />
-          <span>Depart {open.location}</span>
+          <span>{open.location ? `Depart ${open.location}` : "Location TBC"}</span>
         </div>
+
+        {open.source === "strava" && open.strava_url && (
+          <a
+            href={open.strava_url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-[#FC4C02] hover:underline"
+            data-testid="ride-strava-link"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Open in Strava
+          </a>
+        )}
 
         <div className="mt-4">
           <RouteMap name={open.name} />
@@ -210,6 +223,7 @@ export default function RidesTab() {
 
   return (
     <div className="px-4 pt-4 pb-6" data-testid="rides-list">
+      <StravaPanel onSynced={load} />
       <div className="flex items-baseline justify-between mb-3 px-1">
         <h2 className="font-heading text-3xl font-black uppercase">Rides</h2>
         <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
@@ -228,31 +242,36 @@ export default function RidesTab() {
               data-testid={`ride-card-${r.id}`}
             >
               <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt">
-                    {r.day} · {r.date} · {r.time}
+                <div className="min-w-0">
+                  <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt flex items-center gap-2 flex-wrap">
+                    <span>{[r.day, r.date, r.time].filter(Boolean).join(" · ") || "TBC"}</span>
+                    {r.source === "strava" && (
+                      <span className="text-[9px] uppercase tracking-widest font-bold bg-[#FC4C02]/20 text-[#FC4C02] border border-[#FC4C02]/40 px-1.5 rounded normal-case">
+                        Strava
+                      </span>
+                    )}
                   </div>
                   <div className="font-heading text-xl font-bold uppercase mt-1 leading-tight">{r.name}</div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-text-muted" />
+                <ChevronRight className="w-5 h-5 text-text-muted flex-none" />
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Route className="w-3.5 h-3.5 text-accent-volt" /> {r.distance}
+                  <Route className="w-3.5 h-3.5 text-accent-volt" /> {r.distance || "—"}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Mountain className="w-3.5 h-3.5 text-accent-orange" /> {r.elevation}
+                  <Mountain className="w-3.5 h-3.5 text-accent-orange" /> {r.elevation || "—"}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
                   <Coffee className="w-3.5 h-3.5 text-accent-coffee" /> {r.cafe || "—"}
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between">
+              <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-[10px] uppercase tracking-widest font-mono-stat text-text-muted">
                   {going} going
                 </div>
-                <div className="text-[10px] text-text-secondary flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> {r.location.split(",")[0]}
+                <div className="text-[10px] text-text-secondary flex items-center gap-1 truncate">
+                  <MapPin className="w-3 h-3 flex-none" /> <span className="truncate">{(r.location || "").split(",")[0] || "Location TBC"}</span>
                 </div>
               </div>
             </button>
