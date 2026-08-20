@@ -266,17 +266,20 @@ export default function RidesTab() {
                 </div>
                 <ChevronRight className="w-5 h-5 text-text-muted flex-none" />
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Route className="w-3.5 h-3.5 text-accent-volt" /> {r.distance || "—"}
+                  <Route className="w-3.5 h-3.5 text-accent-volt flex-none" /> {r.distance || "—"}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Mountain className="w-3.5 h-3.5 text-accent-orange" /> {r.elevation || "—"}
-                </div>
-                <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Coffee className="w-3.5 h-3.5 text-accent-coffee" /> {r.cafe || "—"}
+                  <Mountain className="w-3.5 h-3.5 text-accent-orange flex-none" /> {r.elevation || "—"}
                 </div>
               </div>
+              {r.cafe && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-accent-coffee">
+                  <Coffee className="w-4 h-4 flex-none" />
+                  <span className="truncate">{r.cafe}</span>
+                </div>
+              )}
               <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="text-[10px] uppercase tracking-widest font-mono-stat text-text-muted">
                   {going} going
