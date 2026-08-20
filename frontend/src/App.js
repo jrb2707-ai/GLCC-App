@@ -45,7 +45,7 @@ function Gate() {
 export default function App() {
   return (
     <AppProviders>
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#05070b] py-6 md:py-10 px-3">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center py-6 md:py-10 px-3" style={{ background: "var(--glcc-shell-bg)" }}>
         <PhoneFrame>
           <Gate />
         </PhoneFrame>

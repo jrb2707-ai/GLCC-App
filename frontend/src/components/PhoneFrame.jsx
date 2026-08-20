@@ -4,7 +4,8 @@ import React from "react";
 export default function PhoneFrame({ children }) {
   return (
     <div
-      className="relative w-[402px] max-w-full h-[860px] max-h-[92vh] rounded-[46px] bg-black shadow-2xl overflow-hidden border-[6px] border-[#111318]"
+      className="relative w-[402px] max-w-full h-[860px] max-h-[92vh] rounded-[46px] bg-black shadow-2xl overflow-hidden border-[6px]"
+      style={{ borderColor: "var(--glcc-frame-bezel)" }}
       data-testid="phone-frame"
     >
       {/* Notch */}

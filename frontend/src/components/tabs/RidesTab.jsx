@@ -12,8 +12,18 @@ const RSVP_OPTIONS = [
   { key: "no", label: "Can't go", color: "bg-status-cant/20 text-status-cant border-status-cant/40" },
 ];
 
-function RouteMap({ name }) {
-  // Deterministic-ish stylized SVG polyline based on ride name
+function RouteMap({ name, mapUrl }) {
+  if (mapUrl) {
+    return (
+      <div className="rounded-2xl overflow-hidden relative border border-border-subtle h-48 bg-black" data-testid="route-map">
+        <img src={mapUrl} alt={`Route map — ${name}`} className="w-full h-full object-cover" />
+        <div className="absolute bottom-2 left-3 text-[10px] font-mono-stat uppercase tracking-widest text-white bg-black/40 px-2 py-0.5 rounded">
+          route · {name}
+        </div>
+      </div>
+    );
+  }
+  // Fallback stylized SVG when there's no Strava map
   const seed = name?.length || 8;
   const points = Array.from({ length: 8 }, (_, i) => {
     const x = 20 + i * 42;
@@ -118,10 +128,11 @@ export default function RidesTab() {
       <div className="px-5 pt-4 pb-8" data-testid="ride-detail">
         <button
           onClick={() => setOpenId(null)}
-          className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent-volt mb-3"
+          className="inline-flex items-center gap-1.5 mb-4 px-3 py-2 rounded-full bg-bg-secondary border border-border-subtle text-text-primary hover:border-accent-strava/50 active:scale-95 transition"
           data-testid="ride-back"
         >
-          <ArrowLeft className="w-4 h-4" /> All rides
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-xs uppercase tracking-widest font-bold">Back to Rides</span>
         </button>
         <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt">
           {open.day} · {open.date} · {open.time}
@@ -162,7 +173,7 @@ export default function RidesTab() {
         )}
 
         <div className="mt-4">
-          <RouteMap name={open.name} />
+          <RouteMap name={open.name} mapUrl={open.map_url} />
         </div>
 
         <div className="mt-5">

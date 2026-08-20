@@ -1,17 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "media",
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
   theme: {
     extend: {
       colors: {
         bg: {
-          primary: "#0D1117",
-          secondary: "#161B22",
-          card: "#21262D",
+          primary: "var(--glcc-bg-primary)",
+          secondary: "var(--glcc-bg-secondary)",
+          card: "var(--glcc-bg-card)",
         },
         border: {
-          subtle: "#30363D",
-          active: "#58A6FF",
+          subtle: "var(--glcc-border-subtle)",
+          active: "var(--glcc-border-active)",
         },
         accent: {
           volt: "#D4FF00",
@@ -21,9 +22,9 @@ module.exports = {
           pink: "#EC4899",
         },
         text: {
-          primary: "#F0F6FC",
-          secondary: "#8B949E",
-          muted: "#6E7681",
+          primary: "var(--glcc-text-primary)",
+          secondary: "var(--glcc-text-secondary)",
+          muted: "var(--glcc-text-muted)",
         },
         status: {
           going: "#2EA043",

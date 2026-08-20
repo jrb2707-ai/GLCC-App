@@ -107,6 +107,8 @@ def serialize_ride(doc: dict) -> dict:
         "source": doc.get("source", "manual"),
         "strava_event_id": doc.get("strava_event_id"),
         "strava_url": doc.get("strava_url"),
+        "map_url": doc.get("map_url"),
+        "polyline": doc.get("polyline"),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -504,7 +506,40 @@ async def get_strava_access_token() -> str:
     return data["access_token"]
 
 
-def _event_to_ride(ev: dict) -> dict:
+async def _fetch_route_stats(route_id: str, token: str) -> Optional[dict]:
+    """Fetch full route detail for distance/elevation. Cached in strava_routes."""
+    if not route_id:
+        return None
+    cached = await db.strava_routes.find_one({"_id": route_id})
+    if cached and cached.get("cached_at"):
+        cached_at = cached["cached_at"]
+        if cached_at.tzinfo is None:
+            cached_at = cached_at.replace(tzinfo=timezone.utc)
+        if (now_utc() - cached_at) < timedelta(days=7):
+            return cached
+    try:
+        async with httpx.AsyncClient(timeout=15) as h:
+            r = await h.get(
+                f"{STRAVA_API}/routes/{route_id}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if r.status_code != 200:
+            return cached
+        d = r.json()
+    except Exception:
+        return cached
+    doc = {
+        "_id": route_id,
+        "distance_m": d.get("distance"),
+        "elevation_m": d.get("elevation_gain"),
+        "name": d.get("name"),
+        "cached_at": now_utc(),
+    }
+    await db.strava_routes.update_one({"_id": route_id}, {"$set": doc}, upsert=True)
+    return doc
+
+
+def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
     """Convert a Strava group_event into our ride shape."""
     event_id = str(ev.get("id"))
     occ = (ev.get("upcoming_occurrences") or [None])[0]
@@ -529,16 +564,22 @@ def _event_to_ride(ev: dict) -> dict:
     route = ev.get("route") or {}
     distance = None
     elevation = None
+    map_url = None
+    polyline = None
     if isinstance(route, dict):
-        d = route.get("distance")
-        e = route.get("elevation_gain")
-        if isinstance(d, (int, float)) and d > 0:
-            distance = f"{round(d / 1000)} km"
-        if isinstance(e, (int, float)) and e > 0:
-            elevation = f"{round(e)} m"
-    strava_url = (
-        f"https://www.strava.com/clubs/{STRAVA_CLUB_ID}/group_events/{event_id}"
-    )
+        m = route.get("map") or {}
+        polyline = m.get("summary_polyline") if isinstance(m, dict) else None
+        map_urls = route.get("map_urls") or {}
+        if isinstance(map_urls, dict):
+            map_url = map_urls.get("dark_url") or map_urls.get("light_url") or map_urls.get("url")
+    if route_stats:
+        d_m = route_stats.get("distance_m")
+        e_m = route_stats.get("elevation_m")
+        if isinstance(d_m, (int, float)) and d_m > 0:
+            distance = f"{round(d_m / 1000)} km"
+        if isinstance(e_m, (int, float)) and e_m > 0:
+            elevation = f"{round(e_m)} m"
+    strava_url = f"https://www.strava.com/clubs/{STRAVA_CLUB_ID}/group_events/{event_id}"
     return {
         "strava_event_id": event_id,
         "source": "strava",
@@ -550,8 +591,10 @@ def _event_to_ride(ev: dict) -> dict:
         "distance": distance,
         "elevation": elevation,
         "location": ev.get("address"),
-        "route": route.get("name") if isinstance(route, dict) and route.get("name") else strava_url,
+        "route": (route.get("name") if isinstance(route, dict) and route.get("name") else strava_url),
         "strava_url": strava_url,
+        "map_url": map_url,
+        "polyline": polyline,
         "cafe": None,
         "pace": None,
         "updated_at": now_utc(),
@@ -576,7 +619,9 @@ async def sync_club_events() -> dict:
     ids: List[str] = []
     upserted = 0
     for ev in events:
-        ride = _event_to_ride(ev)
+        route_id = ev.get("route_id") or ((ev.get("route") or {}).get("id"))
+        route_stats = await _fetch_route_stats(str(route_id), token) if route_id else None
+        ride = _event_to_ride(ev, route_stats)
         ids.append(ride["strava_event_id"])
         await db.rides.update_one(
             {"strava_event_id": ride["strava_event_id"]},
@@ -593,7 +638,6 @@ async def sync_club_events() -> dict:
         {"$set": {"last_sync_at": now_utc(), "event_count": len(events)}},
         upsert=True,
     )
-    # Push updated ride list to WS clients
     await manager.broadcast({"type": "rides.synced", "count": len(events), "deleted": deleted})
     return {"synced": upserted, "deleted": deleted, "total": len(events)}
 

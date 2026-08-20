@@ -2,13 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens — light default, dark via prefers-color-scheme */
+:root {
+  --glcc-bg-primary: #FFFFFF;
+  --glcc-bg-secondary: #F4F5F7;
+  --glcc-bg-card: #FFFFFF;
+  --glcc-border-subtle: #E5E7EB;
+  --glcc-border-active: #007AFF;
+  --glcc-text-primary: #0D1117;
+  --glcc-text-secondary: #4B5563;
+  --glcc-text-muted: #9CA3AF;
+  --glcc-shell-bg: #EDEEF1;
+  --glcc-frame-bezel: #1E2126;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --glcc-bg-primary: #0D1117;
+    --glcc-bg-secondary: #161B22;
+    --glcc-bg-card: #21262D;
+    --glcc-border-subtle: #30363D;
+    --glcc-border-active: #58A6FF;
+    --glcc-text-primary: #F0F6FC;
+    --glcc-text-secondary: #8B949E;
+    --glcc-text-muted: #6E7681;
+    --glcc-shell-bg: #05070b;
+    --glcc-frame-bezel: #111318;
+  }
+}
+
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: #05070b;
+  background: var(--glcc-shell-bg);
 }
 
 body {
