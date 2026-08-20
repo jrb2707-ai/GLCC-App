@@ -42,7 +42,7 @@ export default function PushBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -20, opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="mx-4 mt-3 rounded-2xl border border-accent-pink/40 bg-accent-pink backdrop-blur-sm p-3 flex items-start gap-3 relative shadow-pink"
+          className="mx-4 mt-3 mb-3 rounded-2xl border border-accent-pink/40 bg-accent-pink backdrop-blur-sm p-3 flex items-start gap-3 relative shadow-pink"
           data-testid="push-banner"
         >
           <div className="w-9 h-9 rounded-xl bg-white/20 text-white flex items-center justify-center flex-none">
