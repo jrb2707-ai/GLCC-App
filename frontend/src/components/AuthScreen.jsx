@@ -54,7 +54,7 @@ export default function AuthScreen() {
           <h1 className="font-heading text-[54px] leading-[0.95] font-black uppercase text-text-primary">
             GLCC
           </h1>
-          <p className="mt-1 text-text-secondary text-sm">
+          <p className="mt-1 text-text-primary text-sm font-medium" data-testid="auth-tagline">
             4th best cycle club in Grey Lynn. Ride hard, coffee harder.
           </p>
         </motion.div>

@@ -11,6 +11,7 @@ export default function ChatTab() {
   const [weather, setWeather] = useState(null);
   const [text, setText] = useState("");
   const scrollRef = useRef(null);
+  const isPending = user.status === "pending";
 
   const load = useCallback(async () => {
     try {
@@ -123,14 +124,16 @@ export default function ChatTab() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Message the peloton — @mention a rider"
-          className="flex-1 bg-white border border-neutral-300 rounded-full px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#007AFF]"
+          onKeyDown={(e) => e.key === "Enter" && !isPending && send()}
+          placeholder={isPending ? "Awaiting admin approval to post…" : "Message the peloton — @mention a rider"}
+          disabled={isPending}
+          className="flex-1 bg-white border border-neutral-300 rounded-full px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#007AFF] disabled:bg-neutral-100 disabled:text-neutral-400 disabled:cursor-not-allowed"
           data-testid="chat-input"
         />
         <button
           onClick={send}
-          className="w-11 h-11 rounded-full bg-[#007AFF] text-white flex items-center justify-center active:scale-95"
+          disabled={isPending}
+          className="w-11 h-11 rounded-full bg-[#007AFF] text-white flex items-center justify-center active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
           data-testid="chat-send"
         >
           <Send className="w-4 h-4" />

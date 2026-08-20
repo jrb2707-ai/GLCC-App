@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 5 — verified pending-user UX guards + admin-only Register-a-rider + AuthScreen tagline darkening. Backend: created /app/backend/tests/test_pending_user_guards.py with 17 tests covering (a) pending user GETs succeed on /auth/me, /rides, /riders, /coffee/rounds, /chat/messages (pending list hidden from non-admins), (b) pending user POST to /coffee/rounds, /chat/messages, /rides/{id}/rsvp and PATCH /riders/me all return 403 with 'pending admin approval' detail, (c) admin JB + approved member Sam writes still succeed, (d) full approve→post round-trip works and pending banner clears. All 17/17 passed. Frontend (mobile 390x844): registered fresh pending user via API, logged in via UI — pending-banner visible on every tab; Coffee 'Order My Coffee' button has disabled attr + helper text reads 'Awaiting admin approval', clicking (force) creates no new round; Chat input disabled with placeholder 'Awaiting admin approval to post…' and send disabled; Rides ride-detail RSVP going/maybe/no all disabled and cafe-send-round-button disabled; Riders tab shows NO register-rider-button. Logout → login as JB (admin): no pending banner, register-rider-button present, coffee round sent and appears at top of feed as 'JB · Long Black'. Logout → login as Sam (approved member): no pending banner, register-rider-button NOT rendered (admin-only enforced), chat message posts successfully. AuthScreen tagline verified computed style: class='mt-1 text-text-primary text-sm font-medium', color=rgb(13,17,23), font-weight=500 — high-contrast against the frosted image bottom.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_pending_user_guards.py",
+    "/app/test_reports/pytest/iter5_pending.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RidersTab RegisterRiderModal.submit() uses `.@glcc.pending` as the email domain and a random password — this is fine but note the created record is a real pending user in db.users with an unusable password (nobody knows it). Consider a dedicated 'placeholder' status or a proper admin-invite endpoint so admin-created placeholders don't share the auth space with real self-registrations.",
+    "server.py `serialize_rider` exposes `email` on every /riders response — pending user list also returns emails; considered privacy-sensitive. Consider gating email in the response to admin viewers only.",
+    "Two elements on the AuthScreen contain the tagline text ('<p>' + hidden phone-frame '<div data-testid=\"app-tagline\">'). Not a bug, but test authors need to scope to `[data-testid=\"auth-screen\"] p` — worth adding a `data-testid=\"auth-tagline\"` to the primary <p> for future test stability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pending_user_guards.py (new — 17 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% of listed flows"},
+  "test_credentials": "jb@glcc.club/president123, sam@glcc.club/cycle123. Pending user was created dynamically via /api/auth/register with email pending.ui2.<ts>@glcc.club (still pending in DB unless main agent deletes).",
+  "seed_data_creation": "One left-over pending test user (pending.ui2.*@glcc.club) remains in db.users. Backend test's approval-flow user was cleaned up (delete action). Coffee rounds created by tests auto-expire in 3600s.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All prior functionality (Strava sync, WS, coffee TTL, iMessage chat, push banner) still intact. New guardrails verified end-to-end. If continuing, delete leftover pending.ui2.*@glcc.club user via admin action or db cleanup, and consider adding a data-testid='auth-tagline' to the AuthScreen tagline <p> for test stability.",
+  "rca of the issue": "No bugs. Note: initial UI test used selector '[data-testid=\"rides-tab\"]' but the actual testid is 'rides-list' — fixed in-run; not a code bug."
+}

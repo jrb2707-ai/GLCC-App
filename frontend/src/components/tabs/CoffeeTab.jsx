@@ -12,6 +12,7 @@ export default function CoffeeTab() {
   const [rounds, setRounds] = useState([]);
   const [modal, setModal] = useState(false);
   const [coffee, setCoffee] = useState(user.coffee || "Medium Flat White");
+  const isPending = user.status === "pending";
 
   const load = useCallback(async () => {
     try {
@@ -70,15 +71,16 @@ export default function CoffeeTab() {
 
       <div className="px-5 -mt-4 relative z-10">
         <button
-          onClick={quickSend}
-          className="w-full bg-accent-pink text-white font-bold uppercase tracking-widest py-3 rounded-2xl shadow-pink active:scale-[0.98] flex items-center justify-center gap-2"
-          data-testid="coffee-send-round-button"
-        >
-          <Coffee className="w-4 h-4" /> Order My Coffee
-        </button>
-        <div className="mt-1.5 text-center text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-          Sends {user.coffee} · change from your profile
-        </div>
+        onClick={quickSend}
+        disabled={isPending}
+        className="w-full bg-accent-pink text-white font-bold uppercase tracking-widest py-3 rounded-2xl shadow-pink active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+        data-testid="coffee-send-round-button"
+      >
+        <Coffee className="w-4 h-4" /> Order My Coffee
+      </button>
+      <div className="mt-1.5 text-center text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
+        {isPending ? "Awaiting admin approval" : `Sends ${user.coffee} · change from your profile`}
+      </div>
       </div>
 
       <div className="px-5 mt-6">

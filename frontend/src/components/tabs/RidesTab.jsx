@@ -63,6 +63,7 @@ export default function RidesTab({ onNavigate }) {
   const [rides, setRides] = useState([]);
   const [riders, setRiders] = useState([]);
   const [openId, setOpenId] = useState(null);
+  const isPending = user.status === "pending";
 
   const load = useCallback(async () => {
     try {
@@ -178,13 +179,16 @@ export default function RidesTab({ onNavigate }) {
         </div>
 
         <div className="mt-5">
-          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">Your RSVP</div>
+          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">
+            Your RSVP {isPending && <span className="ml-1 text-status-maybe">· locked until approval</span>}
+          </div>
           <div className="flex gap-2">
             {RSVP_OPTIONS.map((o) => (
               <button
                 key={o.key}
                 onClick={() => setRsvp(open.id, o.key)}
-                className={`flex-1 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest ${
+                disabled={isPending}
+                className={`flex-1 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed ${
                   myRsvp === o.key ? o.color : "bg-bg-secondary text-text-secondary border-border-subtle"
                 }`}
                 data-testid={`rsvp-${o.key}-button`}
@@ -204,7 +208,8 @@ export default function RidesTab({ onNavigate }) {
             <div className="font-heading text-xl font-bold mt-1">{open.cafe}</div>
             <button
               onClick={() => sendRound(open)}
-              className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2"
+              disabled={isPending}
+              className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
               data-testid="cafe-send-round-button"
             >
               <Coffee className="w-4 h-4" /> I&apos;m At The Café

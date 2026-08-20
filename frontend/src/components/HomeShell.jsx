@@ -8,6 +8,7 @@ import CoffeeTab from "./tabs/CoffeeTab";
 import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
 import PushBanner from "./PushBanner";
+import PendingBanner from "./PendingBanner";
 
 const TABS = [
   { id: "rides", label: "Rides", icon: Bike, activeClass: "text-accent-strava" },
@@ -86,6 +87,7 @@ export default function HomeShell() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar" data-testid="tab-content">
+        <PendingBanner />
         <PushBanner />
         <AnimatePresence mode="wait">
           <motion.div
@@ -94,7 +96,7 @@ export default function HomeShell() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.18 }}
-            className="h-full"
+            className={tab === "chat" ? "h-full" : "min-h-full"}
           >
             {tab === "rides" && <RidesTab onNavigate={setTab} />}
             {tab === "coffee" && <CoffeeTab />}

@@ -159,6 +159,11 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="Admin only")
     return user
 
+async def require_approved(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("status") == "pending":
+        raise HTTPException(status_code=403, detail="Your account is pending admin approval — you can browse but cannot post yet")
+    return user
+
 async def decode_token_ws(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -787,7 +792,7 @@ async def list_riders(user: dict = Depends(get_current_user)):
     return {"riders": approved, "pending": pending if user.get("is_admin") else []}
 
 @api.patch("/riders/me")
-async def update_me(body: ProfileUpdateIn, user: dict = Depends(get_current_user)):
+async def update_me(body: ProfileUpdateIn, user: dict = Depends(require_approved)):
     update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "bio", "coffee", "photo"}}
     if not update:
         return serialize_rider(user)
@@ -866,7 +871,7 @@ async def create_ride(body: RideCreateIn, admin: dict = Depends(require_admin)):
     return serialize_ride(doc)
 
 @api.post("/rides/{ride_id}/rsvp")
-async def rsvp(ride_id: str, body: RSVPIn, user: dict = Depends(get_current_user)):
+async def rsvp(ride_id: str, body: RSVPIn, user: dict = Depends(require_approved)):
     if body.status not in {"going", "maybe", "no"}:
         raise HTTPException(status_code=400, detail="Invalid status")
     try:
@@ -890,7 +895,7 @@ async def list_rounds(user: dict = Depends(get_current_user)):
     return {"rounds": rounds}
 
 @api.post("/coffee/rounds")
-async def send_round(body: CoffeeRoundIn, user: dict = Depends(get_current_user)):
+async def send_round(body: CoffeeRoundIn, user: dict = Depends(require_approved)):
     coffee = body.coffee or user.get("coffee", "Medium Flat White")
     doc = {
         "rider_id": str(user["_id"]),
@@ -930,7 +935,7 @@ async def list_messages(user: dict = Depends(get_current_user)):
     return {"messages": msgs}
 
 @api.post("/chat/messages")
-async def post_message(body: ChatMessageIn, user: dict = Depends(get_current_user)):
+async def post_message(body: ChatMessageIn, user: dict = Depends(require_approved)):
     text = body.text.strip()
     doc = {
         "user_id": str(user["_id"]),

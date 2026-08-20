@@ -17,7 +17,8 @@ function ProfileModal({ rider, onClose, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
   const isMe = rider.id === user.id;
-  const canEditAll = user.is_admin || isMe;
+  const selfPending = isMe && user.status === "pending";
+  const canEditAll = (user.is_admin || isMe) && !selfPending;
   const isPresident = user.is_president;
 
   async function pickFile(e) {
@@ -317,13 +318,15 @@ export default function RidersTab() {
         </span>
       </div>
 
-      <button
-        onClick={() => setRegisterOpen(true)}
-        className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-brand-accent uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
-        data-testid="register-rider-button"
-      >
-        <UserPlus className="w-4 h-4" /> Register a rider
-      </button>
+      {user.is_admin && (
+        <button
+          onClick={() => setRegisterOpen(true)}
+          className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-brand-accent uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
+          data-testid="register-rider-button"
+        >
+          <UserPlus className="w-4 h-4" /> Register a rider
+        </button>
+      )}
 
       {user.is_admin && pending.length > 0 && (
         <div className="bg-status-maybe/10 border border-status-maybe/30 rounded-xl p-3 mb-3" data-testid="pending-block">
