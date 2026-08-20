@@ -69,13 +69,18 @@ function Gate() {
 export default function App() {
   return (
     <AppProviders>
-      <div className="min-h-screen w-full flex flex-col items-center justify-center py-6 md:py-10 px-3" style={{ background: "var(--glcc-shell-bg)" }}>
+      <div className="min-h-screen w-full flex-col items-center justify-center py-6 md:py-10 px-3 hidden sm:flex" style={{ background: "var(--glcc-shell-bg)" }}>
         <PhoneFrame>
           <Gate />
         </PhoneFrame>
         <div className="mt-4 text-[10px] uppercase tracking-[0.35em] text-text-muted font-mono-stat" data-testid="app-tagline">
           GLCC · 4th best cycle club in Grey Lynn
         </div>
+      </div>
+      <div className="sm:hidden">
+        <PhoneFrame>
+          <Gate />
+        </PhoneFrame>
       </div>
       <Toaster
         position="top-center"
