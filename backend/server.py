@@ -1,7 +1,5 @@
 from dotenv import load_dotenv
-# override=True so `/app/backend/.env` is the source of truth even when
-# the pod has a stale env var baked in (e.g. an old preview URL for APP_URL).
-load_dotenv(override=True)
+load_dotenv()
 
 import os
 import re
