@@ -31,8 +31,12 @@ export default function AuthScreen() {
   return (
     <div className="relative h-full w-full flex flex-col" data-testid="auth-screen">
       <div className="absolute inset-0">
-        <img src={IMG.peloton} alt="peloton" className="w-full h-full object-cover opacity-30" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-bg-primary/85 to-bg-primary" />
+        <img
+          src="https://customer-assets-lxgj4vgw.emergentagent.net/job_mobile-craft-4628/artifacts/333y5kuk_IMG_1629.JPG"
+          alt=""
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-bg-primary/40 to-bg-primary" />
       </div>
 
       <div className="relative flex-1 flex flex-col justify-end px-6 pb-8">

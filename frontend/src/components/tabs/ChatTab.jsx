@@ -56,7 +56,7 @@ export default function ChatTab() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white text-neutral-900" data-testid="chat-tab">
+    <div className="h-full flex flex-col bg-white text-neutral-900 rounded-t-3xl overflow-hidden" data-testid="chat-tab">
       {/* Weather header */}
       <div className="px-5 pt-3 pb-3 border-b border-neutral-200 bg-neutral-50">
         <div className="flex items-center gap-2">
