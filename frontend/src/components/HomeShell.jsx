@@ -10,10 +10,10 @@ import ChatTab from "./tabs/ChatTab";
 import PushBanner from "./PushBanner";
 
 const TABS = [
-  { id: "rides", label: "Rides", icon: Bike },
-  { id: "coffee", label: "Coffee", icon: Coffee },
-  { id: "riders", label: "Riders", icon: Users },
-  { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "rides", label: "Rides", icon: Bike, activeClass: "text-accent-strava" },
+  { id: "coffee", label: "Coffee", icon: Coffee, activeClass: "text-accent-pink" },
+  { id: "riders", label: "Riders", icon: Users, activeClass: "text-white" },
+  { id: "chat", label: "Chat", icon: MessageSquare, activeClass: "text-[#007AFF]" },
 ];
 
 export default function HomeShell() {
@@ -110,6 +110,7 @@ export default function HomeShell() {
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
+            const activeCls = t.activeClass || "text-accent-volt";
             return (
               <button
                 key={t.id}
@@ -119,13 +120,13 @@ export default function HomeShell() {
               >
                 <Icon
                   className={`w-6 h-6 transition-colors ${
-                    active ? "text-accent-volt" : "text-text-muted group-hover:text-text-secondary"
+                    active ? activeCls : "text-text-muted group-hover:text-text-secondary"
                   }`}
                   strokeWidth={active ? 2.5 : 2}
                 />
                 <span
                   className={`text-[10px] font-mono-stat uppercase tracking-widest ${
-                    active ? "text-accent-volt" : "text-text-muted"
+                    active ? activeCls : "text-text-muted"
                   }`}
                 >
                   {t.label}

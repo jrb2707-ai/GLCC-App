@@ -61,17 +61,14 @@ export default function CoffeeTab() {
             <Sparkles className="w-3.5 h-3.5" />
             <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em]">You&apos;re at the café?</span>
           </div>
-          <h2 className="font-heading text-4xl font-black uppercase mt-1 leading-none">Send a round</h2>
-          <p className="text-text-secondary text-xs mt-2 max-w-[260px]">
-            Ping the crew with your order — lands in Chat instantly.
-          </p>
+          <h2 className="font-heading text-4xl font-black uppercase mt-1 leading-none">Coffee Order</h2>
         </div>
       </div>
 
       <div className="px-5 -mt-4 relative z-10">
         <button
           onClick={() => setModal(true)}
-          className="w-full bg-accent-volt text-black font-bold uppercase tracking-widest py-3 rounded-2xl shadow-volt active:scale-[0.98] flex items-center justify-center gap-2"
+          className="w-full bg-accent-pink text-white font-bold uppercase tracking-widest py-3 rounded-2xl shadow-pink active:scale-[0.98] flex items-center justify-center gap-2"
           data-testid="coffee-send-round-button"
         >
           <Coffee className="w-4 h-4" /> I&apos;m at the café
@@ -90,7 +87,7 @@ export default function CoffeeTab() {
               className="bg-bg-secondary border border-border-subtle rounded-xl p-3 flex items-center gap-3"
               data-testid={`coffee-round-${r.id}`}
             >
-              <Avatar name={r.rider_name} photo={r.rider_photo} size="sm" />
+              <Avatar name={r.rider_name} photo={null} size="sm" tint="pink" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold truncate">{r.rider_name}</div>
                 <div className="text-[11px] text-text-secondary truncate">{r.coffee}</div>

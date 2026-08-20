@@ -56,21 +56,21 @@ export default function ChatTab() {
   }
 
   return (
-    <div className="h-full flex flex-col" data-testid="chat-tab">
+    <div className="h-full flex flex-col bg-white text-neutral-900" data-testid="chat-tab">
       {/* Weather header */}
-      <div className="px-5 pt-3 pb-3 border-b border-border-subtle bg-gradient-to-r from-bg-secondary to-transparent">
+      <div className="px-5 pt-3 pb-3 border-b border-neutral-200 bg-neutral-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-accent-volt/15 text-accent-volt flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-[#007AFF]/15 text-[#007AFF] flex items-center justify-center">
             <Cloud className="w-4 h-4" />
           </div>
           <div>
-            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-text-muted">
+            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-neutral-500">
               {weather ? `${weather.location} · ${weather.wind} wind` : "Loading weather…"}
             </div>
-            <div className="text-sm font-semibold text-text-primary">
+            <div className="text-sm font-semibold text-neutral-900">
               {weather ? `${weather.temp_c}°C · ${weather.condition}` : ""}
               {weather && (
-                <span className="ml-1 text-text-secondary text-xs">· {weather.rain_chance}% rain</span>
+                <span className="ml-1 text-neutral-500 text-xs">· {weather.rain_chance}% rain</span>
               )}
             </div>
           </div>
@@ -78,36 +78,37 @@ export default function ChatTab() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-2" data-testid="chat-messages">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-1.5 bg-white" data-testid="chat-messages">
         {messages.map((m) => {
           if (m.system) {
             return (
-              <div key={m.id} className="bg-accent-volt/10 border-l-2 border-accent-volt rounded-r-xl px-3 py-2" data-testid={`msg-${m.id}`}>
-                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-volt">
-                  {m.name} · {fmtTime(m.created_at)}
+              <div key={m.id} className="text-center py-1" data-testid={`msg-${m.id}`}>
+                <div className="inline-block bg-neutral-100 text-neutral-600 text-[11px] px-3 py-1 rounded-full">
+                  {m.text}
                 </div>
-                <div className="text-sm text-text-primary mt-0.5">{m.text}</div>
               </div>
             );
           }
           const mine = m.user_id === user.id;
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`msg-${m.id}`}>
-              <div
-                className={`max-w-[78%] px-3 py-2 rounded-2xl border ${
-                  mine
-                    ? "bg-accent-volt text-black border-accent-volt rounded-br-md"
-                    : "bg-bg-secondary text-text-primary border-border-subtle rounded-bl-md"
-                }`}
-              >
+              <div className="max-w-[78%]">
                 {!mine && (
-                  <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted">
+                  <div className="text-[10px] uppercase font-mono-stat tracking-widest text-neutral-500 mb-0.5 ml-3">
                     {m.name} · {fmtTime(m.created_at)}
                   </div>
                 )}
-                <div className="text-sm whitespace-pre-wrap break-words">{m.text}</div>
+                <div
+                  className={
+                    mine
+                      ? "px-3.5 py-2 rounded-2xl rounded-br-md bg-[#007AFF] text-white"
+                      : "px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#E9E9EB] text-neutral-900"
+                  }
+                >
+                  <div className="text-sm whitespace-pre-wrap break-words leading-snug">{m.text}</div>
+                </div>
                 {mine && (
-                  <div className="text-[9px] text-black/60 font-mono-stat text-right mt-0.5">
+                  <div className="text-[9px] text-neutral-400 font-mono-stat text-right mt-0.5 mr-2">
                     {fmtTime(m.created_at)}
                   </div>
                 )}
@@ -118,18 +119,18 @@ export default function ChatTab() {
       </div>
 
       {/* Input */}
-      <div className="px-3 py-3 border-t border-border-subtle bg-bg-secondary/80 flex items-center gap-2">
+      <div className="px-3 py-3 border-t border-neutral-200 bg-neutral-50 flex items-center gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Message the peloton — @mention a rider"
-          className="flex-1 bg-bg-primary border border-border-subtle rounded-full px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-volt/60"
+          className="flex-1 bg-white border border-neutral-300 rounded-full px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#007AFF]"
           data-testid="chat-input"
         />
         <button
           onClick={send}
-          className="w-11 h-11 rounded-full bg-accent-volt text-black flex items-center justify-center active:scale-95 shadow-volt"
+          className="w-11 h-11 rounded-full bg-[#007AFF] text-white flex items-center justify-center active:scale-95"
           data-testid="chat-send"
         >
           <Send className="w-4 h-4" />

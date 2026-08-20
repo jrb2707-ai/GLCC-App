@@ -8,7 +8,14 @@ const SIZES = {
   lg: "w-14 h-14 text-xl rounded-2xl",
 };
 
-export default function Avatar({ name, photo, size = "sm", className = "", testId }) {
+const TINTS = {
+  volt: "bg-accent-volt/15 text-accent-volt",
+  pink: "bg-accent-pink/20 text-accent-pink",
+  strava: "bg-accent-strava/20 text-accent-strava",
+  imessage: "bg-[#007AFF]/20 text-[#007AFF]",
+};
+
+export default function Avatar({ name, photo, size = "sm", tint = "pink", className = "", testId }) {
   const cls = SIZES[size] || SIZES.sm;
   const common = `${cls} ${className} flex items-center justify-center overflow-hidden flex-none`;
   if (photo) {
@@ -18,9 +25,10 @@ export default function Avatar({ name, photo, size = "sm", className = "", testI
       </div>
     );
   }
+  const tintCls = TINTS[tint] || TINTS.volt;
   return (
     <div
-      className={`${common} bg-accent-volt/15 text-accent-volt font-heading font-black`}
+      className={`${common} ${tintCls} font-heading font-black`}
       data-testid={testId}
     >
       {initials(name || "?")}

@@ -17,6 +17,8 @@ module.exports = {
           volt: "#D4FF00",
           orange: "#FF5722",
           coffee: "#E67E22",
+          strava: "#FC4C02",
+          pink: "#EC4899",
         },
         text: {
           primary: "#F0F6FC",
@@ -36,6 +38,8 @@ module.exports = {
       },
       boxShadow: {
         volt: "0 0 24px rgba(212, 255, 0, 0.25)",
+        pink: "0 0 24px rgba(236, 72, 153, 0.35)",
+        strava: "0 0 24px rgba(252, 76, 2, 0.35)",
       },
     },
   },
