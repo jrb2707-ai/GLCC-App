@@ -2,9 +2,10 @@
 
 Backend seeded these accounts on startup. All passwords are for development only.
 
-## Admin (President — JB)
+## Admin (President — Jason Bryant)
 - Email: `jb@glcc.club`
-- Password: `president123`
+- Password: `Roenick2707`
+- Name: Jason Bryant
 - Role: El Presidente (is_admin=true, is_president=true)
 - Special powers: can make/remove admins and delete riders (President-only actions).
 

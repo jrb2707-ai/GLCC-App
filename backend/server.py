@@ -1145,13 +1145,14 @@ async def seed():
     await db.push_tokens.create_index("expo_push_token")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "jb@glcc.club").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "president123")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "Roenick2707")
+    admin_name = os.environ.get("ADMIN_NAME", "Jason Bryant")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({
             "email": admin_email,
             "password_hash": hash_password(admin_password),
-            "name": "JB",
+            "name": admin_name,
             "role": "El Presidente",
             "coffee": "Long Black",
             "bio": "Founder. 4th best cyclist in Grey Lynn.",
@@ -1162,10 +1163,16 @@ async def seed():
             "created_at": now_utc(),
         })
     else:
-        # Ensure JB stays admin+president
-        await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True, "is_president": True, "status": "approved"}})
-        if not verify_password(admin_password, existing["password_hash"]):
+        # Ensure the master admin stays admin+president and password is in sync
+        await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True, "is_president": True, "status": "approved", "name": admin_name}})
+        if not existing.get("password_hash") or not verify_password(admin_password, existing["password_hash"]):
             await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+
+    # Any previous president that isn't the master admin gets demoted to plain admin (only one El Prez).
+    await db.users.update_many(
+        {"email": {"$ne": admin_email}, "is_president": True},
+        {"$set": {"is_president": False}},
+    )
 
     # Seed a few demo riders (approved)
     demo_members = [
