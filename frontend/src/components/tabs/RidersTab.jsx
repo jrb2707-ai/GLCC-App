@@ -1,25 +1,52 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
-import { COFFEES, initials } from "../../lib/util";
-import { Check, X, Shield, Trash2, UserPlus } from "lucide-react";
+import { COFFEES } from "../../lib/util";
+import Avatar from "../Avatar";
+import { resizeAvatarFile } from "../../lib/image";
+import { Check, X, Shield, Trash2, UserPlus, Camera } from "lucide-react";
 import { toast } from "sonner";
 
 function ProfileModal({ rider, onClose, onSaved }) {
-  const { user } = useAuth();
+  const { user, refreshMe } = useAuth();
   const [name, setName] = useState(rider.name);
   const [role, setRole] = useState(rider.role || "Member");
   const [bio, setBio] = useState(rider.bio || "");
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
+  const [photo, setPhoto] = useState(rider.photo || null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
   const isMe = rider.id === user.id;
   const canEditAll = user.is_admin || isMe;
   const isPresident = user.is_president;
 
+  async function pickFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+      toast.error("Please pick an image file");
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataUrl = await resizeAvatarFile(file);
+      setPhoto(dataUrl);
+    } catch (err) {
+      toast.error("Couldn't read that image");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function save() {
     try {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
-      const body = isMe ? { name, bio, coffee } : { name, role, bio, coffee };
+      const body = isMe
+        ? { name, bio, coffee, photo }
+        : { name, role, bio, coffee, photo };
       const { data } = await api.patch(url, body);
+      if (isMe) await refreshMe();
       onSaved(data);
       toast("Profile saved");
       onClose();
@@ -44,8 +71,27 @@ function ProfileModal({ rider, onClose, onSaved }) {
       <div className="w-full max-h-[85%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
         <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-accent-volt/15 text-accent-volt flex items-center justify-center font-heading font-black text-xl">
-            {initials(rider.name)}
+          <div className="relative">
+            <Avatar name={rider.name} photo={photo} size="lg" testId="profile-avatar" />
+            {canEditAll && (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-accent-volt text-black flex items-center justify-center shadow-volt active:scale-95"
+                title="Change photo"
+                data-testid="profile-photo-button"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={pickFile}
+              data-testid="profile-photo-input"
+            />
           </div>
           <div>
             <div className="font-heading text-2xl font-black uppercase leading-none">{rider.name}</div>
@@ -62,6 +108,11 @@ function ProfileModal({ rider, onClose, onSaved }) {
                 </span>
               )}
             </div>
+            {uploading && (
+              <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-volt mt-1">
+                Resizing…
+              </div>
+            )}
           </div>
         </div>
 
@@ -308,9 +359,7 @@ export default function RidersTab() {
             className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-bg-secondary border border-border-subtle hover:border-accent-volt/40 transition"
             data-testid={`rider-card-${r.id}`}
           >
-            <div className="w-10 h-10 rounded-xl bg-accent-volt/15 text-accent-volt flex items-center justify-center font-heading font-black">
-              {initials(r.name)}
-            </div>
+            <Avatar name={r.name} photo={r.photo} size="md" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <div className="text-sm font-semibold truncate">{r.name}</div>

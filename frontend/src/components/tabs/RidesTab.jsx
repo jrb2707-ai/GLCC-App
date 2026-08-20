@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
-import { initials } from "../../lib/util";
+import Avatar from "../Avatar";
 import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route } from "lucide-react";
 import { toast } from "sonner";
 
@@ -198,9 +198,7 @@ export default function RidesTab() {
                 key={r.id}
                 className="flex items-center gap-2 bg-bg-secondary border border-border-subtle rounded-full pl-1 pr-3 py-1"
               >
-                <div className="w-6 h-6 rounded-full bg-accent-volt/20 text-accent-volt flex items-center justify-center text-[10px] font-bold">
-                  {initials(r.name)}
-                </div>
+                <Avatar name={r.name} photo={r.photo} size="xs" />
                 <span className="text-xs text-text-primary">{r.name}</span>
               </div>
             ))}

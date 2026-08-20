@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
 import { COFFEES, IMG, timeAgo } from "../../lib/util";
+import Avatar from "../Avatar";
 import { Coffee, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,9 +90,7 @@ export default function CoffeeTab() {
               className="bg-bg-secondary border border-border-subtle rounded-xl p-3 flex items-center gap-3"
               data-testid={`coffee-round-${r.id}`}
             >
-              <div className="w-9 h-9 rounded-full bg-accent-coffee/20 text-accent-coffee flex items-center justify-center">
-                <Coffee className="w-4 h-4" />
-              </div>
+              <Avatar name={r.rider_name} photo={r.rider_photo} size="sm" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold truncate">{r.rider_name}</div>
                 <div className="text-[11px] text-text-secondary truncate">{r.coffee}</div>

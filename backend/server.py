@@ -106,6 +106,7 @@ def serialize_round(doc: dict) -> dict:
         "id": str(doc["_id"]),
         "rider_id": doc.get("rider_id"),
         "rider_name": doc.get("rider_name"),
+        "rider_photo": doc.get("rider_photo"),
         "coffee": doc.get("coffee"),
         "ride_name": doc.get("ride_name"),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
@@ -597,6 +598,7 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(get_current_user)
     doc = {
         "rider_id": str(user["_id"]),
         "rider_name": user.get("name"),
+        "rider_photo": user.get("photo"),
         "coffee": coffee,
         "ride_name": None,
         "created_at": now_utc(),
@@ -610,19 +612,8 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(get_current_user)
             pass
     result = await db.coffee_rounds.insert_one(doc)
     doc["_id"] = result.inserted_id
-    # Also add a system chat message
-    system_msg = {
-        "user_id": None,
-        "name": "GLCC",
-        "text": f"☕ {user.get('name')} is buying a round — {coffee}",
-        "system": True,
-        "created_at": now_utc(),
-    }
-    m = await db.messages.insert_one(system_msg)
-    system_msg["_id"] = m.inserted_id
     payload_round = serialize_round(doc)
     await manager.broadcast({"type": "coffee.round", "round": payload_round})
-    await manager.broadcast({"type": "chat.message", "message": serialize_message(system_msg)})
     # Fire-and-forget Expo push to everyone except sender
     asyncio.create_task(push_to_all_except(
         str(user["_id"]),
