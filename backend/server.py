@@ -89,11 +89,13 @@ def serialize_rider(doc: dict) -> dict:
     }
 
 def serialize_ride(doc: dict) -> dict:
+    starts_at = doc.get("starts_at")
     return {
         "id": str(doc["_id"]),
         "day": doc.get("day"),
         "date": doc.get("date"),
         "time": doc.get("time"),
+        "starts_at": starts_at.isoformat() if isinstance(starts_at, datetime) else starts_at,
         "name": doc.get("name"),
         "distance": doc.get("distance"),
         "elevation": doc.get("elevation"),
@@ -507,23 +509,24 @@ def _event_to_ride(ev: dict) -> dict:
     event_id = str(ev.get("id"))
     occ = (ev.get("upcoming_occurrences") or [None])[0]
     day = date_str = time_str = None
+    starts_at = None
     if occ:
         try:
-            dt = datetime.fromisoformat(occ.replace("Z", "+00:00"))
+            dt_utc = datetime.fromisoformat(occ.replace("Z", "+00:00"))
+            starts_at = dt_utc
+            dt = dt_utc
             tz = ev.get("zone")
             if tz:
                 try:
-                    dt = dt.astimezone(ZoneInfo(tz))
+                    dt = dt_utc.astimezone(ZoneInfo(tz))
                 except Exception:
                     pass
             day = dt.strftime("%a").upper()
-            date_str = dt.strftime("%-d %b") if hasattr(dt, "strftime") else None
+            date_str = dt.strftime("%-d %b")
             time_str = dt.strftime("%-I:%M %p")
         except Exception:
             pass
     route = ev.get("route") or {}
-    route_id = route.get("id") if isinstance(route, dict) else None
-    # Distance (metres) & elevation (metres) from route if available
     distance = None
     elevation = None
     if isinstance(route, dict):
@@ -542,6 +545,7 @@ def _event_to_ride(ev: dict) -> dict:
         "day": day,
         "date": date_str,
         "time": time_str,
+        "starts_at": starts_at,
         "name": ev.get("title") or "Strava club ride",
         "distance": distance,
         "elevation": elevation,
@@ -551,7 +555,7 @@ def _event_to_ride(ev: dict) -> dict:
         "cafe": None,
         "pace": None,
         "updated_at": now_utc(),
-        "sort_key": occ or f"z-{event_id}",
+        "sort_key": starts_at.isoformat() if starts_at else f"z-{event_id}",
     }
 
 
@@ -792,8 +796,11 @@ async def rider_admin_action(body: AdminActionIn, admin: dict = Depends(require_
 # ---------- Rides ----------
 @api.get("/rides")
 async def list_rides(user: dict = Depends(get_current_user)):
+    # Show only today's and future rides (rides without a starts_at fall through).
+    today_start = now_utc().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=12)
+    query = {"$or": [{"starts_at": {"$gte": today_start}}, {"starts_at": None}, {"starts_at": {"$exists": False}}]}
     rides = []
-    async for r in db.rides.find({}).sort("sort_key", 1):
+    async for r in db.rides.find(query).sort("sort_key", 1):
         rides.append(serialize_ride(r))
     return {"rides": rides}
 
@@ -1081,11 +1088,7 @@ async def seed():
                 "created_at": now_utc(),
             })
 
-    # Seed rides if none
-    if await db.rides.count_documents({}) == 0:
-        for idx, ride in enumerate(SEED_RIDES):
-            doc = {**ride, "rsvps": {}, "created_at": now_utc(), "sort_key": f"{idx:02d}"}
-            await db.rides.insert_one(doc)
+    # Rides come from Strava sync (via /api/strava/connect). No demo seed rides.
 
     # Seed some feed
     if await db.messages.count_documents({}) == 0:

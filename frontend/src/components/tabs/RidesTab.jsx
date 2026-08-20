@@ -225,7 +225,7 @@ export default function RidesTab() {
     <div className="px-4 pt-4 pb-6" data-testid="rides-list">
       <StravaPanel onSynced={load} />
       <div className="flex items-baseline justify-between mb-3 px-1">
-        <h2 className="font-heading text-3xl font-black uppercase">Rides</h2>
+        <h2 className="font-heading text-2xl font-black uppercase leading-tight">Your Next<br/>GLCC Rides</h2>
         <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
           {rides.length} scheduled
         </span>
