@@ -29,7 +29,10 @@ export default function CoffeeTab() {
   useEffect(() => {
     return subscribe((evt) => {
       if (evt.type === "coffee.round") {
-        setRounds((prev) => [evt.round, ...prev].slice(0, 30));
+        setRounds((prev) => {
+          if (prev.some((p) => p.id === evt.round.id)) return prev;
+          return [evt.round, ...prev].slice(0, 30);
+        });
       }
     });
   }, [subscribe]);

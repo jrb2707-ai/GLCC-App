@@ -95,7 +95,7 @@ body {
   box-shadow: 0 0 0 1px rgba(212, 255, 0, 0.35), 0 0 24px rgba(212, 255, 0, 0.18);
 }
 
-/* Volt-accent text — flips to black in light mode for legibility on light tints */
+/* Volt-accent text — black in light mode, volt yellow in dark mode */
 .text-brand-accent {
   color: #0D1117;
 }
