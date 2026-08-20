@@ -108,6 +108,11 @@ function ProfileModal({ rider, onClose, onSaved }) {
                   Pending
                 </span>
               )}
+              {rider.status === "invited" && (
+                <span className="text-[9px] uppercase tracking-widest font-bold bg-status-maybe/15 text-status-maybe border border-status-maybe/30 px-1.5 rounded">
+                  Invited
+                </span>
+              )}
             </div>
             {uploading && (
               <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent mt-1">
@@ -215,20 +220,22 @@ function ProfileModal({ rider, onClose, onSaved }) {
 }
 
 function RegisterRiderModal({ onClose }) {
-  const { user } = useAuth();
   const [name, setName] = useState("");
   const [coffee, setCoffee] = useState("Medium Flat White");
+  const [role, setRole] = useState("Member");
+  const [submitting, setSubmitting] = useState(false);
 
   async function submit() {
-    // Admin creating a placeholder rider isn't in scope; direct people to register themselves.
-    // But we can add an in-club pending entry:
+    if (!name.trim() || submitting) return;
+    setSubmitting(true);
     try {
-      const email = `${name.toLowerCase().replace(/\s+/g, ".")}.${Date.now()}@glcc.pending`;
-      await api.post("/auth/register", { email, password: "cycle" + Math.random().toString(36).slice(2, 8), name, coffee });
-      toast("Submitted for approval");
+      await api.post("/riders/invite", { name: name.trim(), coffee, role });
+      toast("Rider invited", { description: `${name.trim()} added to the roster` });
       onClose();
     } catch (e) {
       toast.error(formatDetail(e));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -236,8 +243,11 @@ function RegisterRiderModal({ onClose }) {
     <div className="absolute inset-0 z-30 bg-black/60 flex items-end" data-testid="register-modal">
       <div className="w-full bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
         <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
-        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Register a rider</div>
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Invite a rider</div>
         <h3 className="font-heading text-2xl font-black uppercase mt-1">New rider</h3>
+        <p className="text-[11px] text-text-muted mt-1">
+          They&apos;ll appear as <span className="text-status-maybe">Invited</span> until they sign up with their own email.
+        </p>
         <div className="space-y-2 mt-3">
           <input
             placeholder="Name"
@@ -246,10 +256,18 @@ function RegisterRiderModal({ onClose }) {
             className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm"
             data-testid="register-name"
           />
+          <input
+            placeholder="Role (Member, Ride Captain…)"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm"
+            data-testid="register-role"
+          />
           <select
             value={coffee}
             onChange={(e) => setCoffee(e.target.value)}
             className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm"
+            data-testid="register-coffee"
           >
             {COFFEES.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -260,8 +278,13 @@ function RegisterRiderModal({ onClose }) {
           <button onClick={onClose} className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2.5 rounded-xl" data-testid="register-cancel">
             Cancel
           </button>
-          <button onClick={submit} disabled={!name} className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-50" data-testid="register-submit">
-            Submit for approval
+          <button
+            onClick={submit}
+            disabled={!name.trim() || submitting}
+            className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-50"
+            data-testid="register-submit"
+          >
+            {submitting ? "Inviting…" : "Add to roster"}
           </button>
         </div>
       </div>
@@ -324,7 +347,7 @@ export default function RidersTab() {
           className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-brand-accent uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
           data-testid="register-rider-button"
         >
-          <UserPlus className="w-4 h-4" /> Register a rider
+          <UserPlus className="w-4 h-4" /> Invite a rider
         </button>
       )}
 
@@ -369,6 +392,11 @@ export default function RidersTab() {
                 {r.is_admin && (
                   <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30 px-1.5 rounded">
                     {r.is_president ? "El Prez" : "Admin"}
+                  </span>
+                )}
+                {r.status === "invited" && (
+                  <span className="text-[9px] uppercase tracking-widest font-bold bg-status-maybe/15 text-status-maybe border border-status-maybe/30 px-1.5 rounded" data-testid={`invited-badge-${r.id}`}>
+                    Invited
                   </span>
                 )}
               </div>

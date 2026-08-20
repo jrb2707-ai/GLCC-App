@@ -71,12 +71,16 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def serialize_rider(doc: dict) -> dict:
+def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
     if not doc:
         return doc
+    # Email is private: only the rider themselves or an admin can see it.
+    show_email = True
+    if viewer is not None:
+        show_email = bool(viewer.get("is_admin")) or str(viewer.get("_id")) == str(doc.get("_id"))
     return {
         "id": str(doc["_id"]),
-        "email": doc.get("email"),
+        "email": doc.get("email") if show_email else None,
         "name": doc.get("name"),
         "role": doc.get("role", "Member"),
         "bio": doc.get("bio", ""),
@@ -84,7 +88,7 @@ def serialize_rider(doc: dict) -> dict:
         "photo": doc.get("photo"),
         "is_admin": doc.get("is_admin", False),
         "is_president": doc.get("is_president", False),
-        "status": doc.get("status", "approved"),  # approved | pending
+        "status": doc.get("status", "approved"),  # approved | pending | invited
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -409,6 +413,11 @@ class ProfileUpdateIn(BaseModel):
 class AdminActionIn(BaseModel):
     action: str  # approve | deny | make_admin | remove_admin | delete
     target_id: str
+
+class RiderInviteIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    coffee: str = "Medium Flat White"
+    role: str = "Member"
 
 class CoffeeRoundIn(BaseModel):
     coffee: Optional[str] = None
@@ -770,7 +779,7 @@ async def register(body: RegisterIn):
 async def login(body: LoginIn):
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email})
-    if not user or not verify_password(body.password, user["password_hash"]):
+    if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(str(user["_id"]), email, user.get("role", "Member"))
     return {"token": token, "user": serialize_rider(user)}
@@ -786,10 +795,34 @@ async def list_riders(user: dict = Depends(get_current_user)):
     pending = []
     async for r in db.users.find({}).sort("created_at", 1):
         if r.get("status") == "pending":
-            pending.append(serialize_rider(r))
+            pending.append(serialize_rider(r, viewer=user))
         else:
-            approved.append(serialize_rider(r))
+            # includes both "approved" and admin-created "invited" riders
+            approved.append(serialize_rider(r, viewer=user))
     return {"riders": approved, "pending": pending if user.get("is_admin") else []}
+
+@api.post("/riders/invite")
+async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)):
+    """Admin creates a placeholder rider that appears in the roster with status='invited'.
+    They have no email/password and cannot log in until they self-register with their real email."""
+    doc = {
+        "email": None,               # no auth identity yet
+        "password_hash": None,       # cannot log in
+        "name": body.name.strip(),
+        "coffee": body.coffee,
+        "role": body.role,
+        "bio": "",
+        "photo": None,
+        "is_admin": False,
+        "is_president": False,
+        "status": "invited",
+        "invited_by": str(admin["_id"]),
+        "created_at": now_utc(),
+    }
+    result = await db.users.insert_one(doc)
+    doc["_id"] = result.inserted_id
+    await manager.broadcast({"type": "rider.updated", "rider": serialize_rider(doc)})
+    return serialize_rider(doc, viewer=admin)
 
 @api.patch("/riders/me")
 async def update_me(body: ProfileUpdateIn, user: dict = Depends(require_approved)):
@@ -928,6 +961,9 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(require_approved)
 # ---------- Chat ----------
 @api.get("/chat/messages")
 async def list_messages(user: dict = Depends(get_current_user)):
+    # Pending riders cannot read the chat — the feed only opens once an admin approves them.
+    if user.get("status") == "pending":
+        return {"messages": []}
     msgs = []
     async for m in db.messages.find({}).sort("created_at", -1).limit(100):
         msgs.append(serialize_message(m))

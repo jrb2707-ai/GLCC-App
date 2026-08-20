@@ -16,24 +16,25 @@ export default function ChatTab() {
   const load = useCallback(async () => {
     try {
       const [m, w] = await Promise.all([api.get("/chat/messages"), api.get("/weather")]);
-      setMessages(m.data.messages);
+      setMessages(isPending ? [] : m.data.messages);
       setWeather(w.data);
     } catch (e) {
       // ignore
     }
-  }, []);
+  }, [isPending]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
+    if (isPending) return undefined;
     return subscribe((evt) => {
       if (evt.type === "chat.message") {
         setMessages((prev) => [...prev, evt.message]);
       }
     });
-  }, [subscribe]);
+  }, [subscribe, isPending]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -80,7 +81,16 @@ export default function ChatTab() {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-1.5 bg-white" data-testid="chat-messages">
-        {messages.map((m) => {
+        {isPending ? (
+          <div className="h-full min-h-[220px] flex items-center justify-center px-6" data-testid="chat-locked">
+            <div className="text-center text-neutral-500 text-xs leading-relaxed max-w-[240px]">
+              <div className="text-[10px] uppercase tracking-widest font-mono-stat text-neutral-400 mb-1">
+                Chat locked
+              </div>
+              The peloton opens up once an admin approves you.
+            </div>
+          </div>
+        ) : messages.map((m) => {
           if (m.system) {
             return (
               <div key={m.id} className="text-center py-1" data-testid={`msg-${m.id}`}>
