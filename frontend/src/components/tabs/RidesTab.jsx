@@ -57,7 +57,7 @@ function goingList(ride, riders) {
   return ids.map((id) => riders.find((r) => r.id === id)).filter(Boolean);
 }
 
-export default function RidesTab() {
+export default function RidesTab({ onNavigate }) {
   const { user } = useAuth();
   const { subscribe } = useEvents();
   const [rides, setRides] = useState([]);
@@ -202,11 +202,11 @@ export default function RidesTab() {
             </div>
             <div className="font-heading text-xl font-bold mt-1">{open.cafe}</div>
             <button
-              onClick={() => sendRound(open)}
-              className="mt-3 w-full bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98]"
+              onClick={() => onNavigate && onNavigate("coffee")}
+              className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2"
               data-testid="cafe-send-round-button"
             >
-              Send a coffee round
+              <Coffee className="w-4 h-4" /> Order my coffee
             </button>
           </div>
         )}

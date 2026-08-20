@@ -96,7 +96,7 @@ export default function HomeShell() {
             transition={{ duration: 0.18 }}
             className="h-full"
           >
-            {tab === "rides" && <RidesTab />}
+            {tab === "rides" && <RidesTab onNavigate={setTab} />}
             {tab === "coffee" && <CoffeeTab />}
             {tab === "riders" && <RidersTab />}
             {tab === "chat" && <ChatTab />}
