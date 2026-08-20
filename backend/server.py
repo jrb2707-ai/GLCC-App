@@ -498,6 +498,10 @@ STRAVA_STATE_SECRET = os.environ.get("STRAVA_STATE_SECRET", "change-me")
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_API = "https://www.strava.com/api/v3"
 APP_URL = os.environ.get("APP_URL", "").rstrip("/")
+# In production PUBLIC_APP_URL is already the canonical app URL; use it as a
+# safe fallback so the Strava OAuth redirect works even if APP_URL wasn't set.
+if not APP_URL:
+    APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", APP_URL).rstrip("/")
 
 

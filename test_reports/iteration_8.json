@@ -1,0 +1,22 @@
+{
+  "summary": "Verified Strava OAuth APP_URL fallback fix. Backend: GET /api/strava/connect returns 200 with a valid Strava authorize URL (redirect_uri ends in /api/strava/callback, HTTPS). Subprocess test confirms server.APP_URL falls back to PUBLIC_APP_URL when APP_URL is truly absent. Frontend: admin login on 390x844, Rides tab auto-shown, strava-panel renders strava-sync state (already connected), fetch to /api/strava/connect returns 200 with a valid Strava URL, zero JS errors. As noted by main agent, preview redirect_uri still contains the stale OS-env APP_URL host — not flagged as a bug.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_strava_connect.py",
+    "/app/test_reports/pytest/strava_connect.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py calls load_dotenv() with default override=False, so a stale OS-level APP_URL will always beat backend/.env — main agent knows this; leaving as-is per instruction.",
+    "StravaPanel.jsx renders twice in the DOM (mobile+desktop layout wrappers). Not a bug but duplicated data-testids can confuse selector logic; consider gating with a single mount."
+  ],
+  "updated_files": ["/app/backend/tests/test_strava_connect.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "jb@glcc.club / Roenick2707 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file /app/backend/tests/test_strava_connect.py has 2 tests: (1) live /api/strava/connect returns 200 with valid URL, (2) subprocess import with APP_URL unset and PUBLIC_APP_URL set proves fallback. The subprocess sets cwd=/tmp to prevent server.py's load_dotenv() from picking up backend/.env, and copies only non-APP_URL keys from backend/.env into the child env. Preview redirect_uri shows the stale preview host (known, per main agent).",
+  "rca of the issue": "Production APP_URL secret was never set. Previous code raised HTTP 500 when APP_URL was empty. Fix in server.py falls back to PUBLIC_APP_URL (already set to https://greylynncc.com in prod). Verified by subprocess import test and live endpoint test."
+}
