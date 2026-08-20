@@ -45,7 +45,7 @@ export default function PushBanner() {
           className="mx-4 mt-3 rounded-2xl border border-accent-volt/40 bg-accent-volt/10 backdrop-blur-sm p-3 flex items-start gap-3 relative"
           data-testid="push-banner"
         >
-          <div className="w-9 h-9 rounded-xl bg-accent-volt/20 text-accent-volt flex items-center justify-center flex-none">
+          <div className="w-9 h-9 rounded-xl bg-accent-volt/20 text-brand-accent flex items-center justify-center flex-none">
             <Bell className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0 pr-6">

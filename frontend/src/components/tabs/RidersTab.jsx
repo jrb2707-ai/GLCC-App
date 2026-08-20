@@ -98,7 +98,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
             <div className="flex items-center gap-1.5 mt-1">
               <span className="text-[10px] uppercase font-mono-stat tracking-widest text-text-secondary">{rider.role}</span>
               {rider.is_admin && (
-                <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-accent-volt border border-accent-volt/30 px-1.5 rounded">
+                <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30 px-1.5 rounded">
                   {rider.is_president ? "El Prez" : "Admin"}
                 </span>
               )}
@@ -109,7 +109,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
               )}
             </div>
             {uploading && (
-              <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-volt mt-1">
+              <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent mt-1">
                 Resizing…
               </div>
             )}
@@ -152,7 +152,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
                     onClick={() => setCoffee(c)}
                     className={`text-left px-3 py-2 rounded-lg border text-xs ${
                       coffee === c
-                        ? "bg-accent-volt/15 border-accent-volt text-accent-volt"
+                        ? "bg-accent-volt/15 border-accent-volt text-brand-accent"
                         : "bg-bg-primary border-border-subtle text-text-secondary"
                     }`}
                   >
@@ -188,7 +188,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
             <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">Admin actions</div>
             <div className="flex flex-wrap gap-2">
               {isPresident && !rider.is_admin && (
-                <button onClick={() => act("make_admin")} className="text-xs uppercase tracking-widest bg-accent-volt/15 border border-accent-volt/40 text-accent-volt px-3 py-2 rounded-lg" data-testid="admin-make">
+                <button onClick={() => act("make_admin")} className="text-xs uppercase tracking-widest bg-accent-volt/15 border border-accent-volt/40 text-brand-accent px-3 py-2 rounded-lg" data-testid="admin-make">
                   <Shield className="inline w-3 h-3 mr-1" /> Make admin
                 </button>
               )}
@@ -235,7 +235,7 @@ function RegisterRiderModal({ onClose }) {
     <div className="absolute inset-0 z-30 bg-black/60 flex items-end" data-testid="register-modal">
       <div className="w-full bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
         <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
-        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-volt">Register a rider</div>
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Register a rider</div>
         <h3 className="font-heading text-2xl font-black uppercase mt-1">New rider</h3>
         <div className="space-y-2 mt-3">
           <input
@@ -319,7 +319,7 @@ export default function RidersTab() {
 
       <button
         onClick={() => setRegisterOpen(true)}
-        className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-accent-volt uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
+        className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-brand-accent uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
         data-testid="register-rider-button"
       >
         <UserPlus className="w-4 h-4" /> Register a rider
@@ -364,7 +364,7 @@ export default function RidersTab() {
               <div className="flex items-center gap-1.5">
                 <div className="text-sm font-semibold truncate">{r.name}</div>
                 {r.is_admin && (
-                  <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-accent-volt border border-accent-volt/30 px-1.5 rounded">
+                  <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30 px-1.5 rounded">
                     {r.is_president ? "El Prez" : "Admin"}
                   </span>
                 )}

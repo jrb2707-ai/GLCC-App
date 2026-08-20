@@ -47,7 +47,7 @@ export default function AuthScreen() {
         >
           <div className="mb-2 flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full bg-accent-volt shadow-volt pulse-volt" />
-            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt">
+            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-brand-accent">
               Grey Lynn Cycle Club
             </span>
           </div>

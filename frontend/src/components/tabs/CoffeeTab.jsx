@@ -71,7 +71,7 @@ export default function CoffeeTab() {
           className="w-full bg-accent-pink text-white font-bold uppercase tracking-widest py-3 rounded-2xl shadow-pink active:scale-[0.98] flex items-center justify-center gap-2"
           data-testid="coffee-send-round-button"
         >
-          <Coffee className="w-4 h-4" /> I&apos;m at the café
+          <Coffee className="w-4 h-4" /> Order My Coffee
         </button>
       </div>
 
@@ -100,10 +100,9 @@ export default function CoffeeTab() {
 
       {/* Modal */}
       {modal && (
-        <div className="absolute inset-0 z-30 bg-black/60 flex items-end animate-slide-down" data-testid="coffee-modal">
-          <div className="w-full bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8">
-            <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
-            <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee">Send a coffee round</div>
+        <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center px-6 animate-slide-down" data-testid="coffee-modal">
+          <div className="w-full bg-bg-secondary border border-border-subtle rounded-3xl p-5 shadow-2xl">
+            <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink">Send a coffee round</div>
             <h3 className="font-heading text-2xl font-black uppercase mt-1">Your coffee</h3>
             <div className="mt-3 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto no-scrollbar">
               {COFFEES.map((c) => (
@@ -112,7 +111,7 @@ export default function CoffeeTab() {
                   onClick={() => setCoffee(c)}
                   className={`text-left px-3 py-2 rounded-xl border text-xs ${
                     coffee === c
-                      ? "bg-accent-volt/15 border-accent-volt text-accent-volt"
+                      ? "bg-accent-pink/15 border-accent-pink text-accent-pink"
                       : "bg-bg-primary border-border-subtle text-text-secondary"
                   }`}
                   data-testid={`coffee-option-${c.replace(/\s+/g, "-").toLowerCase()}`}
@@ -131,7 +130,7 @@ export default function CoffeeTab() {
               </button>
               <button
                 onClick={send}
-                className="flex-1 py-3 rounded-xl bg-accent-volt text-black font-bold uppercase tracking-widest text-xs"
+                className="flex-1 py-3 rounded-xl bg-accent-pink text-white font-bold uppercase tracking-widest text-xs shadow-pink"
                 data-testid="coffee-modal-send"
               >
                 Send to group

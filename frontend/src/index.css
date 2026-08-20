@@ -95,6 +95,16 @@ body {
   box-shadow: 0 0 0 1px rgba(212, 255, 0, 0.35), 0 0 24px rgba(212, 255, 0, 0.18);
 }
 
+/* Volt-accent text — flips to black in light mode for legibility on light tints */
+.text-brand-accent {
+  color: #0D1117;
+}
+@media (prefers-color-scheme: dark) {
+  .text-brand-accent {
+    color: #D4FF00;
+  }
+}
+
 /* Toast slide */
 @keyframes slide-down {
   from {

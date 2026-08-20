@@ -135,7 +135,7 @@ export default function RidesTab({ onNavigate }) {
           <ArrowLeft className="w-4 h-4" />
           <span className="text-xs uppercase tracking-widest font-bold">Back to Rides</span>
         </button>
-        <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt">
+        <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-brand-accent">
           {open.day} · {open.date} · {open.time}
         </div>
         <h2 className="font-heading text-3xl font-black uppercase leading-tight mt-1">{open.name}</h2>
@@ -157,7 +157,7 @@ export default function RidesTab({ onNavigate }) {
         </div>
 
         <div className="mt-4 flex items-center gap-2 text-xs text-text-secondary">
-          <MapPin className="w-3.5 h-3.5 text-accent-volt" />
+          <MapPin className="w-3.5 h-3.5 text-brand-accent" />
           <span>{open.location ? `Depart ${open.location}` : "Location TBC"}</span>
         </div>
 
@@ -207,7 +207,7 @@ export default function RidesTab({ onNavigate }) {
               className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2"
               data-testid="cafe-send-round-button"
             >
-              <Coffee className="w-4 h-4" /> Order my coffee
+              <Coffee className="w-4 h-4" /> I&apos;m At The Café
             </button>
           </div>
         )}
@@ -255,7 +255,7 @@ export default function RidesTab({ onNavigate }) {
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
-                  <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-accent-volt flex items-center gap-2 flex-wrap">
+                  <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-brand-accent flex items-center gap-2 flex-wrap">
                     <span>{[r.day, r.date, r.time].filter(Boolean).join(" · ") || "TBC"}</span>
                     {r.source === "strava" && (
                       <span className="text-[9px] uppercase tracking-widest font-bold bg-[#FC4C02]/20 text-[#FC4C02] border border-[#FC4C02]/40 px-1.5 rounded normal-case">
@@ -269,7 +269,7 @@ export default function RidesTab({ onNavigate }) {
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Route className="w-3.5 h-3.5 text-accent-volt flex-none" /> {r.distance || "—"}
+                  <Route className="w-3.5 h-3.5 text-brand-accent flex-none" /> {r.distance || "—"}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-text-secondary">
                   <Mountain className="w-3.5 h-3.5 text-accent-orange flex-none" /> {r.elevation || "—"}

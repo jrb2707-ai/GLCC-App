@@ -9,7 +9,7 @@ const SIZES = {
 };
 
 const TINTS = {
-  volt: "bg-accent-volt/15 text-accent-volt",
+  volt: "bg-accent-volt/15 text-brand-accent",
   pink: "bg-accent-pink/20 text-accent-pink",
   strava: "bg-accent-strava/20 text-accent-strava",
   imessage: "bg-[#007AFF]/20 text-[#007AFF]",

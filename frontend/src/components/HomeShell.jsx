@@ -56,7 +56,7 @@ export default function HomeShell() {
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent-volt pulse-volt" />
           <span className="font-heading text-xl font-black uppercase tracking-wider">GLCC</span>
           {user?.is_admin && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-accent-volt border border-accent-volt/30">
+            <span className="ml-1 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30">
               {user.is_president ? "El Prez" : "Admin"}
             </span>
           )}
@@ -67,8 +67,8 @@ export default function HomeShell() {
             title={bellEnabled ? "Notifications on" : "Enable notifications"}
             className={`p-1.5 rounded-full transition ${
               bellEnabled
-                ? "text-accent-volt bg-accent-volt/10 border border-accent-volt/30"
-                : "text-text-secondary hover:text-accent-volt border border-transparent"
+                ? "text-brand-accent bg-accent-volt/10 border border-accent-volt/30"
+                : "text-text-secondary hover:text-brand-accent border border-transparent"
             }`}
             data-testid="notifications-toggle"
           >
@@ -76,7 +76,7 @@ export default function HomeShell() {
           </button>
           <button
             onClick={logout}
-            className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-text-secondary hover:text-accent-volt"
+            className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-text-secondary hover:text-brand-accent"
             data-testid="logout-button"
           >
             <LogOut className="w-3.5 h-3.5" /> Exit
@@ -110,7 +110,7 @@ export default function HomeShell() {
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
-            const activeCls = t.activeClass || "text-accent-volt";
+            const activeCls = t.activeClass || "text-brand-accent";
             return (
               <button
                 key={t.id}

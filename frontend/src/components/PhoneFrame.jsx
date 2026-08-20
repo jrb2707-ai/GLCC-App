@@ -13,7 +13,7 @@ export default function PhoneFrame({ children }) {
       {/* Status bar */}
       <div className="absolute top-0 left-0 right-0 h-[26px] z-30 flex items-center justify-between px-6 text-[11px] font-mono-stat text-text-primary/90">
         <span>9:41</span>
-        <span className="text-accent-volt">●</span>
+        <span className="text-brand-accent">●</span>
       </div>
       <div className="relative h-full w-full bg-bg-primary text-text-primary flex flex-col overflow-hidden">
         {children}

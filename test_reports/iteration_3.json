@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 3: Verified the two reported fixes — (1) coffee modal centered classes and (2) 'Order my coffee' auto-populates with rider saved coffee. Backend (6/6) passes for the full flow: JB's saved coffee=Long Black, POST /coffee/rounds with only ride_id uses user.coffee, PATCH /riders/me to Piccolo then order-my-coffee correctly writes Piccolo, modal-selected coffee overrides saved value. Frontend flows also functionally work: modal opens, shows 14 COFFEES (no Cold Brew), 2-col grid, pink accent on selection, Send to group prepends round; 'Order my coffee' fires with NO dropdown/modal, auto-navigates to Coffee tab, and the round appears at top with 'JB' + saved coffee (verified Long Black then Piccolo after PATCH). However, ONE visual regression found: the modal has the correct `items-center justify-center` classes but is rendered inside `<div class='absolute inset-0'>` scoped to CoffeeTab (not phone-frame), and CoffeeTab is taller than the visible phone viewport (hero + feed) — so the modal's centered card ends up at y=958 while the phone-frame center is at y=524 (~430px too low, appearing as a bottom-of-viewport pop). Class check passes; VISUAL center check FAILS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CoffeeTab modal", "issue": "Modal has items-center justify-center classes but its overlay is 'absolute inset-0' scoped to CoffeeTab (which extends far below the phone-frame viewport due to hero + feed content). Result: the centered card renders around y≈958 while the phone-frame center is y≈524 — the card visually sits near/below the tab-bar, not at viewport center. Fix: portal/anchor the modal to [data-testid=phone-frame] (or use `fixed` + inset within phone-frame), so items-center resolves against the visible viewport, not the tab's full scroll height.", "selector": "[data-testid=coffee-modal]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_coffee_flow.py",
+    "/app/test_reports/pytest/coffee_flow.xml"
+  ],
+  "action_items": [
+    "Fix coffee-modal visual centering: overlay must be constrained to the phone-frame viewport (fixed inside phone-frame or portal), not `absolute inset-0` of the tall CoffeeTab. Verify card_center_y is within 15% of phone-frame center (~430)."
+  ],
+  "critical_code_review_comments": [
+    "CoffeeTab modal overlay uses `absolute inset-0` inside a scrollable/expanding tab container — this is the root cause of the mis-centered pop-up. Should be portalled to phone-frame or use `fixed` with proper stacking.",
+    "RidesTab.sendRound({ride_id}) correctly omits coffee so backend defaults to user.coffee — clean implementation.",
+    "Backend POST /coffee/rounds correctly falls back to user.coffee when body.coffee is None; validated by test_coffee_flow.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_coffee_flow.py (new pytest suite covering the two fixes end-to-end at API level)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "~90% (functional flows pass; modal visual centering fails)"},
+  "test_credentials": "jb@glcc.club/president123 (saved coffee reset to Long Black at teardown), sam@glcc.club/cycle123",
+  "seed_data_creation": "None. Test PATCHes JB's saved coffee to Piccolo mid-run and restores to Long Black at end.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fix #2 (order-my-coffee) is fully verified via /app/backend/tests/test_coffee_flow.py — do not re-test the API layer unless behavior changes. For UI re-test after main agent fixes the modal centering: measure both bounding boxes: phone-frame [data-testid=phone-frame] and the modal inner card (locator('[data-testid=coffee-modal] > div').first). Assert abs(card_center_y - phone_center_y) < phone_height * 0.15. Note: localStorage token key is 'glcc_token' (underscore), not 'glcc.token'.",
+  "rca of the issue": "Modal centering bug: <div data-testid='coffee-modal' class='absolute inset-0 ... flex items-center justify-center'> is a child of the CoffeeTab wrapper (<div class='relative pb-8'>) whose intrinsic height is hero(256px) + button(56px) + feed(unbounded) + padding. Since absolute inset-0 anchors to the nearest positioned ancestor (CoffeeTab, which is 'relative'), the overlay grows to CoffeeTab's full height (~1400px+) — pushing the center well below the phone-frame's visible 860px viewport. Repro: log in as JB, tap 'I'm at the café' — modal card appears cropped at bottom of viewport rather than centered. Mitigation: (a) render modal via createPortal into [data-testid=phone-frame], or (b) change overlay to `fixed inset-0` and set phone-frame to `position: relative` with `contain: layout`, or (c) move the overlay JSX up into HomeShell so it is anchored to phone-frame instead of the tab body."
+}
