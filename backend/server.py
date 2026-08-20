@@ -1088,7 +1088,18 @@ async def seed():
     await db.rides.create_index("sort_key")
     await db.rides.create_index("strava_event_id", unique=True, sparse=True)
     await db.messages.create_index("created_at")
-    await db.coffee_rounds.create_index("created_at")
+    # Coffee rounds auto-expire 1 hour after creation
+    try:
+        idx = await db.coffee_rounds.index_information()
+        for name, info in idx.items():
+            if name == "_id_":
+                continue
+            keys = info.get("key", [])
+            if keys and keys[0][0] == "created_at" and info.get("expireAfterSeconds") != 3600:
+                await db.coffee_rounds.drop_index(name)
+    except Exception:
+        pass
+    await db.coffee_rounds.create_index("created_at", expireAfterSeconds=3600)
     await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
     await db.push_tokens.create_index("expo_push_token")
 

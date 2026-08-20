@@ -37,19 +37,19 @@ export default function CoffeeTab() {
     });
   }, [subscribe]);
 
-  async function send() {
+  async function send(coffeeOverride) {
+    const c = coffeeOverride || user.coffee || coffee;
     try {
-      const { data } = await api.post("/coffee/rounds", { coffee });
-      if (coffee !== user.coffee) {
-        // update profile default silently
-        await api.patch("/riders/me", { coffee });
-        await refreshMe();
-      }
+      const { data } = await api.post("/coffee/rounds", { coffee: c });
       setModal(false);
       toast(`Round sent — ${data.coffee}`, { description: "The peloton hears you" });
     } catch (e) {
       toast.error(formatDetail(e));
     }
+  }
+
+  async function quickSend() {
+    await send(user.coffee);
   }
 
   return (
@@ -70,12 +70,15 @@ export default function CoffeeTab() {
 
       <div className="px-5 -mt-4 relative z-10">
         <button
-          onClick={() => setModal(true)}
+          onClick={quickSend}
           className="w-full bg-accent-pink text-white font-bold uppercase tracking-widest py-3 rounded-2xl shadow-pink active:scale-[0.98] flex items-center justify-center gap-2"
           data-testid="coffee-send-round-button"
         >
           <Coffee className="w-4 h-4" /> Order My Coffee
         </button>
+        <div className="mt-1.5 text-center text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
+          Sends {user.coffee} · change from your profile
+        </div>
       </div>
 
       <div className="px-5 mt-6">
@@ -132,7 +135,7 @@ export default function CoffeeTab() {
                 Cancel
               </button>
               <button
-                onClick={send}
+                onClick={() => send(coffee)}
                 className="flex-1 py-3 rounded-xl bg-accent-pink text-white font-bold uppercase tracking-widest text-xs shadow-pink"
                 data-testid="coffee-modal-send"
               >
