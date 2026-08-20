@@ -669,8 +669,9 @@ app.include_router(api)
 # ---------- Seed ----------
 COFFEES = [
     "Small Flat White", "Medium Flat White", "Large Flat White",
-    "Small Cappuccino", "Medium Cappuccino", "Long Black",
-    "Oat Flat White", "Espresso", "Cold Brew",
+    "Small Cappuccino", "Medium Cappuccino", "Large Cappuccino",
+    "Oat Flat White", "Espresso", "Piccolo", "Macchiato", "Cortado",
+    "Long Black", "Americano", "Mochaccino",
 ]
 
 SEED_RIDES = [

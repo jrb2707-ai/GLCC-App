@@ -4,10 +4,15 @@ export const COFFEES = [
   "Large Flat White",
   "Small Cappuccino",
   "Medium Cappuccino",
-  "Long Black",
+  "Large Cappuccino",
   "Oat Flat White",
   "Espresso",
-  "Cold Brew",
+  "Piccolo",
+  "Macchiato",
+  "Cortado",
+  "Long Black",
+  "Americano",
+  "Mochaccino",
 ];
 
 export const IMG = {
