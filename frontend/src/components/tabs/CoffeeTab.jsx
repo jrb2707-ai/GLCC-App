@@ -74,7 +74,7 @@ export default function CoffeeTab() {
         <div className="absolute top-5 left-5 right-5">
           <div className="flex items-center gap-2 text-accent-coffee">
             <Sparkles className="w-3.5 h-3.5" />
-            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em]" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.9)" }}>You&apos;re at the café?</span>
+            <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em]" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.9)" }}>KM&apos;s deserve caffeine</span>
           </div>
           <h2 className="font-heading text-4xl font-black uppercase mt-1 leading-none text-white" style={{ textShadow: "0 2px 14px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.6)" }}>Coffee Order</h2>
         </div>
