@@ -4,7 +4,8 @@ import { useAuth, useEvents } from "../../lib/store";
 import { COFFEES } from "../../lib/util";
 import Avatar from "../Avatar";
 import { resizeAvatarFile } from "../../lib/image";
-import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail } from "lucide-react";
+import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail, CreditCard } from "lucide-react";
+import MemberCard from "../MemberCard";
 import { toast } from "sonner";
 
 function ChangeEmailBlock() {
@@ -181,6 +182,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
   const [photo, setPhoto] = useState(rider.photo || null);
   const [uploading, setUploading] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
   const fileRef = useRef(null);
   const isMe = rider.id === user.id;
   const selfPending = isMe && user.status === "pending";
@@ -357,6 +359,17 @@ function ProfileModal({ rider, onClose, onSaved }) {
           </button>
         </div>
 
+        <div className="mt-3">
+          <button
+            onClick={() => setCardOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-black text-white uppercase tracking-widest text-xs font-bold py-2.5 rounded-xl active:scale-[0.99]"
+            data-testid="view-member-card"
+          >
+            <CreditCard className="w-4 h-4" />
+            View member card {rider.member_no != null && <span className="text-white/60 ml-1">#{String(rider.member_no).padStart(4, "0")}</span>}
+          </button>
+        </div>
+
         {isMe && user.status === "approved" && (
           <>
             <ChangeEmailBlock />
@@ -410,6 +423,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
           </div>
         )}
       </div>
+      {cardOpen && <MemberCard rider={rider} onClose={() => setCardOpen(false)} />}
     </div>
   );
 }
@@ -604,6 +618,21 @@ export default function RidersTab() {
       </div>
 
       {openRider && (
+        openRider.id === user.id ? (
+          <ProfileModal
+            rider={openRider}
+            onClose={() => setOpenRider(null)}
+            onSaved={() => load()}
+          />
+        ) : (
+          <MemberCard
+            rider={openRider}
+            onClose={() => setOpenRider(null)}
+            onEditProfile={user.is_admin ? () => setOpenRider({ ...openRider, __edit: true }) : undefined}
+          />
+        )
+      )}
+      {openRider?.__edit && (
         <ProfileModal
           rider={openRider}
           onClose={() => setOpenRider(null)}

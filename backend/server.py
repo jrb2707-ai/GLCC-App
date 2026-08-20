@@ -98,6 +98,7 @@ def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
         "is_admin": doc.get("is_admin", False),
         "is_president": doc.get("is_president", False),
         "status": doc.get("status", "approved"),  # approved | pending | invited
+        "member_no": doc.get("member_no"),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -791,6 +792,12 @@ async def root():
     return {"ok": True, "app": "GLCC", "time": now_utc().isoformat()}
 
 # ---------- Auth Routes ----------
+async def _next_member_no() -> int:
+    """Return the next unused member number. Numbers are permanent once assigned."""
+    top = await db.users.find({"member_no": {"$exists": True}}).sort("member_no", -1).limit(1).to_list(1)
+    return (top[0]["member_no"] + 1) if top else 1
+
+
 @api.post("/auth/register")
 async def register(body: RegisterIn):
     email = body.email.lower().strip()
@@ -807,6 +814,7 @@ async def register(body: RegisterIn):
         "is_admin": False,
         "is_president": False,
         "status": "pending",  # requires admin approval
+        "member_no": await _next_member_no(),
         "created_at": now_utc(),
     }
     result = await db.users.insert_one(doc)
@@ -978,11 +986,11 @@ async def admin_reset_password(body: AdminResetPasswordIn, admin: dict = Depends
 async def list_riders(user: dict = Depends(get_current_user)):
     approved = []
     pending = []
-    async for r in db.users.find({}).sort("created_at", 1):
+    # El Presidente always pinned at the top, then everyone else by created_at.
+    async for r in db.users.find({}).sort([("is_president", -1), ("created_at", 1)]):
         if r.get("status") == "pending":
             pending.append(serialize_rider(r, viewer=user))
         else:
-            # includes both "approved" and admin-created "invited" riders
             approved.append(serialize_rider(r, viewer=user))
     return {"riders": approved, "pending": pending if user.get("is_admin") else []}
 
@@ -1001,6 +1009,7 @@ async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)
         "is_admin": False,
         "is_president": False,
         "status": "invited",
+        "member_no": await _next_member_no(),
         "invited_by": str(admin["_id"]),
         "created_at": now_utc(),
     }
@@ -1387,6 +1396,25 @@ async def seed():
             })
 
     # Rides come from Strava sync (via /api/strava/connect). No demo seed rides.
+
+    # ---- Membership numbers ----
+    # JB (master admin) = 1, everyone else gets the next available number.
+    # This runs on every startup, is idempotent, and only assigns numbers to
+    # users that don't have one yet.
+    master = await db.users.find_one({"email": admin_email})
+    if master and master.get("member_no") != 1:
+        # Clear anyone else who might be sitting on #1, then claim it.
+        await db.users.update_many({"member_no": 1, "email": {"$ne": admin_email}}, {"$unset": {"member_no": ""}})
+        await db.users.update_one({"_id": master["_id"]}, {"$set": {"member_no": 1}})
+
+    # Highest number already assigned so we can hand out the next ones.
+    top = await db.users.find({"member_no": {"$exists": True}}).sort("member_no", -1).limit(1).to_list(1)
+    next_no = (top[0]["member_no"] + 1) if top else 2
+    async for u in db.users.find({"member_no": {"$exists": False}}).sort("created_at", 1):
+        if u["email"] == admin_email:
+            continue
+        await db.users.update_one({"_id": u["_id"]}, {"$set": {"member_no": next_no}})
+        next_no += 1
 
     # Seed some feed
     if await db.messages.count_documents({}) == 0:
