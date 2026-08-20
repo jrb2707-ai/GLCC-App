@@ -7,6 +7,7 @@ import RidesTab from "./tabs/RidesTab";
 import CoffeeTab from "./tabs/CoffeeTab";
 import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
+import PushBanner from "./PushBanner";
 
 const TABS = [
   { id: "rides", label: "Rides", icon: Bike },
@@ -36,8 +37,10 @@ export default function HomeShell() {
     const next = await requestBrowserPush();
     setPerm(next);
     if (next === "granted") {
+      localStorage.setItem("glcc_push_banner_dismissed", "1");
       toast("Push notifications enabled", { description: "Coffee rounds and @mentions will ping you" });
     } else if (next === "denied") {
+      localStorage.setItem("glcc_push_banner_dismissed", "1");
       toast.error("Notifications blocked — enable them in browser settings");
     }
   }
@@ -83,6 +86,7 @@ export default function HomeShell() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar" data-testid="tab-content">
+        <PushBanner />
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
