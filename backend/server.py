@@ -525,8 +525,8 @@ def _now_ts() -> int:
 async def get_strava_access_token() -> str:
     """Load stored token, refresh if expiring in <1h. Raises 409 if not connected."""
     doc = await db.strava_tokens.find_one({"_id": "club"})
-    if not doc or not doc.get("refresh_token"):
-        raise HTTPException(status_code=409, detail="Strava is not connected")
+    if not doc or not doc.get("refresh_token") or doc.get("refresh_token") == "MANUAL_TOKEN_NO_REFRESH":
+        raise HTTPException(status_code=401, detail="Strava authorization expired; please reconnect")
     if doc.get("access_token") and doc.get("expires_at", 0) > _now_ts() + 3600:
         return doc["access_token"]
     async with httpx.AsyncClient(timeout=20) as h:
@@ -537,6 +537,8 @@ async def get_strava_access_token() -> str:
             "refresh_token": doc["refresh_token"],
         })
     if r.status_code in (400, 401):
+        # Persist so /strava/status can surface a Reconnect prompt without a fresh sync attempt.
+        await db.strava_tokens.update_one({"_id": "club"}, {"$set": {"last_refresh_error": now_utc().isoformat()}})
         raise HTTPException(status_code=401, detail="Strava authorization expired; please reconnect")
     r.raise_for_status()
     data = r.json()
@@ -547,7 +549,7 @@ async def get_strava_access_token() -> str:
             "expires_at": data.get("expires_at", _now_ts() + data.get("expires_in", 21600)),
             "refresh_token": data.get("refresh_token", doc["refresh_token"]),
             "updated_at": now_utc(),
-        }},
+        }, "$unset": {"last_refresh_error": ""}},
     )
     return data["access_token"]
 
@@ -696,10 +698,16 @@ async def sync_club_events() -> dict:
 
 @api.get("/strava/status")
 async def strava_status(user: dict = Depends(get_current_user)):
-    token_doc = await db.strava_tokens.find_one({"_id": "club"}, {"refresh_token": 1})
+    token_doc = await db.strava_tokens.find_one({"_id": "club"}, {"refresh_token": 1, "expires_at": 1, "last_refresh_error": 1})
     meta = await db.strava_meta.find_one({"_id": "club"})
+    refresh_token = (token_doc or {}).get("refresh_token")
+    # A placeholder / missing refresh token means we cannot renew — the club needs to reconnect.
+    invalid_refresh = (not refresh_token) or refresh_token == "MANUAL_TOKEN_NO_REFRESH"
+    has_recent_error = bool((token_doc or {}).get("last_refresh_error"))
+    needs_reconnect = bool(token_doc) and (invalid_refresh or has_recent_error)
     return {
-        "connected": bool(token_doc and token_doc.get("refresh_token")),
+        "connected": bool(token_doc and not invalid_refresh and not has_recent_error),
+        "needs_reconnect": needs_reconnect,
         "last_sync_at": meta.get("last_sync_at").isoformat() if meta and meta.get("last_sync_at") else None,
         "event_count": (meta or {}).get("event_count", 0),
         "club_id": STRAVA_CLUB_ID,

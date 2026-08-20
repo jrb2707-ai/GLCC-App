@@ -1,0 +1,22 @@
+{
+  "summary": "Verified Coffee tab hero image swap to Rapha cappuccino. Login as admin succeeded, home-shell rendered, coffee-tab loaded, hero <img alt='espresso'> src matches new customer-assets URL, image completed loading (naturalWidth=1500, naturalHeight=2000, complete=true), asset HTTP fetch returns 200. Regression: coffee-send-round-button visible and enabled, coffee-feed renders. Rides regression: strava-panel renders in needs-reconnect state with strava-reconnect button visible (no crash). All targeted checks pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Duplicate DOM nodes exist for both mobile and desktop layouts sharing the same data-testid values (input-email, submit-auth, home-shell, tab-coffee, strava-panel). Automated tests must filter by :visible or use scoped selectors. Consider gating one branch with CSS `hidden` set to display:none (currently one is visually hidden but still present in DOM) or namespacing testids (e.g., input-email-mobile / input-email-desktop) to make E2E scripts more robust."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "Admin jb@glcc.club / Roenick2707 (from /app/memory/test_credentials.md) — works",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PhoneFrame renders both mobile and desktop layouts in DOM; several data-testid selectors have 2 matches. Always use ':visible' filter or `.first` on the visible one. At 390x844 viewport, mobile layout is visible; at desktop widths the other one shows. Strava currently in needs_reconnect state for admin jb@glcc.club.",
+  "rca of the issue": "N/A — no bugs found. Image swap verified end-to-end."
+}

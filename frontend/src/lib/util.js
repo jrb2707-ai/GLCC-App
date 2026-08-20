@@ -17,7 +17,7 @@ export const COFFEES = [
 
 export const IMG = {
   espresso:
-    "https://images.unsplash.com/photo-1613856204847-7f0060f81b3e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwyfHxlc3ByZXNzbyUyMGN1cCUyMGNhZmUlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc4NzE4MDk3MXww&ixlib=rb-4.1.0&q=85",
+    "https://customer-assets-lxgj4vgw.emergentagent.net/job_mobile-craft-4628/artifacts/dikgnf47_IMG_5201.webp",
   peloton:
     "https://images.unsplash.com/photo-1758300620054-f42cf6e5458f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHw0fHxyb2FkJTIwY3ljbGlzdCUyMGdyb3VwJTIwcGVsb3RvbnxlbnwwfHx8fDE3ODcxODA5NzF8MA&ixlib=rb-4.1.0&q=85",
   cyclist:

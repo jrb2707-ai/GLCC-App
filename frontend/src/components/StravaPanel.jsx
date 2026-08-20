@@ -88,17 +88,20 @@ export default function StravaPanel({ onSynced }) {
   }
 
   const connected = status?.connected;
+  const needsReconnect = status?.needs_reconnect;
 
   return (
     <div
       className={`mx-1 mb-3 rounded-xl border p-3 flex items-center gap-3 ${
-        connected
+        needsReconnect
+          ? "bg-status-cant/10 border-status-cant/40"
+          : connected
           ? "bg-[#FC4C02]/10 border-[#FC4C02]/40"
           : "bg-bg-secondary border-border-subtle border-dashed"
       }`}
       data-testid="strava-panel"
     >
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-none ${connected ? "bg-[#FC4C02] text-white" : "bg-[#FC4C02]/20 text-[#FC4C02]"}`}>
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-none ${needsReconnect ? "bg-status-cant/20 text-status-cant" : connected ? "bg-[#FC4C02] text-white" : "bg-[#FC4C02]/20 text-[#FC4C02]"}`}>
         <Zap className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
@@ -106,10 +109,22 @@ export default function StravaPanel({ onSynced }) {
           Strava · Club {status?.club_id || "50775"}
         </div>
         <div className="text-sm font-semibold truncate">
-          {connected ? `Synced · ${status.event_count} events · ${fmtWhen(status.last_sync_at)}` : "Not connected"}
+          {needsReconnect
+            ? "Authorisation expired — reconnect to sync"
+            : connected
+            ? `Synced · ${status.event_count} events · ${fmtWhen(status.last_sync_at)}`
+            : "Not connected"}
         </div>
       </div>
-      {connected ? (
+      {needsReconnect ? (
+        <button
+          onClick={connect}
+          className="text-[10px] uppercase tracking-widest font-bold bg-[#FC4C02] text-white px-3 py-1.5 rounded-md active:scale-95"
+          data-testid="strava-reconnect"
+        >
+          Reconnect
+        </button>
+      ) : connected ? (
         <div className="flex items-center gap-1">
           <button
             onClick={syncNow}

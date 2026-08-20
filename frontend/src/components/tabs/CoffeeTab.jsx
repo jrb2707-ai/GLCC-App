@@ -7,12 +7,21 @@ import { Coffee, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CoffeeTab() {
-  const { user, refreshMe } = useAuth();
+  const { user } = useAuth();
   const { subscribe } = useEvents();
   const [rounds, setRounds] = useState([]);
   const [modal, setModal] = useState(false);
   const [coffee, setCoffee] = useState(user.coffee || "Medium Flat White");
   const isPending = user.status === "pending";
+
+  // Only show orders placed today (local time). Backend TTL is 1h so this is
+  // usually the same set anyway, but the filter is explicit and future-proof.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayRounds = rounds.filter((r) => {
+    if (!r.created_at) return false;
+    return new Date(r.created_at) >= startOfToday;
+  });
 
   const load = useCallback(async () => {
     try {
@@ -56,16 +65,16 @@ export default function CoffeeTab() {
   return (
     <div className="relative pb-8" data-testid="coffee-tab">
       {/* Hero */}
-      <div className="relative h-64 overflow-hidden">
-        <img src={IMG.espresso} alt="espresso" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-bg-primary" />
+      <div className="relative h-72 overflow-hidden">
+        <img src={IMG.espresso} alt="espresso" className="w-full h-full object-cover" style={{ objectPosition: "center 65%" }} />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/40 to-bg-primary" />
         <div className="absolute inset-0 grain" />
         <div className="absolute top-5 left-5 right-5">
           <div className="flex items-center gap-2 text-accent-coffee">
             <Sparkles className="w-3.5 h-3.5" />
             <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em]">You&apos;re at the café?</span>
           </div>
-          <h2 className="font-heading text-4xl font-black uppercase mt-1 leading-none">Coffee Order</h2>
+          <h2 className="font-heading text-4xl font-black uppercase mt-1 leading-none" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.55)" }}>Coffee Order</h2>
         </div>
       </div>
 
@@ -84,12 +93,12 @@ export default function CoffeeTab() {
       </div>
 
       <div className="px-5 mt-6">
-        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">Recent rounds</div>
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">Today&apos;s coffee orders</div>
         <div className="space-y-2" data-testid="coffee-feed">
-          {rounds.length === 0 && (
+          {todayRounds.length === 0 && (
             <div className="text-text-muted text-xs py-8 text-center">Silent morning. Someone stand up.</div>
           )}
-          {rounds.map((r) => (
+          {todayRounds.map((r) => (
             <div
               key={r.id}
               className="bg-bg-secondary border border-border-subtle rounded-xl p-3 flex items-center gap-3"

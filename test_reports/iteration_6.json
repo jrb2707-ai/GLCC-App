@@ -1,0 +1,24 @@
+{
+  "summary": "Verified fix for stale Strava placeholder refresh_token. Backend now returns connected=false/needs_reconnect=true; sync returns 401 with 'reconnect' detail; last_refresh_error persists so subsequent status calls stay in needs_reconnect state. Frontend renders red danger 'Authorisation expired \u2014 reconnect to sync' panel with strava-reconnect button; strava-sync/disconnect/connect are NOT rendered. Reconnect button fires GET /api/strava/connect returning 200 with a Strava OAuth URL.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_strava_reconnect.py",
+    "/app/test_reports/pytest/strava_reconnect.xml",
+    "/app/test_reports/strava_panel.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "get_strava_access_token correctly treats placeholder token and 400/401 refresh failure as invalid and persists last_refresh_error; unsets it on successful refresh (good).",
+    "strava_status derives needs_reconnect from either invalid refresh_token OR last_refresh_error flag \u2014 sticky behaviour is correct.",
+    "Login form renders duplicate input-email/input-password/tab-rides testids for SIGN IN and JOIN CLUB tab panels (one hidden). Consider scoping testids per tab (e.g. input-signin-email vs input-signup-email) to avoid strict-mode conflicts in automation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "jb@glcc.club / Roenick2707 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Tested against existing placeholder token in preview Mongo (per request).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The strava_tokens doc in preview Mongo intentionally has refresh_token='MANUAL_TOKEN_NO_REFRESH'; all Strava sync flows will 401. Do not seed a real token unless you also want to exercise the happy path. Login form has 2 sets of identical data-testids (Sign In tab + Join Club tab) \u2014 use .last for the visible one on mobile viewport.",
+  "rca of the issue": "Original bug: strava_tokens had placeholder refresh_token 'MANUAL_TOKEN_NO_REFRESH' from a manual seed. get_strava_access_token would attempt a refresh with that string, fail at Strava, and raise 401 \u2014 but /api/strava/status only checked for token existence, so it reported connected:true. Fix: (1) get_strava_access_token treats placeholder/missing refresh_token as invalid up front and persists last_refresh_error on 400/401 refresh failure; (2) strava_status flips connected:false and needs_reconnect:true when refresh_token is invalid or last_refresh_error is set; (3) StravaPanel.jsx renders a red 'Authorisation expired' state with a strava-reconnect button when needs_reconnect is true, hiding sync/disconnect. Verified end-to-end."
+}
