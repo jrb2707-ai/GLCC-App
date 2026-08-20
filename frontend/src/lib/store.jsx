@@ -125,6 +125,7 @@ export function AppProviders({ children }) {
         setUser(data);
         connectWs(t);
       } catch (e) {
+        console.warn("[glcc] auth boot failed:", e?.message || e);
         setToken(null);
       } finally {
         setBooted(true);
@@ -163,7 +164,7 @@ export function AppProviders({ children }) {
       const { data } = await api.get("/auth/me");
       setUser(data);
     } catch (e) {
-      // ignore
+      console.warn("[glcc] refreshMe failed:", e?.message || e);
     }
   };
 
