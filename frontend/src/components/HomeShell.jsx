@@ -12,7 +12,7 @@ import PushBanner from "./PushBanner";
 const TABS = [
   { id: "rides", label: "Rides", icon: Bike, activeClass: "text-accent-strava" },
   { id: "coffee", label: "Coffee", icon: Coffee, activeClass: "text-accent-pink" },
-  { id: "riders", label: "Riders", icon: Users, activeClass: "text-white" },
+  { id: "riders", label: "Riders", icon: Users, activeClass: "text-black dark:text-white" },
   { id: "chat", label: "Chat", icon: MessageSquare, activeClass: "text-[#007AFF]" },
 ];
 
