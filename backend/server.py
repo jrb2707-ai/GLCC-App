@@ -545,6 +545,7 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
     occ = (ev.get("upcoming_occurrences") or [None])[0]
     day = date_str = time_str = None
     starts_at = None
+    weekday = None  # 0=Mon .. 6=Sun (local)
     if occ:
         try:
             dt_utc = datetime.fromisoformat(occ.replace("Z", "+00:00"))
@@ -559,6 +560,7 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
             day = dt.strftime("%a").upper()
             date_str = dt.strftime("%-d %b")
             time_str = dt.strftime("%-I:%M %p")
+            weekday = dt.weekday()
         except Exception:
             pass
     route = ev.get("route") or {}
@@ -579,6 +581,10 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
             distance = f"{round(d_m / 1000)} km"
         if isinstance(e_m, (int, float)) and e_m > 0:
             elevation = f"{round(e_m)} m"
+    # Weekday rides (Mon–Fri) always stop at The Brunchery
+    cafe = None
+    if weekday is not None and weekday <= 4:
+        cafe = "The Brunchery · 318 Richmond Rd, Grey Lynn"
     strava_url = f"https://www.strava.com/clubs/{STRAVA_CLUB_ID}/group_events/{event_id}"
     return {
         "strava_event_id": event_id,
@@ -595,7 +601,7 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
         "strava_url": strava_url,
         "map_url": map_url,
         "polyline": polyline,
-        "cafe": None,
+        "cafe": cafe,
         "pace": None,
         "updated_at": now_utc(),
         "sort_key": starts_at.isoformat() if starts_at else f"z-{event_id}",
