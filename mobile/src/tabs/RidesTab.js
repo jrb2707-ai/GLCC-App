@@ -9,6 +9,7 @@ import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import StravaPanel from "../components/StravaPanel";
 import RouteMap from "../components/RouteMap";
+import { readCache, writeCache } from "../lib/cache";
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: colors.statusGoing },
@@ -39,12 +40,23 @@ export default function RidesTab() {
       const [rr, us] = await Promise.all([api.get("/rides"), api.get("/riders")]);
       setRides(rr.data.rides || []);
       setRiders(us.data.riders || []);
+      writeCache("rides", rr.data.rides || []);
+      writeCache("riders", us.data.riders || []);
       setErr("");
     } catch (e) {
       setErr(formatDetail(e));
     } finally { setLoading(false); setRefreshing(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Warm from cache so the ride list appears instantly at the start line
+    (async () => {
+      const [cachedRides, cachedRiders] = await Promise.all([readCache("rides"), readCache("riders")]);
+      if (cachedRides) setRides(cachedRides);
+      if (cachedRiders) setRiders(cachedRiders);
+      if (cachedRides || cachedRiders) setLoading(false);
+    })();
+    load();
+  }, [load]);
 
   // WS-driven live updates for rides + riders + strava sync completion.
   useEffect(() => {

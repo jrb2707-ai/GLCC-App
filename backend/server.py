@@ -99,6 +99,7 @@ def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
         "is_president": doc.get("is_president", False),
         "status": doc.get("status", "approved"),  # approved | pending | invited
         "member_no": doc.get("member_no"),
+        "ride_reminders": doc.get("ride_reminders", True),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -306,6 +307,8 @@ async def _send_ride_reminder(ride: dict, going_users: list[dict]) -> int:
     for u in going_users:
         to_email = u.get("email")
         if not to_email or not u.get("password_hash"):
+            continue
+        if u.get("ride_reminders") is False:
             continue
         html = f"""
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#0b0d10;padding:32px 16px;color:#e6edf3">
@@ -556,6 +559,7 @@ class ProfileUpdateIn(BaseModel):
     bio: Optional[str] = None
     coffee: Optional[str] = None
     photo: Optional[str] = None
+    ride_reminders: Optional[bool] = None
 
 class AdminActionIn(BaseModel):
     action: str  # approve | deny | make_admin | remove_admin | delete
@@ -1166,7 +1170,7 @@ async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)
 async def update_me(body: ProfileUpdateIn, user: dict = Depends(require_approved)):
     # Riders can only self-edit their name and coffee. Role, bio, photo, join
     # date and member number are all managed elsewhere (admin route / server).
-    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "coffee"}}
+    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "coffee", "ride_reminders"}}
     if not update:
         return serialize_rider(user)
     await db.users.update_one({"_id": user["_id"]}, {"$set": update})

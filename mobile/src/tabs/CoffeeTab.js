@@ -8,6 +8,7 @@ import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing, COFFEES } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import { timeAgo } from "../lib/util";
+import { readCache, writeCache } from "../lib/cache";
 
 const HERO = "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80";
 
@@ -26,10 +27,17 @@ export default function CoffeeTab() {
     try {
       const { data } = await api.get("/coffee/rounds");
       setRounds(data.rounds || []);
+      writeCache("coffee", data.rounds || []);
     } catch (e) { /* ignore */ }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      const cached = await readCache("coffee");
+      if (cached) { setRounds(cached); setLoading(false); }
+    })();
+    load();
+  }, [load]);
 
   // Live coffee-round events via WS
   useEffect(() => {

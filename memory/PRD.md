@@ -53,6 +53,11 @@ See `/app/memory/test_credentials.md`.
     - `components/RouteMap.js`: Shows Strava `map_url` when present, otherwise renders a stylised SVG polyline (react-native-svg) with a volt→orange gradient. Rendered inside ride detail view.
     - `app.json`: Added `expo-image-picker` plugin; `NSPhotoLibraryUsageDescription` already present.
     - New deps: `expo-image-picker@~15.0.0`, `expo-image-manipulator@~12.0.0`, `react-native-svg@15.2.0`.
+  - **Phase 3.5 (Feb 2026): DONE** — Polish + retention loop:
+    - Chat @mention picker: horizontal riders list appears above the input when `@` is typed (or the new `@` button is tapped), filters as you type, inserts `@RiderName` handle so mention pushes fire more often.
+    - Test push button on self ProfileModal calls `/api/push/test` and reports device count / no-devices state.
+    - Ride reminder toggle on self ProfileModal — new backend field `ride_reminders` (defaults true) round-trips through `ProfileUpdateIn` and `/riders/me`; the reminder loop skips riders with the flag off.
+    - Offline cache via `@react-native-async-storage/async-storage` — rides, riders, pending, coffee rounds hydrate from disk on boot so the app is populated at the ride start line before the network responds. Cache clears on logout.
   - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
   - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.

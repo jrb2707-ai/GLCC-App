@@ -7,6 +7,13 @@ import { api, formatDetail } from "../lib/api";
 import { colors, radius } from "../constants/theme";
 import { useAuth, useEvents } from "../lib/store";
 import { fmtTime } from "../lib/util";
+import Avatar from "../components/Avatar";
+import { readCache } from "../lib/cache";
+
+// Turn "Jason Bryant" into "JasonBryant" so the mention token is a single word.
+function toHandle(name) {
+  return String(name || "").replace(/[^\p{L}\p{N}]/gu, "");
+}
 
 export default function ChatTab() {
   const { user } = useAuth();
@@ -14,24 +21,37 @@ export default function ChatTab() {
   const [messages, setMessages] = useState([]);
   const [weather, setWeather] = useState(null);
   const [text, setText] = useState("");
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  const [riders, setRiders] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState(null); // null | { start, term }
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
   const isPending = user?.status === "pending";
 
   const load = useCallback(async () => {
     try {
-      const [m, w] = await Promise.all([
+      const [m, w, r] = await Promise.all([
         isPending ? Promise.resolve({ data: { messages: [] } }) : api.get("/chat/messages"),
         api.get("/weather").catch(() => ({ data: null })),
+        api.get("/riders").catch(() => ({ data: { riders: [] } })),
       ]);
       setMessages(m.data?.messages || []);
       setWeather(w.data || null);
+      setRiders(r.data?.riders || []);
     } catch (e) { /* ignore */ }
     finally { setLoading(false); }
   }, [isPending]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Warm messages + roster from cache so the peloton feed appears instantly
+    (async () => {
+      const cachedRiders = await readCache("riders");
+      if (cachedRiders) setRiders(cachedRiders);
+    })();
+    load();
+  }, [load]);
 
   // Live updates via WebSocket — no polling needed anymore.
   useEffect(() => {
@@ -48,6 +68,7 @@ export default function ChatTab() {
     if (!t || sending) return;
     setSending(true);
     setText("");
+    setMentionQuery(null);
     try {
       // Server broadcasts the new message via WS, so we don't need to reload.
       await api.post("/chat/messages", { text: t });
@@ -55,6 +76,52 @@ export default function ChatTab() {
     } catch (e) { /* ignore */ }
     finally { setSending(false); }
   }
+
+  // Detect an @token being typed just before the caret so we can offer
+  // a rider list to autocomplete against.
+  function detectMention(next, selStart) {
+    const before = next.slice(0, selStart);
+    const m = /(^|\s)@([\p{L}\p{N}]*)$/u.exec(before);
+    if (!m) { setMentionQuery(null); return; }
+    setMentionQuery({ start: selStart - m[2].length - 1, term: m[2].toLowerCase() });
+  }
+
+  function onChangeText(next) {
+    setText(next);
+    detectMention(next, selection.start || next.length);
+  }
+
+  function onSelectionChange(e) {
+    const sel = e.nativeEvent.selection;
+    setSelection(sel);
+    detectMention(text, sel.start);
+  }
+
+  function insertMention(rider) {
+    if (!mentionQuery) return;
+    const handle = toHandle(rider.name);
+    const before = text.slice(0, mentionQuery.start);
+    const after = text.slice(selection.start ?? text.length);
+    const next = `${before}@${handle} ${after}`;
+    setText(next);
+    setMentionQuery(null);
+    // Give focus a beat to reclaim the input so the user can keep typing.
+    setTimeout(() => inputRef.current?.focus(), 40);
+  }
+
+  function triggerMentionPicker() {
+    const nextText = text + (text && !text.endsWith(" ") ? " @" : "@");
+    setText(nextText);
+    setMentionQuery({ start: nextText.length - 1, term: "" });
+    setTimeout(() => inputRef.current?.focus(), 40);
+  }
+
+  const mentionCandidates = mentionQuery
+    ? riders
+        .filter((r) => r.id !== user?.id && r.status !== "invited")
+        .filter((r) => !mentionQuery.term || String(r.name || "").toLowerCase().includes(mentionQuery.term))
+        .slice(0, 8)
+    : [];
 
   if (loading) return <View style={s.center}><ActivityIndicator color={colors.accentVolt} /></View>;
 
@@ -116,10 +183,45 @@ export default function ChatTab() {
         )}
       </ScrollView>
 
+      {mentionCandidates.length > 0 && (
+        <ScrollView
+          horizontal
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+          style={s.mentionRow}
+          contentContainerStyle={{ paddingHorizontal: 10, gap: 8, alignItems: "center" }}
+          testID="mention-picker"
+        >
+          <Text style={s.mentionEyebrow}>MENTION</Text>
+          {mentionCandidates.map((r) => (
+            <TouchableOpacity
+              key={r.id}
+              onPress={() => insertMention(r)}
+              style={s.mentionChip}
+              testID={`mention-${r.id}`}
+            >
+              <Avatar name={r.name} photo={r.photo} size="xs" />
+              <Text style={s.mentionName}>@{toHandle(r.name)}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
       <View style={s.inputRow}>
+        <TouchableOpacity
+          onPress={triggerMentionPicker}
+          disabled={isPending || riders.length === 0}
+          style={[s.atBtn, (isPending || riders.length === 0) && { opacity: 0.4 }]}
+          testID="mention-open"
+        >
+          <Text style={{ color: "#007AFF", fontWeight: "900", fontSize: 18 }}>@</Text>
+        </TouchableOpacity>
         <TextInput
+          ref={inputRef}
           value={text}
-          onChangeText={setText}
+          onChangeText={onChangeText}
+          onSelectionChange={onSelectionChange}
+          selection={selection}
           placeholder={isPending ? "Awaiting admin approval to post…" : "Message the peloton"}
           placeholderTextColor="#999"
           editable={!isPending}
@@ -163,4 +265,9 @@ const s = StyleSheet.create({
   inputRow: { flexDirection: "row", padding: 10, borderTopWidth: 1, borderTopColor: "#e5e5e5", backgroundColor: "#fafafa", gap: 8, alignItems: "center" },
   input: { flex: 1, backgroundColor: "#fff", borderColor: "#d0d0d0", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 10, color: "#111", fontSize: 14 },
   sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#007AFF", alignItems: "center", justifyContent: "center" },
+  atBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(0,122,255,0.08)", alignItems: "center", justifyContent: "center" },
+  mentionRow: { backgroundColor: "#fafafa", borderTopWidth: 1, borderTopColor: "#e5e5e5", paddingVertical: 8 },
+  mentionEyebrow: { color: "#666", fontSize: 9, letterSpacing: 3, fontWeight: "700", marginRight: 4 },
+  mentionChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#fff", borderColor: "#d0d0d0", borderWidth: 1, borderRadius: 999, paddingLeft: 4, paddingRight: 10, paddingVertical: 3 },
+  mentionName: { color: "#111", fontSize: 12, fontWeight: "700" },
 });

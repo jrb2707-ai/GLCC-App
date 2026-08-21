@@ -10,6 +10,7 @@ import Avatar from "../components/Avatar";
 import MemberCard from "../components/MemberCard";
 import { pad4 } from "../lib/util";
 import { pickAvatar } from "../lib/imagePicker";
+import { readCache, writeCache } from "../lib/cache";
 
 export default function RidersTab() {
   const { user, refreshMe } = useAuth();
@@ -26,10 +27,20 @@ export default function RidersTab() {
       const { data } = await api.get("/riders");
       setRiders(data.riders || []);
       setPending(data.pending || []);
+      writeCache("riders", data.riders || []);
+      writeCache("pending", data.pending || []);
     } catch (e) { /* ignore */ }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      const [cachedR, cachedP] = await Promise.all([readCache("riders"), readCache("pending")]);
+      if (cachedR) setRiders(cachedR);
+      if (cachedP) setPending(cachedP);
+      if (cachedR || cachedP) setLoading(false);
+    })();
+    load();
+  }, [load]);
 
   // Live roster updates
   useEffect(() => {
@@ -144,10 +155,12 @@ function ProfileModal({ rider, onClose, onSaved }) {
   const [bio, setBio] = useState(rider.bio || "");
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
   const [photo, setPhoto] = useState(rider.photo || null);
+  const [reminders, setReminders] = useState(rider.ride_reminders !== false);
   const [uploading, setUploading] = useState(false);
   const [coffeeOpen, setCoffeeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
   const isMe = rider.id === user?.id;
   const selfPending = isMe && user?.status === "pending";
   const canEdit = (user?.is_admin || isMe) && !selfPending;
@@ -175,7 +188,9 @@ function ProfileModal({ rider, onClose, onSaved }) {
     setSaving(true);
     try {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
-      const body = isMe ? { name, coffee } : { name, role, bio, photo };
+      const body = isMe
+        ? { name, coffee, ride_reminders: reminders }
+        : { name, role, bio, photo };
       await api.patch(url, body);
       await onSaved?.();
       Alert.alert("Profile", "Saved");
@@ -183,6 +198,18 @@ function ProfileModal({ rider, onClose, onSaved }) {
     } catch (e) {
       Alert.alert("Profile", formatDetail(e));
     } finally { setSaving(false); }
+  }
+
+  async function sendTestPush() {
+    if (testingPush) return;
+    setTestingPush(true);
+    try {
+      const { data } = await api.post("/push/test");
+      if (data?.ok) Alert.alert("Test push sent", `Delivered to ${data.sent} device${data.sent === 1 ? "" : "s"}. Should land within a few seconds.`);
+      else Alert.alert("No devices", data?.detail || "This account hasn't registered a push token yet.");
+    } catch (e) {
+      Alert.alert("Push", formatDetail(e));
+    } finally { setTestingPush(false); }
   }
 
   async function act(action) {
@@ -270,6 +297,21 @@ function ProfileModal({ rider, onClose, onSaved }) {
                     </View>
                   </View>
                 )}
+                {isMe && (
+                  <TouchableOpacity
+                    onPress={() => setReminders((v) => !v)}
+                    style={s.toggleRow}
+                    testID="reminder-toggle"
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.miniLabel}>RIDE REMINDER EMAILS</Text>
+                      <Text style={s.toggleHint}>Evening-before email for rides you're going to</Text>
+                    </View>
+                    <View style={[s.toggleTrack, reminders && s.toggleTrackOn]}>
+                      <View style={[s.toggleThumb, reminders && s.toggleThumbOn]} />
+                    </View>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -290,6 +332,18 @@ function ProfileModal({ rider, onClose, onSaved }) {
                 🪪 VIEW MEMBER CARD {rider.member_no != null && <Text style={{ color: "rgba(255,255,255,0.6)" }}>#{pad4(rider.member_no)}</Text>}
               </Text>
             </TouchableOpacity>
+
+            {isMe && (
+              <TouchableOpacity
+                onPress={sendTestPush}
+                disabled={testingPush}
+                style={s.pushBtn}
+                testID="send-test-push"
+              >
+                {testingPush && <ActivityIndicator size="small" color={colors.accentVolt} style={{ marginRight: 6 }} />}
+                <Text style={s.pushBtnTxt}>🔔 SEND A TEST PUSH</Text>
+              </TouchableOpacity>
+            )}
 
             {isMe && user?.status === "approved" && (
               <View style={{ marginTop: 12 }}>
@@ -534,4 +588,14 @@ const s = StyleSheet.create({
 
   photoBtn: { position: "absolute", right: -4, bottom: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accentVolt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.bgSecondary },
   uploadingTxt: { color: colors.accentVolt, fontSize: 10, letterSpacing: 3, fontWeight: "700", marginTop: 6 },
+
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, padding: 12 },
+  toggleHint: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
+  toggleTrack: { width: 44, height: 26, borderRadius: 13, backgroundColor: colors.borderSubtle, padding: 3, justifyContent: "center" },
+  toggleTrackOn: { backgroundColor: colors.accentVolt },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff" },
+  toggleThumbOn: { transform: [{ translateX: 18 }], backgroundColor: "#000" },
+
+  pushBtn: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(212,255,0,0.10)", borderColor: "rgba(212,255,0,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 12 },
+  pushBtnTxt: { color: colors.accentVolt, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
 });

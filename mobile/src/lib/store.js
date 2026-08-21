@@ -4,6 +4,7 @@ import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { api, setToken as persistToken } from "./api";
 import { registerForPush } from "./push";
+import { clearAllCache } from "./cache";
 
 const AuthContext = createContext(null);
 const EventsContext = createContext(null);
@@ -101,6 +102,7 @@ export function AuthProvider({ children }) {
     wsToken.current = null;
     closeWs();
     await persistToken(null);
+    await clearAllCache();
     setUser(null);
   }, [closeWs]);
 
