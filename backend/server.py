@@ -608,6 +608,9 @@ _CAFE_MAP: list[tuple[str, str]] = [
     ("airport ride", "Daily Bread · Britomart"),
     ("gentle sunday spin", "Daily Bread · Britomart"),
     ("sunday spin", "Daily Bread · Britomart"),
+    ("up and over", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("jailbreak", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("jail break", "Little Sister · 3 Onslow Ave, Epsom"),
     ("devonport loop", "Calliope Rd Cafe · Devonport"),
     # Anywhere out west or through the Waitakere Ranges we stop at Little
     # Sister on the way home.
