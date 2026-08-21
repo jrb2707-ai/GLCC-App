@@ -617,22 +617,29 @@ export default function RidersTab() {
   const [riders, setRiders] = useState([]);
   const [pending, setPending] = useState([]);
   const [blockedIds, setBlockedIds] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [processingReport, setProcessingReport] = useState(null);
   const [openRider, setOpenRider] = useState(null);
   const [registerOpen, setRegisterOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [r, b] = await Promise.all([
+      const [r, b, rep] = await Promise.all([
         api.get("/riders"),
         api.get("/blocks").catch(() => ({ data: { blocked_ids: [] } })),
+        user.is_admin
+          ? api.get("/admin/reports?status_filter=open").catch(() => ({ data: { reports: [] } }))
+          : Promise.resolve({ data: { reports: [] } }),
       ]);
       setRiders(r.data.riders);
       setPending(r.data.pending);
       setBlockedIds(b.data.blocked_ids || []);
+      setReports(rep.data.reports || []);
     } catch (e) {
       // ignore
     }
-  }, []);
+  }, [user.is_admin]);
 
   useEffect(() => {
     load();
@@ -640,11 +647,23 @@ export default function RidersTab() {
 
   useEffect(() => {
     return subscribe((evt) => {
-      if (["rider.updated", "rider.pending", "rider.deleted"].includes(evt.type)) {
+      if (["rider.updated", "rider.pending", "rider.deleted", "chat.report", "chat.deleted"].includes(evt.type)) {
         load();
       }
     });
   }, [subscribe, load]);
+
+  async function actOnReport(id, action) {
+    if (processingReport) return;
+    setProcessingReport(id);
+    try {
+      const path = action === "delete" ? `/admin/reports/${id}/delete-message` : `/admin/reports/${id}/dismiss`;
+      await api.post(path);
+      toast(action === "delete" ? "Message deleted" : "Report dismissed");
+      await load();
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setProcessingReport(null); }
+  }
 
   async function decidePending(id, action) {
     try {
@@ -673,6 +692,56 @@ export default function RidersTab() {
         >
           <UserPlus className="w-4 h-4" /> Invite a rider
         </button>
+      )}
+
+      {user.is_admin && reports.length > 0 && (
+        <div className="bg-status-cant/10 border border-status-cant/30 rounded-xl p-3 mb-3" data-testid="reports-block">
+          <button
+            onClick={() => setReportsOpen((v) => !v)}
+            className="w-full flex items-center justify-between"
+            data-testid="reports-toggle"
+          >
+            <span className="text-[10px] uppercase font-mono-stat tracking-widest text-status-cant">
+              🚩 Reported messages · {reports.length}
+            </span>
+            <span className="text-status-cant font-black">{reportsOpen ? "−" : "+"}</span>
+          </button>
+          {reportsOpen && (
+            <div className="space-y-2 mt-2">
+              {reports.map((r) => (
+                <div key={r.id} className="bg-bg-primary rounded-lg p-3" data-testid={`report-item-${r.id}`}>
+                  <div className="text-[11px] font-bold text-text-primary">
+                    {r.message_snapshot?.name || "Unknown"} · <span className="text-status-cant">{r.reason}</span>
+                  </div>
+                  <div className="text-sm text-text-secondary mt-1 line-clamp-4">
+                    {r.message_snapshot?.text || "(message deleted)"}
+                  </div>
+                  <div className="text-[10px] text-text-muted mt-1 font-mono-stat uppercase tracking-widest">
+                    Reported by {r.reporter_name}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => actOnReport(r.id, "dismiss")}
+                      disabled={processingReport === r.id}
+                      className="flex-1 border border-border-subtle rounded-lg py-1.5 text-[10px] uppercase tracking-widest text-text-secondary disabled:opacity-50"
+                      data-testid={`report-dismiss-${r.id}`}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      onClick={() => actOnReport(r.id, "delete")}
+                      disabled={processingReport === r.id}
+                      className="flex-1 bg-status-cant text-white rounded-lg py-1.5 text-[10px] uppercase tracking-widest font-bold disabled:opacity-50"
+                      data-testid={`report-delete-${r.id}`}
+                    >
+                      {processingReport === r.id ? "…" : "Delete message"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {user.is_admin && pending.length > 0 && (

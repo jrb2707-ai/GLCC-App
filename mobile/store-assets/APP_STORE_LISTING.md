@@ -150,14 +150,28 @@ Status in the shipped app (v1.0):
   this explicitly in review notes and turn on an auto-filter later if 1.2
   reviewers push back.
 
-## Screenshot ideas (10 slots — pick 3-5 best)
+## Screenshots — capture on your Mac after the EAS build
 
-Sizes needed: 6.7" iPhone (1290×2796) AND 6.5" (1284×2778).
-Use the same 5 screenshots for both — Apple downsizes automatically.
+You need 6.7" iPhone screenshots for App Store Connect (1290×2796 or 1284×2778).
+Apple auto-downsizes to smaller devices from these.
 
-1. AuthScreen with hero + glass panel: "GLCC. — 4th best cycle club in Grey Lynn"
-2. Rides list with 3 upcoming rides + distance/elevation stats
-3. Coffee tab with "ORDER MY COFFEE" button + today's orders feed
-4. Riders tab showing JB at #0001 + roster
-5. Member card modal (Rapha-style)
-6. Chat tab with a few messages + weather header
+Fastest path once your first `eas build` has landed in TestFlight:
+
+```bash
+# On your Mac
+open -a Simulator
+# Xcode → Window → Devices and Simulators → boot an iPhone 15 Pro Max
+# Install the TestFlight build on that simulator
+```
+
+Then in the simulator, press Cmd+S on each screen you want. Suggested 5:
+
+1. AuthScreen (dark hero + glass GLCC panel)
+2. Rides tab list — three upcoming rides with distance/elevation
+3. Ride detail with map + Going chips + RSVP row
+4. Coffee tab hero + Today's coffee orders feed
+5. Member Card modal (Rapha-style, rotated card)
+
+Rename each PNG to describe the screen, drop them into
+`store-assets/screenshots/` and upload to App Store Connect → Version 1.0 →
+Screenshots → iPhone 6.7" Display.

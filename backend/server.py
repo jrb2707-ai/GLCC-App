@@ -594,6 +594,41 @@ async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: 
         await send_expo_push(tokens, title, body, data)
 
 
+# ---------- Content filter (Apple 1.2 fallback) ----------
+# Small NZ/AU-flavoured list. Can be overridden via PROFANITY_WORDS env var
+# (comma-separated) so admins can tune without a redeploy.
+_DEFAULT_PROFANITY = (
+    "fuck,shit,bitch,cunt,bastard,dick,piss,asshole,arsehole,whore,slut,"
+    "faggot,nigger,retard,twat,wanker"
+)
+PROFANITY_WORDS = [
+    w.strip().lower()
+    for w in (os.environ.get("PROFANITY_WORDS") or _DEFAULT_PROFANITY).split(",")
+    if w.strip()
+]
+_PROFANITY_RE = re.compile(
+    # Match each stem plus any trailing word characters so "fuck" catches
+    # "fucking" / "fucked" too. Boundaries stop it firing inside benign
+    # words that happen to contain the stem in the middle.
+    r"\b(" + "|".join(re.escape(w) for w in PROFANITY_WORDS) + r")\w*\b",
+    re.IGNORECASE,
+) if PROFANITY_WORDS else None
+
+
+def _mask(word: str) -> str:
+    if len(word) <= 2:
+        return "*" * len(word)
+    return word[0] + "*" * (len(word) - 2) + word[-1]
+
+
+def filter_profanity(text: str) -> str:
+    """Replace profanity with masked equivalents. Non-destructive so admins
+    can still audit chat_reports — we filter on display and on the way in."""
+    if not _PROFANITY_RE or not text:
+        return text
+    return _PROFANITY_RE.sub(lambda m: _mask(m.group(0)), text)
+
+
 # ---------- Mention parsing ----------
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z][A-Za-z0-9_\-\.]*)")
 
@@ -1461,7 +1496,7 @@ async def list_messages(user: dict = Depends(get_current_user)):
 
 @api.post("/chat/messages")
 async def post_message(body: ChatMessageIn, user: dict = Depends(require_approved)):
-    text = body.text.strip()
+    text = filter_profanity(body.text.strip())
     doc = {
         "user_id": str(user["_id"]),
         "name": user.get("name"),
@@ -1547,6 +1582,83 @@ async def report_message(message_id: str, body: ReportIn, user: dict = Depends(r
 async def list_blocks(user: dict = Depends(get_current_user)):
     docs = await db.blocks.find({"user_id": str(user["_id"])}).to_list(200)
     return {"blocked_ids": [d.get("target_id") for d in docs]}
+
+
+# ---------- Admin moderation inbox ----------
+def _serialize_report(doc: dict) -> dict:
+    snap = doc.get("message_snapshot", {}) or {}
+    created = snap.get("created_at")
+    return {
+        "id": str(doc["_id"]),
+        "reporter_id": doc.get("reporter_id"),
+        "reporter_name": doc.get("reporter_name"),
+        "message_id": doc.get("message_id"),
+        "reason": doc.get("reason"),
+        "status": doc.get("status", "open"),
+        "resolved_by": doc.get("resolved_by"),
+        "resolved_at": doc.get("resolved_at").isoformat() if isinstance(doc.get("resolved_at"), datetime) else doc.get("resolved_at"),
+        "message_snapshot": {
+            "text": snap.get("text"),
+            "name": snap.get("name"),
+            "user_id": snap.get("user_id"),
+            "created_at": created.isoformat() if isinstance(created, datetime) else created,
+        },
+        "created_at": doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else doc.get("created_at"),
+    }
+
+
+@api.get("/admin/reports")
+async def admin_list_reports(status_filter: Optional[str] = None, admin: dict = Depends(require_admin)):
+    query: dict = {}
+    if status_filter in {"open", "resolved"}:
+        query["status"] = status_filter
+    docs = await db.chat_reports.find(query).sort("created_at", -1).limit(100).to_list(100)
+    open_count = await db.chat_reports.count_documents({"status": "open"})
+    return {"reports": [_serialize_report(d) for d in docs], "open_count": open_count}
+
+
+async def _resolve_report(oid: ObjectId, admin: dict, action: str) -> dict:
+    """Shared handler for dismiss / delete-message actions on a report."""
+    doc = await db.chat_reports.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Report not found")
+    await db.chat_reports.update_one(
+        {"_id": oid},
+        {"$set": {
+            "status": "resolved",
+            "resolved_by": str(admin["_id"]),
+            "resolved_at": now_utc(),
+            "resolution": action,
+        }},
+    )
+    return doc
+
+
+@api.post("/admin/reports/{report_id}/dismiss")
+async def admin_dismiss_report(report_id: str, admin: dict = Depends(require_admin)):
+    try:
+        oid = ObjectId(report_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid report id")
+    await _resolve_report(oid, admin, "dismissed")
+    return {"ok": True}
+
+
+@api.post("/admin/reports/{report_id}/delete-message")
+async def admin_delete_reported_message(report_id: str, admin: dict = Depends(require_admin)):
+    try:
+        oid = ObjectId(report_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid report id")
+    report = await _resolve_report(oid, admin, "message_deleted")
+    msg_id = report.get("message_id")
+    if msg_id:
+        try:
+            await db.messages.delete_one({"_id": ObjectId(msg_id)})
+            await manager.broadcast({"type": "chat.deleted", "message_id": msg_id})
+        except InvalidId:
+            pass
+    return {"ok": True}
 
 
 @api.post("/blocks")

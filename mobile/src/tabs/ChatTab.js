@@ -70,6 +70,9 @@ export default function ChatTab() {
       if (evt.type === "chat.message" && evt.message) {
         setMessages((prev) => (prev.some((m) => m.id === evt.message.id) ? prev : [...prev, evt.message]));
       }
+      if (evt.type === "chat.deleted" && evt.message_id) {
+        setMessages((prev) => prev.filter((m) => m.id !== evt.message_id));
+      }
     });
   }, [subscribe, isPending]);
 

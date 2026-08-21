@@ -18,25 +18,32 @@ export default function RidersTab() {
   const [riders, setRiders] = useState([]);
   const [pending, setPending] = useState([]);
   const [blockedIds, setBlockedIds] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [openRider, setOpenRider] = useState(null); // { rider, mode: 'card'|'edit' }
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [processingReport, setProcessingReport] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [r, b] = await Promise.all([
+      const [r, b, rep] = await Promise.all([
         api.get("/riders"),
         api.get("/blocks").catch(() => ({ data: { blocked_ids: [] } })),
+        user?.is_admin
+          ? api.get("/admin/reports?status_filter=open").catch(() => ({ data: { reports: [] } }))
+          : Promise.resolve({ data: { reports: [] } }),
       ]);
       setRiders(r.data.riders || []);
       setPending(r.data.pending || []);
       setBlockedIds(b.data.blocked_ids || []);
+      setReports(rep.data.reports || []);
       writeCache("riders", r.data.riders || []);
       writeCache("pending", r.data.pending || []);
     } catch (e) { /* ignore */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, []);
+  }, [user?.is_admin]);
   useEffect(() => {
     (async () => {
       const [cachedR, cachedP] = await Promise.all([readCache("riders"), readCache("pending")]);
@@ -50,11 +57,22 @@ export default function RidersTab() {
   // Live roster updates
   useEffect(() => {
     return subscribe((evt) => {
-      if (["rider.updated", "rider.pending", "rider.deleted", "rider.approved", "rider.denied"].includes(evt.type)) {
+      if (["rider.updated", "rider.pending", "rider.deleted", "rider.approved", "rider.denied", "chat.report", "chat.deleted"].includes(evt.type)) {
         load();
       }
     });
   }, [subscribe, load]);
+
+  async function actOnReport(id, action) {
+    if (processingReport) return;
+    setProcessingReport(id);
+    try {
+      const path = action === "delete" ? `/admin/reports/${id}/delete-message` : `/admin/reports/${id}/dismiss`;
+      await api.post(path);
+      await load();
+    } catch (e) { Alert.alert("Report", formatDetail(e)); }
+    finally { setProcessingReport(null); }
+  }
 
   async function decidePending(id, action) {
     try {
@@ -86,6 +104,49 @@ export default function RidersTab() {
         <TouchableOpacity onPress={() => setInviteOpen(true)} style={s.inviteBtn} testID="register-rider-button">
           <Text style={s.inviteTxt}>＋ INVITE A RIDER</Text>
         </TouchableOpacity>
+      )}
+
+      {user?.is_admin && reports.length > 0 && (
+        <View style={s.reportsBlock} testID="reports-block">
+          <TouchableOpacity
+            onPress={() => setReportsOpen((v) => !v)}
+            style={s.reportsHeader}
+            testID="reports-toggle"
+          >
+            <Text style={s.reportsEyebrow}>🚩 REPORTED MESSAGES · {reports.length}</Text>
+            <Text style={s.reportsChevron}>{reportsOpen ? "−" : "+"}</Text>
+          </TouchableOpacity>
+          {reportsOpen && reports.map((r) => (
+            <View key={r.id} style={s.reportItem} testID={`report-item-${r.id}`}>
+              <Text style={s.reportSnapshotName}>
+                {r.message_snapshot?.name || "Unknown"} · {r.reason}
+              </Text>
+              <Text style={s.reportSnapshotText} numberOfLines={4}>
+                {r.message_snapshot?.text || "(message deleted)"}
+              </Text>
+              <Text style={s.reportMeta}>Reported by {r.reporter_name}</Text>
+              <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={() => actOnReport(r.id, "dismiss")}
+                  disabled={processingReport === r.id}
+                  style={s.reportDismiss}
+                  testID={`report-dismiss-${r.id}`}
+                >
+                  <Text style={s.reportDismissTxt}>DISMISS</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => actOnReport(r.id, "delete")}
+                  disabled={processingReport === r.id}
+                  style={s.reportDelete}
+                  testID={`report-delete-${r.id}`}
+                >
+                  {processingReport === r.id && <ActivityIndicator color="#fff" size="small" style={{ marginRight: 4 }} />}
+                  <Text style={s.reportDeleteTxt}>DELETE MESSAGE</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
       )}
 
       {user?.is_admin && pending.length > 0 && (
@@ -723,4 +784,17 @@ const s = StyleSheet.create({
   deleteHint: { color: colors.textSecondary, fontSize: 11, marginVertical: 6 },
   deleteConfirm: { flex: 1, backgroundColor: colors.statusCant, borderRadius: radius.sm, paddingVertical: 10, alignItems: "center", flexDirection: "row", justifyContent: "center" },
   deleteConfirmTxt: { color: "#fff", fontWeight: "900", letterSpacing: 2, fontSize: 11 },
+
+  reportsBlock: { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.30)", borderWidth: 1, borderRadius: radius.md, padding: 12, marginBottom: 12 },
+  reportsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  reportsEyebrow: { color: colors.statusCant, fontSize: 10, letterSpacing: 2, fontWeight: "700" },
+  reportsChevron: { color: colors.statusCant, fontSize: 16, fontWeight: "900" },
+  reportItem: { backgroundColor: colors.bgPrimary, borderRadius: radius.sm, padding: 10, marginTop: 8 },
+  reportSnapshotName: { color: colors.textPrimary, fontSize: 12, fontWeight: "700" },
+  reportSnapshotText: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
+  reportMeta: { color: colors.textMuted, fontSize: 10, marginTop: 4, letterSpacing: 1 },
+  reportDismiss: { flex: 1, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.sm, paddingVertical: 8, alignItems: "center" },
+  reportDismissTxt: { color: colors.textSecondary, fontWeight: "700", letterSpacing: 2, fontSize: 10 },
+  reportDelete: { flex: 1, backgroundColor: colors.statusCant, borderRadius: radius.sm, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center" },
+  reportDeleteTxt: { color: "#fff", fontWeight: "900", letterSpacing: 2, fontSize: 10 },
 });

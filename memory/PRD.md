@@ -73,6 +73,12 @@ See `/app/memory/test_credentials.md`.
     - Web: Flag icon on hover of any chat message → ReportSheet with same reason picker. Member Card gained Block/Unblock. Profile modal (self) gained Delete-my-account block.
     - Verified via curl: self-report blocked (400), self-block blocked (400), report ok, block hides messages from list (27→25), delete-account wrong-pw 401, correct-pw purges user and anonymises chat to "Former rider", login post-delete 401. President cannot self-delete (400).
     - Store-assets docs updated: `APP_STORE_LISTING.md` marks 1.2 as IMPLEMENTED, `BUILD_AND_SUBMIT.md` lists the reviewer test path so Apple can verify on first submission.
+  - **Phase 4.1 (Feb 2026): DONE** — Moderation tooling + auto-filter (Apple 1.2 hardening):
+    - Backend: profanity filter (`filter_profanity`) applied to incoming chat text, stems + trailing word-chars so "fuck"/"fucking"/"fucked" all mask to `f*****g`. Configurable via `PROFANITY_WORDS` env var (comma-separated), 16-word NZ-flavoured default. Admin reports inbox: `GET /api/admin/reports?status_filter=open`, `POST /api/admin/reports/{id}/dismiss`, `POST /api/admin/reports/{id}/delete-message` (drops the source message and broadcasts `chat.deleted`).
+    - Native RidersTab: collapsible "🚩 Reported messages · N" block above the pending approvals. Each row shows the snapshot, reporter, reason, and Dismiss / Delete Message buttons. Auto-reloads on `chat.report` WS events. Native ChatTab now removes locally on `chat.deleted`.
+    - Web RidersTab: matching collapsible reports block with dismiss + delete-message actions. Web ChatTab handles `chat.deleted` too.
+    - Verified end-to-end via curl: Leo reports JB's message, JB sees it in `/admin/reports`, tapping delete-message purges the message and drops open count to 0 and message list confirms it's gone.
+    - Screenshots docs updated in `APP_STORE_LISTING.md` — user captures 6.7" iPhone shots on their Mac from the Simulator after the first `eas build`.
   - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
   - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.
