@@ -38,6 +38,16 @@ See `/app/memory/test_credentials.md`.
 
 ### P3
 - Migrate to true React Native / Expo native codebase for App Store / Play Store distribution.
+  - **Phase 1 (Feb 2026): DONE** — Expo scaffold under `/app/mobile` with AuthScreen (all polish: validation, pending, forgot pw, glass panel), HomeShell tab nav, and live-data tabs (Rides, Coffee, Riders, Chat with polling). Secure token storage, EAS build config, App Store Connect draft copy at `/app/mobile/store-assets/APP_STORE_LISTING.md`, submit checklist at `/app/mobile/store-assets/BUILD_AND_SUBMIT.md`. Bundle id `com.greylynncc.app`.
+  - **Phase 2 (Feb 2026): DONE** — Full UI port with feature parity:
+    - `RidesTab.js`: list + ride detail view with RSVP (going/maybe/can't), café round CTA, going-list chips, Strava deep-link, StravaPanel admin (connect/sync/disconnect via `expo-web-browser` OAuth session).
+    - `CoffeeTab.js`: hero image header, Order button with pending guard, "Today's coffee orders" list with avatars + relative time, coffee picker modal.
+    - `ChatTab.js`: weather header, iMessage-style bubbles, system messages, pending lock state, 5s polling refresh.
+    - `RidersTab.js`: pending approvals block (approve/deny), rider list with badges, ProfileModal (self-edit name+coffee; admin-edit role+bio+admin actions; make/remove admin, send-reset-link, delete), Invite modal, MemberCard viewer (Rapha-style card with rotate + watermark + meta grid), inline change-password block.
+    - Shared: `components/Avatar.js`, `components/MemberCard.js`, `components/StravaPanel.js`, `lib/util.js` (timeAgo, fmtTime, pad4).
+  - Phase 3 (next): Native WebSocket `/api/ws?token=…` for live chat/coffee/RSVP updates + Expo Push Notifications wired to `/api/push/register`.
+  - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
+  - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.
 
 ## Latest Verified Test Report

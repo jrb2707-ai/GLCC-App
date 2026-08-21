@@ -66,10 +66,22 @@ function Gate() {
   return user ? <HomeShell /> : <AuthScreen />;
 }
 
-export default function App() {
-  return (
-    <AppProviders>
-      <div className="min-h-screen w-full flex-col items-center justify-center py-6 md:py-10 px-3 hidden sm:flex" style={{ background: "var(--glcc-shell-bg)" }}>
+function AppShell() {
+  const [isDesktop, setIsDesktop] = React.useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 640px)").matches;
+  });
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mq = window.matchMedia("(min-width: 640px)");
+    const l = (e) => setIsDesktop(e.matches);
+    mq.addEventListener("change", l);
+    return () => mq.removeEventListener("change", l);
+  }, []);
+
+  if (isDesktop) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center py-6 md:py-10 px-3" style={{ background: "var(--glcc-shell-bg)" }}>
         <PhoneFrame>
           <Gate />
         </PhoneFrame>
@@ -77,11 +89,21 @@ export default function App() {
           GLCC · 4th best cycle club in Grey Lynn
         </div>
       </div>
-      <div className="sm:hidden min-h-screen w-full" style={{ background: "var(--glcc-shell-bg)" }}>
-        <PhoneFrame>
-          <Gate />
-        </PhoneFrame>
-      </div>
+    );
+  }
+  return (
+    <div className="min-h-screen w-full" style={{ background: "var(--glcc-shell-bg)" }}>
+      <PhoneFrame>
+        <Gate />
+      </PhoneFrame>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppProviders>
+      <AppShell />
       <Toaster
         position="top-center"
         theme="dark"

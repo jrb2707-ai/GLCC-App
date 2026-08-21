@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "GLCC",
+    "slug": "glcc",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "glcc",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#0b0d10"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.greylynncc.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to take a photo for your rider profile.",
+        "NSPhotoLibraryUsageDescription": "Used to pick a profile photo from your library.",
+        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": false },
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "associatedDomains": ["applinks:greylynncc.com"]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#D4FF00"
+      },
+      "package": "com.greylynncc.app",
+      "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "greylynncc.com" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#D4FF00"
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "https://greylynncc.com",
+      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" }
+    }
+  }
+}
