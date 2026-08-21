@@ -121,10 +121,13 @@ See `/app/memory/test_credentials.md`.
     - Backend: `cafe_rules` Mongo collection with in-memory cache + admin CRUD at `GET/POST/PATCH/DELETE /api/admin/cafe-rules`. Seeded from the hard-coded `_CAFE_MAP` on first boot.
     - Web SPA: new `CafeRulesAdmin` block on the Riders tab (admin-only) with filter, inline edit, add-new, and delete. Cache refreshes on every write so `/api/rides/cafe-suggest` reflects changes instantly.
   - **Phase 5.6 (Feb 2026): DONE** — Chat retention & wipe:
-    - MongoDB TTL index on `messages.created_at` set to 604800s = 7 days. Every message auto-deletes 7 days after creation with zero code running.
-    - Admin-only `DELETE /api/chat/messages` endpoint nukes all messages + chat_reports and broadcasts a `chat.cleared` WS event so every connected client empties instantly.
-    - ChatTab shows a "Wipe now" button (admin-only) + the "Messages auto-clear after 7 days" hint under the weather header.
-    - Verified end-to-end via curl: admin wipe deletes 2→0 msgs, non-admin returns 403, TTL index confirmed at 604800s.
+    - MongoDB TTL index on `messages.created_at` set to 604800s = 7 days.
+    - Admin-only `DELETE /api/chat/messages` endpoint + WS `chat.cleared` broadcast.
+    - ChatTab "Wipe now" button + "Messages auto-clear after 7 days" hint.
+  - **Phase 5.7 (Feb 2026): DONE** — Café Rules admin on native mobile:
+    - New `/app/mobile/src/components/CafeRulesAdmin.js` mirrors the web version — collapsible admin-only block on the Riders tab with filter, inline edit, add-new, delete. Uses the same `/api/admin/cafe-rules` endpoints.
+    - Both babel-parses clean under the Expo preset.
+    - JB can now add, edit or delete café rules from his phone.
     - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
     - Same fix applies to every approved rider — anyone can now update their own avatar.
     - Verified: only `is_president=True` can promote/demote admins (`make_admin`/`remove_admin` returns 403 for non-president admins — pre-existing correct behaviour).

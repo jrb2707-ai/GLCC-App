@@ -8,6 +8,7 @@ import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing, COFFEES } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import MemberCard from "../components/MemberCard";
+import CafeRulesAdmin from "../components/CafeRulesAdmin";
 import { pad4 } from "../lib/util";
 import { pickAvatar } from "../lib/imagePicker";
 import { readCache, writeCache } from "../lib/cache";
@@ -105,6 +106,8 @@ export default function RidersTab() {
           <Text style={s.inviteTxt}>＋ INVITE A RIDER</Text>
         </TouchableOpacity>
       )}
+
+      {user?.is_admin && <CafeRulesAdmin />}
 
       {user?.is_admin && reports.length > 0 && (
         <View style={s.reportsBlock} testID="reports-block">
