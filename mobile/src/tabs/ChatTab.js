@@ -5,11 +5,12 @@ import {
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
 import { colors, radius } from "../constants/theme";
-import { useAuth } from "../lib/store";
+import { useAuth, useEvents } from "../lib/store";
 import { fmtTime } from "../lib/util";
 
 export default function ChatTab() {
   const { user } = useAuth();
+  const { subscribe } = useEvents();
   const [messages, setMessages] = useState([]);
   const [weather, setWeather] = useState(null);
   const [text, setText] = useState("");
@@ -31,11 +32,16 @@ export default function ChatTab() {
   }, [isPending]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live updates via WebSocket — no polling needed anymore.
   useEffect(() => {
     if (isPending) return undefined;
-    const id = setInterval(load, 5000); // polling; WS in Phase 3
-    return () => clearInterval(id);
-  }, [load, isPending]);
+    return subscribe((evt) => {
+      if (evt.type === "chat.message" && evt.message) {
+        setMessages((prev) => (prev.some((m) => m.id === evt.message.id) ? prev : [...prev, evt.message]));
+      }
+    });
+  }, [subscribe, isPending]);
 
   async function send() {
     const t = text.trim();
@@ -43,8 +49,8 @@ export default function ChatTab() {
     setSending(true);
     setText("");
     try {
+      // Server broadcasts the new message via WS, so we don't need to reload.
       await api.post("/chat/messages", { text: t });
-      await load();
       scrollRef.current?.scrollToEnd({ animated: true });
     } catch (e) { /* ignore */ }
     finally { setSending(false); }

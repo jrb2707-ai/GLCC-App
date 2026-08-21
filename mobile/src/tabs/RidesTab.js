@@ -4,10 +4,11 @@ import {
   Linking, ActivityIndicator, Alert,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
-import { useAuth } from "../lib/store";
+import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import StravaPanel from "../components/StravaPanel";
+import RouteMap from "../components/RouteMap";
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: colors.statusGoing },
@@ -24,6 +25,7 @@ function goingList(ride, riders) {
 
 export default function RidesTab() {
   const { user } = useAuth();
+  const { subscribe } = useEvents();
   const [rides, setRides] = useState([]);
   const [riders, setRiders] = useState([]);
   const [openId, setOpenId] = useState(null);
@@ -43,6 +45,30 @@ export default function RidesTab() {
     } finally { setLoading(false); setRefreshing(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // WS-driven live updates for rides + riders + strava sync completion.
+  useEffect(() => {
+    return subscribe((evt) => {
+      if ((evt.type === "ride.updated" || evt.type === "ride.created") && evt.ride) {
+        setRides((prev) => {
+          const idx = prev.findIndex((r) => r.id === evt.ride.id);
+          if (idx === -1) return [...prev, evt.ride];
+          const next = [...prev]; next[idx] = evt.ride; return next;
+        });
+      }
+      if (evt.type === "ride.deleted" && evt.ride_id) {
+        setRides((prev) => prev.filter((r) => r.id !== evt.ride_id));
+      }
+      if (evt.type === "rider.updated" && evt.rider?.id) {
+        setRiders((prev) => {
+          const idx = prev.findIndex((r) => r.id === evt.rider.id);
+          if (idx === -1) return prev;
+          const next = [...prev]; next[idx] = evt.rider; return next;
+        });
+      }
+      if (evt.type === "rides.synced") load();
+    });
+  }, [subscribe, load]);
 
   async function setRsvp(rideId, status, ride) {
     try {
@@ -98,6 +124,10 @@ export default function RidesTab() {
             <Text style={s.stravaLink}>OPEN IN STRAVA →</Text>
           </TouchableOpacity>
         )}
+
+        <View style={{ marginTop: 16 }}>
+          <RouteMap name={open.name} mapUrl={open.map_url} />
+        </View>
 
         <Text style={s.sectionLabel}>YOUR RSVP {isPending && <Text style={{ color: colors.statusMaybe }}>· locked until approval</Text>}</Text>
         <View style={s.rsvpRow}>

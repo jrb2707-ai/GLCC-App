@@ -1,43 +1,108 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Platform } from "react-native";
+import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
 import { api, setToken as persistToken } from "./api";
+import { registerForPush } from "./push";
 
 const AuthContext = createContext(null);
+const EventsContext = createContext(null);
+
+function wsUrl(token) {
+  const base = (Constants.expoConfig?.extra?.apiUrl || "https://greylynncc.com").replace(/\/$/, "");
+  const scheme = base.startsWith("https") ? "wss" : "ws";
+  return `${scheme}://${base.replace(/^https?:\/\//, "")}/api/ws?token=${encodeURIComponent(token)}`;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [booted, setBooted] = useState(false);
+  const listeners = useRef(new Set());
+  const wsRef = useRef(null);
+  const wsToken = useRef(null);
+  const reconnectTimer = useRef(null);
+
+  const subscribe = useCallback((fn) => {
+    listeners.current.add(fn);
+    return () => listeners.current.delete(fn);
+  }, []);
+
+  const emit = useCallback((evt) => {
+    listeners.current.forEach((fn) => {
+      try { fn(evt); } catch (e) { /* ignore */ }
+    });
+  }, []);
+
+  const closeWs = useCallback(() => {
+    if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+    if (wsRef.current) {
+      try { wsRef.current.close(); } catch (e) { /* ignore */ }
+      wsRef.current = null;
+    }
+  }, []);
+
+  const connectWs = useCallback((token) => {
+    if (!token) return;
+    wsToken.current = token;
+    closeWs();
+    const ws = new WebSocket(wsUrl(token));
+    wsRef.current = ws;
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        emit(data);
+        // Foreground toasts for the two headline events (mirrors web behaviour)
+        if (data.type === "chat.mention" && Platform.OS !== "web") {
+          Alert.alert(`${data.from || "Someone"} mentioned you`, data.text || "");
+        }
+      } catch (_) { /* keepalive */ }
+    };
+    ws.onclose = () => {
+      wsRef.current = null;
+      // Reconnect if still logged in
+      if (wsToken.current) {
+        reconnectTimer.current = setTimeout(() => connectWs(wsToken.current), 2500);
+      }
+    };
+    ws.onerror = () => { /* onclose handles the retry */ };
+  }, [closeWs, emit]);
 
   const login = useCallback(async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
     await persistToken(data.token);
     setUser(data.user);
+    connectWs(data.token);
+    registerForPush().catch(() => {});
     return data.user;
-  }, []);
+  }, [connectWs]);
 
   const register = useCallback(async (payload) => {
     const { data } = await api.post("/auth/register", payload);
     if (data.user?.status !== "pending") {
       await persistToken(data.token);
       setUser(data.user);
+      connectWs(data.token);
+      registerForPush().catch(() => {});
     }
     return data.user;
-  }, []);
+  }, [connectWs]);
 
   const refreshMe = useCallback(async () => {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
     } catch (e) {
-      // token invalid — clear it
       await persistToken(null);
       setUser(null);
     }
   }, []);
 
   const logout = useCallback(async () => {
+    wsToken.current = null;
+    closeWs();
     await persistToken(null);
     setUser(null);
-  }, []);
+  }, [closeWs]);
 
   useEffect(() => {
     (async () => {
@@ -49,16 +114,42 @@ export function AuthProvider({ children }) {
     })();
   }, [refreshMe]);
 
-  const value = useMemo(
+  // When user becomes available (either at boot or after login), ensure the
+  // WS is connected using the currently stored token. This handles the
+  // cold-start refreshMe path where connectWs wasn't called yet.
+  useEffect(() => {
+    if (!user) return undefined;
+    (async () => {
+      const token = await SecureStore.getItemAsync("glcc.token");
+      if (token && !wsRef.current) {
+        connectWs(token);
+        registerForPush().catch(() => {});
+      }
+    })();
+    return () => { /* keep WS alive across renders */ };
+  }, [user, connectWs]);
+
+  const authValue = useMemo(
     () => ({ user, booted, login, register, logout, refreshMe }),
     [user, booted, login, register, logout, refreshMe]
   );
+  const eventsValue = useMemo(() => ({ subscribe }), [subscribe]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={authValue}>
+      <EventsContext.Provider value={eventsValue}>{children}</EventsContext.Provider>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be inside <AuthProvider>");
+  return ctx;
+}
+
+export function useEvents() {
+  const ctx = useContext(EventsContext);
+  if (!ctx) throw new Error("useEvents must be inside <AuthProvider>");
   return ctx;
 }

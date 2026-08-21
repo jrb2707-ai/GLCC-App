@@ -45,7 +45,14 @@ See `/app/memory/test_credentials.md`.
     - `ChatTab.js`: weather header, iMessage-style bubbles, system messages, pending lock state, 5s polling refresh.
     - `RidersTab.js`: pending approvals block (approve/deny), rider list with badges, ProfileModal (self-edit name+coffee; admin-edit role+bio+admin actions; make/remove admin, send-reset-link, delete), Invite modal, MemberCard viewer (Rapha-style card with rotate + watermark + meta grid), inline change-password block.
     - Shared: `components/Avatar.js`, `components/MemberCard.js`, `components/StravaPanel.js`, `lib/util.js` (timeAgo, fmtTime, pad4).
-  - Phase 3 (next): Native WebSocket `/api/ws?token=…` for live chat/coffee/RSVP updates + Expo Push Notifications wired to `/api/push/register`.
+  - **Phase 3 (Feb 2026): DONE** — Real-time + native platform features:
+    - `lib/store.js`: WebSocket client connects to `wss://…/api/ws?token=…` with auto-reconnect (2.5s backoff). Exposes `useEvents()` context matching the web app.
+    - Tab subscriptions: ChatTab (`chat.message` appends live, polling removed), CoffeeTab (`coffee.round` prepends live), RidesTab (`ride.updated/created/deleted`, `rider.updated`, `rides.synced`), RidersTab (`rider.updated/pending/deleted/approved/denied`).
+    - `lib/push.js`: `registerForPush()` requests notification permission, gets Expo push token via `Notifications.getExpoPushTokenAsync`, POSTs `/api/push/register` `{expo_push_token, platform, project_id}`. Foreground handler shows heads-up alerts.
+    - `lib/imagePicker.js`: `expo-image-picker` + `expo-image-manipulator` pipeline — pick, crop 1:1, resize to 512px JPEG, return base64 data URL. Wired into `ProfileModal` as a camera badge on the avatar (admin editing others only, matching web parity). `MemberCard` preview reflects the pending photo.
+    - `components/RouteMap.js`: Shows Strava `map_url` when present, otherwise renders a stylised SVG polyline (react-native-svg) with a volt→orange gradient. Rendered inside ride detail view.
+    - `app.json`: Added `expo-image-picker` plugin; `NSPhotoLibraryUsageDescription` already present.
+    - New deps: `expo-image-picker@~15.0.0`, `expo-image-manipulator@~12.0.0`, `react-native-svg@15.2.0`.
   - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
   - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.

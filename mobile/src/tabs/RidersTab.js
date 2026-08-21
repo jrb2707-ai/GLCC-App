@@ -4,14 +4,16 @@ import {
   RefreshControl, Modal, TextInput, Alert,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
-import { useAuth } from "../lib/store";
+import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing, COFFEES } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import MemberCard from "../components/MemberCard";
 import { pad4 } from "../lib/util";
+import { pickAvatar } from "../lib/imagePicker";
 
 export default function RidersTab() {
   const { user, refreshMe } = useAuth();
+  const { subscribe } = useEvents();
   const [riders, setRiders] = useState([]);
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,15 @@ export default function RidersTab() {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Live roster updates
+  useEffect(() => {
+    return subscribe((evt) => {
+      if (["rider.updated", "rider.pending", "rider.deleted", "rider.approved", "rider.denied"].includes(evt.type)) {
+        load();
+      }
+    });
+  }, [subscribe, load]);
 
   async function decidePending(id, action) {
     try {
@@ -132,20 +143,39 @@ function ProfileModal({ rider, onClose, onSaved }) {
   const [role, setRole] = useState(rider.role || "Member");
   const [bio, setBio] = useState(rider.bio || "");
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
+  const [photo, setPhoto] = useState(rider.photo || null);
+  const [uploading, setUploading] = useState(false);
   const [coffeeOpen, setCoffeeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const isMe = rider.id === user?.id;
   const selfPending = isMe && user?.status === "pending";
   const canEdit = (user?.is_admin || isMe) && !selfPending;
+  const canEditPhoto = user?.is_admin && !isMe; // matches web parity
   const isPresident = user?.is_president;
+
+  async function onPickPhoto() {
+    if (uploading) return;
+    setUploading(true);
+    try {
+      const res = await pickAvatar();
+      if (res.permissionDenied) {
+        Alert.alert("Photos", "Enable photo library access in Settings to change avatars.");
+        return;
+      }
+      if (res.canceled || !res.dataUrl) return;
+      setPhoto(res.dataUrl);
+    } catch (e) {
+      Alert.alert("Photo", "Couldn't read that image");
+    } finally { setUploading(false); }
+  }
 
   async function save() {
     if (saving) return;
     setSaving(true);
     try {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
-      const body = isMe ? { name, coffee } : { name, role, bio };
+      const body = isMe ? { name, coffee } : { name, role, bio, photo };
       await api.patch(url, body);
       await onSaved?.();
       Alert.alert("Profile", "Saved");
@@ -180,7 +210,18 @@ function ProfileModal({ rider, onClose, onSaved }) {
           <View style={s.handle} />
           <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <Avatar name={rider.name} photo={rider.photo} size="lg" />
+              <View>
+                <Avatar name={rider.name} photo={photo} size="lg" />
+                {canEditPhoto && (
+                  <TouchableOpacity
+                    onPress={onPickPhoto}
+                    style={s.photoBtn}
+                    testID="profile-photo-button"
+                  >
+                    <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>📷</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.pName}>{rider.name}</Text>
                 <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
@@ -192,6 +233,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
                     <View style={s.invitedBadge}><Text style={s.invitedTxt}>INVITED</Text></View>
                   )}
                 </View>
+                {uploading && <Text style={s.uploadingTxt}>RESIZING…</Text>}
               </View>
             </View>
 
@@ -291,7 +333,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
         <CoffeePicker value={coffee} onChange={setCoffee} onClose={() => setCoffeeOpen(false)} />
       )}
       {cardOpen && (
-        <MemberCard rider={{ ...rider, name, coffee, role }} onClose={() => setCardOpen(false)} />
+        <MemberCard rider={{ ...rider, name, coffee, role, photo }} onClose={() => setCardOpen(false)} />
       )}
     </Modal>
   );
@@ -489,4 +531,7 @@ const s = StyleSheet.create({
 
   eyebrowInvite: { color: colors.accentVolt, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   inviteHint: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
+
+  photoBtn: { position: "absolute", right: -4, bottom: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accentVolt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.bgSecondary },
+  uploadingTxt: { color: colors.accentVolt, fontSize: 10, letterSpacing: 3, fontWeight: "700", marginTop: 6 },
 });

@@ -4,7 +4,7 @@ import {
   Alert, RefreshControl, ImageBackground, Modal,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
-import { useAuth } from "../lib/store";
+import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing, COFFEES } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import { timeAgo } from "../lib/util";
@@ -13,6 +13,7 @@ const HERO = "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=120
 
 export default function CoffeeTab() {
   const { user } = useAuth();
+  const { subscribe } = useEvents();
   const [rounds, setRounds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,6 +30,15 @@ export default function CoffeeTab() {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Live coffee-round events via WS
+  useEffect(() => {
+    return subscribe((evt) => {
+      if (evt.type === "coffee.round" && evt.round) {
+        setRounds((prev) => (prev.some((r) => r.id === evt.round.id) ? prev : [evt.round, ...prev].slice(0, 60)));
+      }
+    });
+  }, [subscribe]);
 
   async function send(override) {
     if (sending) return;
