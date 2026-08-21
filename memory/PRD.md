@@ -98,6 +98,17 @@ See `/app/memory/test_credentials.md`.
     - Visual sign-off on the sticky glass clubhouse banner completed on the web preview at chat tab (Playwright screenshot, banner text "Welcome to the GLCC clubhouse. Weather check. Watch this space." rendered correctly, profanity filter visible on messages).
     - App is now functionally App Store-ready. Remaining work is user-side: fill Apple IDs in `eas.json`, publish greylynncc.com/privacy + /support, run `eas build` + `eas submit` on Mac, capture screenshots via Maestro.
   - **Phase 5.1 (Feb 2026): DONE** — Legal pages shipped:
+    - New `/app/frontend/src/components/LegalPage.jsx` — full-page (breaks out of the phone frame) responsive layout serving `/privacy` and `/support` at the top of `App()` before AppShell. Content drawn from the drafts in `APP_STORE_LISTING.md`. GLCC branding + footer links between the two.
+    - AuthScreen gained a "Privacy · Support" footer link so App Review can reach the pages from any point in the app.
+    - Verified 200 OK via curl on both URLs and via Playwright screenshot.
+    - Live at `https://greylynncc.com/privacy` and `/support` after deploy.
+  - **Phase 5.2 (Feb 2026): DONE** — Café rules refresh (user's authoritative version):
+    - Weekday rides (Mon-Fri) stop at The Brunchery (unchanged).
+    - Airport loop + Julie Andrews now stop at `Daily Bread · Britomart` (was Federal St).
+    - Devonport loop + any Devonport ride now stops at `Calliope Rd Cafe · Devonport` (was The Depot Eatery).
+    - West Auckland + Waitakeres + Scenic Drive + Henderson Valley + "out west" all stop at Little Sister.
+    - Backfilled 2 existing Airport/Julie Andrews rides in Mongo to the new Britomart café.
+    - Verified via `/api/rides/cafe-suggest` for 9 keyword variants.
     - New `/app/frontend/src/components/LegalPage.jsx` — full-page (breaks out of the phone frame) responsive layout serving `/privacy` and `/support` at the top of `App()` before AppShell. Content drawn from the drafts in `APP_STORE_LISTING.md` (data collected/not collected, third parties, retention, contact for privacy; sign-in help, pending state, push troubleshooting, block/unblock, delete-my-account, and email escalation for support). GLCC branding + footer links between the two.
     - AuthScreen gained a "Privacy · Support" footer link so App Review can reach the pages from any point in the app.
     - Verified 200 OK via curl on both URLs and via Playwright screenshot (both render cleanly at desktop widths — no phone frame in the way for Apple's reviewer).

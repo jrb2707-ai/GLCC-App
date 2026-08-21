@@ -603,16 +603,20 @@ async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: 
 _CAFE_MAP: list[tuple[str, str]] = [
     # Named ride shortcuts — checked first via ordering so route-specific
     # rules beat generic neighbourhoods.
-    ("julie andrews", "Daily Bread · Federal St, Auckland Central"),
-    ("airport loop", "Daily Bread · Federal St, Auckland Central"),
-    ("airport ride", "Daily Bread · Federal St, Auckland Central"),
-    # Anywhere through the Waitakere Ranges we stop at Little Sister on
-    # Great North Rd. (Daily Bread is a fine alternate when Little Sister
-    # is closed — override via CAFE_OVERRIDES if you need to swap.)
+    ("julie andrews", "Daily Bread · Britomart"),
+    ("airport loop", "Daily Bread · Britomart"),
+    ("airport ride", "Daily Bread · Britomart"),
+    ("gentle sunday spin", "Daily Bread · Britomart"),
+    ("sunday spin", "Daily Bread · Britomart"),
+    ("devonport loop", "Calliope Rd Cafe · Devonport"),
+    # Anywhere out west or through the Waitakere Ranges we stop at Little
+    # Sister on the way home.
     ("waitakere", "Little Sister · 3 Onslow Ave, Epsom"),
     ("waitakeres", "Little Sister · 3 Onslow Ave, Epsom"),
     ("scenic drive", "Little Sister · 3 Onslow Ave, Epsom"),
     ("henderson valley", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("west auckland", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("out west", "Little Sister · 3 Onslow Ave, Epsom"),
     # Neighbourhood defaults
     ("grey lynn", "The Brunchery · 318 Richmond Rd, Grey Lynn"),
     ("ponsonby", "Ceremony Coffee · Ponsonby"),
@@ -630,7 +634,7 @@ _CAFE_MAP: list[tuple[str, str]] = [
     ("mission bay", "Bird On A Wire · Mission Bay"),
     ("kohimarama", "Ripe Deli · Kohimarama"),
     ("st heliers", "Sisters Yarn · St Heliers"),
-    ("devonport", "The Depot Eatery · Devonport"),
+    ("devonport", "Calliope Rd Cafe · Devonport"),
     ("takapuna", "Takapuna Beach Cafe"),
     ("browns bay", "Deco Eatery · Browns Bay"),
     ("titirangi", "Deco Eatery · Titirangi"),
