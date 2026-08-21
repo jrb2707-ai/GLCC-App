@@ -2000,6 +2000,16 @@ async def admin_delete_reported_message(report_id: str, admin: dict = Depends(re
     return {"ok": True}
 
 
+@api.delete("/chat/messages")
+async def wipe_chat(admin: dict = Depends(require_admin)):
+    """Admin-only: nukes every chat message + associated reports. Broadcasts
+    `chat.cleared` so every connected client empties its local state instantly."""
+    deleted_msgs = await db.messages.delete_many({})
+    deleted_reports = await db.chat_reports.delete_many({})
+    await manager.broadcast({"type": "chat.cleared", "by": admin.get("name")})
+    return {"messages_deleted": deleted_msgs.deleted_count, "reports_deleted": deleted_reports.deleted_count}
+
+
 @api.post("/blocks")
 async def create_block(body: BlockIn, user: dict = Depends(get_current_user)):
     if body.target_id == str(user["_id"]):
@@ -2194,7 +2204,18 @@ async def seed():
     )
     await db.rides.create_index("sort_key")
     await db.rides.create_index("strava_event_id", unique=True, sparse=True)
-    await db.messages.create_index("created_at")
+    # Chat messages auto-expire 7 days (604800s) after creation
+    try:
+        idx = await db.messages.index_information()
+        for name, info in idx.items():
+            if name == "_id_":
+                continue
+            keys = info.get("key", [])
+            if keys and keys[0][0] == "created_at" and info.get("expireAfterSeconds") != 604800:
+                await db.messages.drop_index(name)
+    except Exception:
+        pass
+    await db.messages.create_index("created_at", expireAfterSeconds=604800)
     # Coffee rounds auto-expire 1 hour after creation
     try:
         idx = await db.coffee_rounds.index_information()

@@ -35,7 +35,7 @@ function RuleRow({ rule, onSaved, onDeleted }) {
     if (!window.confirm(`Delete rule "${rule.pattern}" → ${rule.cafe}?`)) return;
     setBusy(true);
     try {
-      await api.del(`/admin/cafe-rules/${rule.id}`);
+      await api.delete(`/admin/cafe-rules/${rule.id}`);
       onDeleted(rule.id);
       toast("Rule deleted");
     } catch (e) {
@@ -140,7 +140,7 @@ function NewRuleRow({ onCreated }) {
     }
     setBusy(true);
     try {
-      const created = await api.post("/admin/cafe-rules", { pattern: p, cafe: c });
+      const { data: created } = await api.post("/admin/cafe-rules", { pattern: p, cafe: c });
       onCreated(created);
       setPattern("");
       setCafe("");
@@ -200,8 +200,8 @@ export default function CafeRulesAdmin() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/admin/cafe-rules");
-      setRules(res.rules || []);
+      const { data } = await api.get("/admin/cafe-rules");
+      setRules(data.rules || []);
     } catch (e) {
       toast.error(formatDetail(e));
     } finally {

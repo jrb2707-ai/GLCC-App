@@ -111,6 +111,10 @@ export default function ChatTab() {
       if (evt.type === "chat.deleted") {
         setMessages((prev) => prev.filter((m) => m.id !== evt.message_id));
       }
+      if (evt.type === "chat.cleared") {
+        setMessages([]);
+        toast(`Chat wiped${evt.by ? ` by ${evt.by}` : ""}`);
+      }
     });
   }, [subscribe, isPending]);
 
@@ -124,6 +128,16 @@ export default function ChatTab() {
     setText("");
     try {
       await api.post("/chat/messages", { text: t });
+    } catch (e) {
+      toast.error(formatDetail(e));
+    }
+  }
+
+  async function wipe() {
+    if (!window.confirm("Wipe every chat message right now? This can't be undone.")) return;
+    try {
+      const { data } = await api.delete("/chat/messages");
+      toast(`Wiped ${data.messages_deleted} messages`);
     } catch (e) {
       toast.error(formatDetail(e));
     }
@@ -143,7 +157,7 @@ export default function ChatTab() {
           <div className="w-8 h-8 rounded-lg bg-[#007AFF]/15 text-[#007AFF] flex items-center justify-center">
             <Cloud className="w-4 h-4" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="font-mono-stat text-[10px] uppercase tracking-widest text-neutral-500">
               {weather ? `${weather.location} · ${weather.wind} wind` : "Loading weather…"}
             </div>
@@ -154,6 +168,19 @@ export default function ChatTab() {
               )}
             </div>
           </div>
+          {user.is_admin && (
+            <button
+              onClick={wipe}
+              className="text-[10px] font-mono-stat uppercase tracking-widest text-neutral-500 hover:text-status-cant border border-neutral-300 hover:border-status-cant rounded-full px-2.5 py-1 active:scale-95"
+              title="Wipe every chat message right now"
+              data-testid="chat-wipe-button"
+            >
+              Wipe now
+            </button>
+          )}
+        </div>
+        <div className="mt-1.5 text-[10px] text-neutral-400 font-mono-stat uppercase tracking-widest">
+          Messages auto-clear after 7 days
         </div>
       </div>
 

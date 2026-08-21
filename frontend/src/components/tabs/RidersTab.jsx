@@ -7,6 +7,7 @@ import { resizeAvatarFile } from "../../lib/image";
 import { usePullToDismiss } from "../../lib/usePullToDismiss";
 import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail, MessageCircle, CreditCard } from "lucide-react";
 import MemberCard from "../MemberCard";
+import CafeRulesAdmin from "../CafeRulesAdmin";
 import { toast } from "sonner";
 
 function ChangeEmailBlock() {
@@ -566,6 +567,7 @@ function RegisterRiderModal({ onClose }) {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef(null);
+  const { handlers: dragHandlers, dy, dragging } = usePullToDismiss({ onDismiss: onClose });
 
   async function pickPhoto(e) {
     const file = e.target.files?.[0];
@@ -632,8 +634,20 @@ function RegisterRiderModal({ onClose }) {
 
   return (
     <div className="absolute inset-0 z-30 bg-black/60 flex items-end" data-testid="register-modal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-h-[92%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
-        <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
+      <div
+        className="w-full max-h-[92%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down"
+        style={{
+          transform: dy ? `translateY(${dy}px)` : undefined,
+          transition: dragging ? "none" : "transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1)",
+        }}
+      >
+        <div
+          {...dragHandlers}
+          className="pt-1 pb-3 -mx-5 px-5 -mt-5 mb-1 select-none"
+          data-testid="register-drag-handle"
+        >
+          <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto" />
+        </div>
         <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Invite a rider</div>
         <h3 className="font-heading text-2xl font-black uppercase mt-1">New rider</h3>
         <p className="text-[11px] text-text-muted mt-1">
@@ -844,6 +858,8 @@ export default function RidersTab() {
           <UserPlus className="w-4 h-4" /> Invite a rider
         </button>
       )}
+
+      {user.is_admin && <CafeRulesAdmin />}
 
       {user.is_admin && reports.length > 0 && (
         <div className="bg-status-cant/10 border border-status-cant/30 rounded-xl p-3 mb-3" data-testid="reports-block">
