@@ -22,8 +22,8 @@
 | iPhone-only (`supportsTablet: false`) | Set in `app.json` |
 | Deep links (`applinks:greylynncc.com`, `scheme: glcc`) | Set |
 | Screenshots (6.7") | Generate on Mac via Maestro |
-| Privacy policy URL live | **TODO before submit** |
-| Support URL live | **TODO before submit** |
+| Privacy policy URL live | **Shipped in app at `/privacy` — live as soon as DNS points at deployment** |
+| Support URL live | **Shipped in app at `/support` — live as soon as DNS points at deployment** |
 | EAS Project ID in `app.json` | **TODO — replace placeholder** |
 | Apple IDs in `eas.json` | **TODO — replace placeholders** |
 
@@ -60,18 +60,24 @@ Where to find those:
 
 ## 2. Two web pages you must publish **before** submit
 
-Apple will 401-reject the review if either URL is behind auth. Static HTML on `greylynncc.com` is enough. Copy the drafts from `APP_STORE_LISTING.md`.
+Apple will 401-reject the review if either URL is behind auth. **These pages are now shipped in the app** (routes `/privacy` and `/support` served by the frontend) — as soon as `greylynncc.com` DNS points at this deployment, both URLs go live automatically.
 
 - `https://greylynncc.com/privacy` — required
-- `https://greylynncc.com/support`  — required (can be a mailto page)
+- `https://greylynncc.com/support`  — required
 
-Verify with:
+Verify (do this from your Mac after DNS is pointed):
 
 ```bash
 curl -I https://greylynncc.com/privacy
 curl -I https://greylynncc.com/support
 # Both must be 200 (or a 301/302 to a 200). No 401/403/404.
 ```
+
+Preview (before DNS is pointed) — same content lives at:
+- `https://mobile-craft-4628.preview.emergentagent.com/privacy`
+- `https://mobile-craft-4628.preview.emergentagent.com/support`
+
+If you'd rather host the copy on a static site (Notion, Framer, Webflow), the drafts are in `APP_STORE_LISTING.md` — just copy/paste.
 
 ---
 
@@ -187,7 +193,7 @@ For any rejection: fix → `eas build` (buildNumber auto-bumps) → `eas submit`
 
 **TL;DR checklist**
 
-- [ ] Publish `/privacy` and `/support` on greylynncc.com
+- [x] Ship `/privacy` and `/support` pages (done — served by the frontend, auto-live at greylynncc.com once DNS points here)
 - [ ] Fill `appleId` / `ascAppId` / `appleTeamId` in `eas.json`
 - [ ] Fill `projectId` in `app.json` (from `eas init`)
 - [ ] `eas build --platform ios --profile production`

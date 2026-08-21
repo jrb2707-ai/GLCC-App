@@ -350,6 +350,16 @@ export default function AuthScreen() {
               An admin will approve your rider profile
             </p>
           )}
+
+          <div className="flex items-center justify-center gap-3 pt-1 text-[10px] uppercase tracking-widest font-mono-stat text-text-muted">
+            <a href="/privacy" className="hover:text-brand-accent underline underline-offset-4" data-testid="auth-privacy-link">
+              Privacy
+            </a>
+            <span aria-hidden>·</span>
+            <a href="/support" className="hover:text-brand-accent underline underline-offset-4" data-testid="auth-support-link">
+              Support
+            </a>
+          </div>
         </form>
       </div>
       {forgotOpen && (

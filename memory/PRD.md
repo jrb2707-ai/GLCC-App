@@ -97,6 +97,11 @@ See `/app/memory/test_credentials.md`.
     - `/app/mobile/store-assets/SUBMISSION_PLAYBOOK.md` — single-source-of-truth checklist covering EAS setup, privacy/support URL requirements, `eas build`, Maestro screenshot capture, ASC metadata paste, review notes with reviewer credentials, and the rejection recovery loop.
     - Visual sign-off on the sticky glass clubhouse banner completed on the web preview at chat tab (Playwright screenshot, banner text "Welcome to the GLCC clubhouse. Weather check. Watch this space." rendered correctly, profanity filter visible on messages).
     - App is now functionally App Store-ready. Remaining work is user-side: fill Apple IDs in `eas.json`, publish greylynncc.com/privacy + /support, run `eas build` + `eas submit` on Mac, capture screenshots via Maestro.
+  - **Phase 5.1 (Feb 2026): DONE** — Legal pages shipped:
+    - New `/app/frontend/src/components/LegalPage.jsx` — full-page (breaks out of the phone frame) responsive layout serving `/privacy` and `/support` at the top of `App()` before AppShell. Content drawn from the drafts in `APP_STORE_LISTING.md` (data collected/not collected, third parties, retention, contact for privacy; sign-in help, pending state, push troubleshooting, block/unblock, delete-my-account, and email escalation for support). GLCC branding + footer links between the two.
+    - AuthScreen gained a "Privacy · Support" footer link so App Review can reach the pages from any point in the app.
+    - Verified 200 OK via curl on both URLs and via Playwright screenshot (both render cleanly at desktop widths — no phone frame in the way for Apple's reviewer).
+    - Pages will auto-serve at `https://greylynncc.com/privacy` and `/support` the moment DNS points at this deployment.
 - Phase 6 (Backlog): Refactor `/app/backend/server.py` (2100+ lines) into `/routes`, `/models`, `/services` modules.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.
 

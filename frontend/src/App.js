@@ -6,6 +6,7 @@ import AuthScreen from "./components/AuthScreen";
 import HomeShell from "./components/HomeShell";
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import RidePreviewScreen from "./components/RidePreviewScreen";
+import LegalPage from "./components/LegalPage";
 
 function useResetToken() {
   const [state, setState] = useState(() => {
@@ -123,6 +124,16 @@ function AppShell() {
 }
 
 export default function App() {
+  const legalKind = (() => {
+    if (typeof window === "undefined") return null;
+    const p = window.location.pathname;
+    if (p === "/privacy" || p === "/privacy/") return "privacy";
+    if (p === "/support" || p === "/support/") return "support";
+    return null;
+  })();
+  if (legalKind) {
+    return <LegalPage kind={legalKind} />;
+  }
   return (
     <AppProviders>
       <AppShell />
