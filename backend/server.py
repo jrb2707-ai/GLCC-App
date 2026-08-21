@@ -287,6 +287,28 @@ async def _fetch_forecast_at(when: datetime) -> Optional[dict]:
     }
 
 
+async def _going_user_docs(ride: dict) -> list[dict]:
+    """Resolve the list of user documents who RSVP'd `going` to this ride.
+    Reads from the canonical `rsvps` dict (older docs may also carry a
+    legacy `going` list) so downstream callers don't need to care."""
+    ids: set[str] = set(ride.get("going", []) or [])
+    rsvps = ride.get("rsvps") or {}
+    for uid, st in rsvps.items():
+        if st == "going":
+            ids.add(str(uid))
+    if not ids:
+        return []
+    oids = []
+    for i in ids:
+        try:
+            oids.append(ObjectId(i))
+        except Exception:
+            pass
+    if not oids:
+        return []
+    return await db.users.find({"_id": {"$in": oids}}).to_list(200)
+
+
 async def _send_ride_reminder(ride: dict, going_users: list[dict]) -> int:
     """Email each `going` rider (with a real email + password_hash) a reminder."""
     if not RESEND_API_KEY:
@@ -302,7 +324,8 @@ async def _send_ride_reminder(ride: dict, going_users: list[dict]) -> int:
         if forecast else "Weather forecast unavailable"
     )
     cafe_line = f"{ride.get('cafe') or 'Café TBC'}"
-    ride_url = f"{PUBLIC_APP_URL}"
+    ride_id = str(ride.get("_id"))
+    ride_url = f"{PUBLIC_APP_URL}/r/{ride_id}" if ride_id else PUBLIC_APP_URL
     sent = 0
     for u in going_users:
         to_email = u.get("email")
@@ -336,7 +359,7 @@ async def _send_ride_reminder(ride: dict, going_users: list[dict]) -> int:
                 <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b949e">Riders going</div>
                 <div style="color:#e6edf3;margin-top:2px">{going_names}</div>
               </div>
-              <a href="{ride_url}" style="display:inline-block;background:#D4FF00;color:#0b0d10;font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:13px;padding:14px 24px;border-radius:12px;text-decoration:none">Open GLCC</a>
+              <a href="{ride_url}" style="display:inline-block;background:#D4FF00;color:#0b0d10;font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:13px;padding:14px 24px;border-radius:12px;text-decoration:none">Open ride in GLCC</a>
             </td></tr>
             <tr><td style="padding:16px 28px 28px 28px;border-top:1px solid #2a2e36">
               <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#6e7681">GLCC · 4th best cycle club in Grey Lynn</div>
@@ -373,23 +396,70 @@ async def send_pending_ride_reminders() -> dict:
     total_sent = 0
     reminded = 0
     async for ride in cursor:
-        going_ids = ride.get("going", []) or []
-        if not going_ids:
+        users = await _going_user_docs(ride)
+        if not users:
             continue
-        oids = []
-        for i in going_ids:
-            try:
-                oids.append(ObjectId(i))
-            except Exception:
-                pass
-        if not oids:
-            continue
-        users = await db.users.find({"_id": {"$in": oids}}).to_list(200)
         sent = await _send_ride_reminder(ride, users)
         await db.rides.update_one({"_id": ride["_id"]}, {"$set": {"reminder_sent_at": now_utc(), "reminder_recipients": sent}})
         total_sent += sent
         reminded += 1
     return {"rides_reminded": reminded, "emails_sent": total_sent}
+
+
+# ---------- Morning-of weather alert ----------
+WEATHER_ALERT_RAIN_PCT = 60
+WEATHER_ALERT_WIND_KPH = 40
+
+
+async def send_pending_weather_alerts() -> dict:
+    """Every ride starting in the next 2-14 hours whose forecast turns nasty
+    (rain > 60% or wind > 40 kph) gets one push per going rider so they can
+    bail early. Idempotent via `weather_alert_sent_at`."""
+    now = now_utc()
+    window_start = now + timedelta(hours=2)
+    window_end = now + timedelta(hours=14)
+    cursor = db.rides.find({
+        "starts_at": {"$gte": window_start, "$lte": window_end},
+        "weather_alert_sent_at": {"$exists": False},
+    })
+    alerts_sent = 0
+    rides_alerted = 0
+    async for ride in cursor:
+        forecast = await _fetch_forecast_at(ride["starts_at"])
+        if not forecast:
+            continue
+        rain = forecast.get("rain_chance") or 0
+        wind = forecast.get("wind_kph") or 0
+        if rain < WEATHER_ALERT_RAIN_PCT and wind < WEATHER_ALERT_WIND_KPH:
+            continue
+        users = await _going_user_docs(ride)
+        if not users:
+            continue
+        user_ids = [str(u["_id"]) for u in users]
+        reason = "rain" if rain >= WEATHER_ALERT_RAIN_PCT else "wind"
+        ride_name = ride.get("name") or "today's ride"
+        title = f"Ugly forecast for {ride_name}"
+        if reason == "rain":
+            body = f"{rain}% rain expected. Tap to view ride, bail or reconfirm."
+        else:
+            body = f"{wind} kph wind expected. Tap to view ride, bail or reconfirm."
+        await push_to_users(
+            user_ids,
+            title,
+            body,
+            {"type": "ride.weather_alert", "ride_id": str(ride["_id"])},
+        )
+        await db.rides.update_one(
+            {"_id": ride["_id"]},
+            {"$set": {
+                "weather_alert_sent_at": now_utc(),
+                "weather_alert_recipients": len(user_ids),
+                "weather_alert_reason": reason,
+            }},
+        )
+        alerts_sent += len(user_ids)
+        rides_alerted += 1
+    return {"rides_alerted": rides_alerted, "pushes_sent": alerts_sent}
 
 
 async def get_weather() -> dict:
@@ -1310,6 +1380,13 @@ async def admin_send_ride_reminders(admin: dict = Depends(require_admin)):
     return result
 
 
+@api.post("/admin/send-weather-alerts")
+async def admin_send_weather_alerts(admin: dict = Depends(require_admin)):
+    """Manual trigger for the morning-of weather-alert push."""
+    result = await send_pending_weather_alerts()
+    return result
+
+
 # ---------- Chat ----------
 @api.get("/chat/messages")
 async def list_messages(user: dict = Depends(get_current_user)):
@@ -1615,9 +1692,23 @@ async def on_startup():
             await asyncio.sleep(1800)
     app.state.reminder_task = asyncio.create_task(_reminder_loop())
 
+    # Morning-of weather alert loop — every 20 minutes we check rides
+    # starting in the next 2-14 hours and push if the forecast turns bad.
+    async def _weather_alert_loop():
+        await asyncio.sleep(90)
+        while True:
+            try:
+                result = await send_pending_weather_alerts()
+                if result.get("pushes_sent"):
+                    log.info("Weather alerts: %s", result)
+            except Exception as exc:
+                log.warning("Weather alert loop error: %s", exc)
+            await asyncio.sleep(1200)
+    app.state.weather_alert_task = asyncio.create_task(_weather_alert_loop())
+
 @app.on_event("shutdown")
 async def on_shutdown():
-    for name in ("strava_task", "reminder_task"):
+    for name in ("strava_task", "reminder_task", "weather_alert_task"):
         task = getattr(app.state, name, None)
         if task:
             task.cancel()

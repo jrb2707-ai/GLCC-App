@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform } from "react-native";
+import { Alert, Linking, Platform } from "react-native";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
+import * as Notifications from "expo-notifications";
 import { api, setToken as persistToken } from "./api";
 import { registerForPush } from "./push";
 import { clearAllCache } from "./cache";
@@ -15,9 +16,21 @@ function wsUrl(token) {
   return `${scheme}://${base.replace(/^https?:\/\//, "")}/api/ws?token=${encodeURIComponent(token)}`;
 }
 
+// Pull a ride id out of any URL the app receives. Handles both the associated
+// domain (`https://greylynncc.com/r/<id>`, `/rides/<id>`) and the custom
+// scheme (`glcc://ride/<id>`).
+function rideIdFromUrl(url) {
+  if (!url) return null;
+  try {
+    const m = /(?:^|\/)(?:r|ride|rides)\/([a-zA-Z0-9]+)/.exec(url);
+    return m ? m[1] : null;
+  } catch (e) { return null; }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [booted, setBooted] = useState(false);
+  const [pendingRideId, setPendingRideId] = useState(null);
   const listeners = useRef(new Set());
   const wsRef = useRef(null);
   const wsToken = useRef(null);
@@ -116,6 +129,43 @@ export function AuthProvider({ children }) {
     })();
   }, [refreshMe]);
 
+  // Deep-link + push-notification-tap → open the referenced ride when the
+  // rider next hits the Rides tab. `consumePendingRide` clears the marker.
+  useEffect(() => {
+    let mounted = true;
+    const handle = (url) => {
+      const id = rideIdFromUrl(url);
+      if (mounted && id) setPendingRideId(id);
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener("url", (e) => handle(e.url));
+    // A tapped push notification with data.ride_id lands us here too.
+    const tapSub = Notifications.addNotificationResponseReceivedListener((resp) => {
+      const rideId = resp?.notification?.request?.content?.data?.ride_id;
+      if (mounted && rideId) setPendingRideId(String(rideId));
+    });
+    // Cold-start case: the tap may have already resolved before we could
+    // subscribe. `getLastNotificationResponseAsync` fills that gap.
+    Notifications.getLastNotificationResponseAsync?.()
+      .then((resp) => {
+        const rideId = resp?.notification?.request?.content?.data?.ride_id;
+        if (mounted && rideId) setPendingRideId(String(rideId));
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+      sub?.remove?.();
+      tapSub?.remove?.();
+    };
+  }, []);
+
+  const consumePendingRide = useCallback(() => {
+    setPendingRideId((prev) => {
+      if (prev) return null;
+      return prev;
+    });
+  }, []);
+
   // When user becomes available (either at boot or after login), ensure the
   // WS is connected using the currently stored token. This handles the
   // cold-start refreshMe path where connectWs wasn't called yet.
@@ -132,8 +182,8 @@ export function AuthProvider({ children }) {
   }, [user, connectWs]);
 
   const authValue = useMemo(
-    () => ({ user, booted, login, register, logout, refreshMe }),
-    [user, booted, login, register, logout, refreshMe]
+    () => ({ user, booted, login, register, logout, refreshMe, pendingRideId, consumePendingRide }),
+    [user, booted, login, register, logout, refreshMe, pendingRideId, consumePendingRide]
   );
   const eventsValue = useMemo(() => ({ subscribe }), [subscribe]);
 

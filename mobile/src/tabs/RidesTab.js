@@ -25,7 +25,7 @@ function goingList(ride, riders) {
 }
 
 export default function RidesTab() {
-  const { user } = useAuth();
+  const { user, pendingRideId, consumePendingRide } = useAuth();
   const { subscribe } = useEvents();
   const [rides, setRides] = useState([]);
   const [riders, setRiders] = useState([]);
@@ -57,6 +57,19 @@ export default function RidesTab() {
     })();
     load();
   }, [load]);
+
+  // Deep-link / push-tap → jump straight into the ride detail. If the ride
+  // hasn't loaded yet (cold start from a killed app), refresh once and try
+  // again once the list arrives.
+  useEffect(() => {
+    if (!pendingRideId) return;
+    if (rides.some((r) => r.id === pendingRideId)) {
+      setOpenId(pendingRideId);
+      consumePendingRide();
+    } else if (!loading) {
+      consumePendingRide();
+    }
+  }, [pendingRideId, rides, loading, consumePendingRide]);
 
   // WS-driven live updates for rides + riders + strava sync completion.
   useEffect(() => {
