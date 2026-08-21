@@ -5,6 +5,7 @@ import PhoneFrame from "./components/PhoneFrame";
 import AuthScreen from "./components/AuthScreen";
 import HomeShell from "./components/HomeShell";
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
+import RidePreviewScreen from "./components/RidePreviewScreen";
 
 function useResetToken() {
   const [state, setState] = useState(() => {
@@ -24,12 +25,33 @@ function useResetToken() {
   return [state.token, clear];
 }
 
+function useRidePreviewId() {
+  const [state, setState] = useState(() => {
+    if (typeof window === "undefined") return { id: null };
+    const m = /^\/(?:r|ride|rides)\/([a-zA-Z0-9]+)/.exec(window.location.pathname);
+    return { id: m ? m[1] : null };
+  });
+  const clear = () => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", "/");
+    }
+    setState({ id: null });
+  };
+  return [state.id, clear];
+}
+
 function Gate() {
   const { user, booted } = useAuth();
   const [resetToken, clearReset] = useResetToken();
+  const [previewRideId, clearPreview] = useRidePreviewId();
   useEffect(() => {}, []);
   if (resetToken) {
     return <ResetPasswordScreen token={resetToken} onDone={clearReset} />;
+  }
+  // Unauthed share preview — visible to logged-in AND logged-out visitors
+  // so a rider tapping the email link doesn't lose their spot.
+  if (previewRideId && !user) {
+    return <RidePreviewScreen rideId={previewRideId} onSignIn={clearPreview} />;
   }
   if (!booted) {
     return (

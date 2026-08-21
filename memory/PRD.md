@@ -63,6 +63,10 @@ See `/app/memory/test_credentials.md`.
     - **Bug fix bonus**: The reminder loop was reading `ride.going` which is never written. New shared helper `_going_user_docs(ride)` derives going riders from the canonical `rsvps` dict so both reminders and weather alerts actually reach the right people. Verified end-to-end: `/api/admin/send-ride-reminders` now returns `rides_reminded > 0` where before it always returned 0.
     - Reminder email button now links to `${PUBLIC_APP_URL}/r/{ride_id}` (associated domain), copy updated to "Open ride in GLCC".
     - Native `store.js` gained a `pendingRideId` context + `consumePendingRide()`: listens to `Linking` (initial URL + subsequent) and `Notifications.addNotificationResponseReceivedListener` + `getLastNotificationResponseAsync` (cold-start). Any URL matching `/(r|ride|rides)/(id)` or notification with `data.ride_id` sets `pendingRideId`, and RidesTab auto-opens the matching ride detail.
+  - **Phase 3.7 (Feb 2026): DONE** — Web ride preview so `/r/{id}` no longer 404s for friends without the app:
+    - Backend `GET /api/rides/public/{ride_id}` — no auth, returns a safe subset (id, name, day/date/time, distance/elevation/pace, cafe, location, going_count, going_first_names, source, strava_url, map_url). No email/rsvps/user ids leaked. Verified 200 + shape and 404 shape via curl.
+    - Web `RidePreviewScreen.jsx` — mobile-styled preview with hero map (or gradient fallback), title, stats grid, café block, going first-name chips, "Open in GLCC app" CTA that attempts `glcc://ride/{id}` and falls back to the sign-in screen after 900ms, and a "View on Strava" link when applicable.
+    - `App.js` gained `useRidePreviewId()` which matches `/r/`, `/ride/`, `/rides/` paths and renders the preview in the Gate for unauthenticated visitors. Verified end-to-end via Playwright screenshot on the preview URL.
   - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
   - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.

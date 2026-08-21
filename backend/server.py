@@ -1307,6 +1307,44 @@ async def list_rides(user: dict = Depends(get_current_user)):
         rides.append(serialize_ride(r))
     return {"rides": rides}
 
+
+@api.get("/rides/public/{ride_id}")
+async def public_ride(ride_id: str):
+    """Auth-free ride preview for share links. Returns a small safe subset
+    (no RSVP user ids, no personal data) so friends without the app can land
+    on a proper preview instead of a bare 404."""
+    try:
+        oid = ObjectId(ride_id)
+    except InvalidId:
+        raise HTTPException(status_code=404, detail="Ride not found")
+    doc = await db.rides.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Ride not found")
+    users = await _going_user_docs(doc)
+    starts_at = doc.get("starts_at")
+    return {
+        "id": str(doc["_id"]),
+        "name": doc.get("name"),
+        "day": doc.get("day"),
+        "date": doc.get("date"),
+        "time": doc.get("time"),
+        "starts_at": starts_at.isoformat() if isinstance(starts_at, datetime) else starts_at,
+        "distance": doc.get("distance"),
+        "elevation": doc.get("elevation"),
+        "pace": doc.get("pace", "28-31 kph"),
+        "location": doc.get("location"),
+        "route": doc.get("route"),
+        "cafe": doc.get("cafe"),
+        "source": doc.get("source", "manual"),
+        "strava_url": doc.get("strava_url"),
+        "map_url": doc.get("map_url"),
+        "going_count": len(users),
+        # First names only so we don't leak the roster.
+        "going_first_names": [
+            (u.get("name") or "").split(" ")[0] for u in users if u.get("name")
+        ],
+    }
+
 @api.post("/rides")
 async def create_ride(body: RideCreateIn, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
