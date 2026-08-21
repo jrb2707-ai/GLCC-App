@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity,
-  Linking, ActivityIndicator, Alert,
+  ActivityIndicator, Alert,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
@@ -95,13 +95,10 @@ export default function RidesTab() {
     });
   }, [subscribe, load]);
 
-  async function setRsvp(rideId, status, ride) {
+  async function setRsvp(rideId, status, _ride) {
     try {
       const { data } = await api.post(`/rides/${rideId}/rsvp`, { status });
       setRides((prev) => prev.map((r) => (r.id === rideId ? data : r)));
-      if (status === "going" && ride?.source === "strava" && ride?.strava_url) {
-        Linking.openURL(ride.strava_url).catch(() => {});
-      }
     } catch (e) {
       Alert.alert("RSVP", formatDetail(e));
     }
@@ -144,12 +141,6 @@ export default function RidesTab() {
 
         <Text style={s.locLine}>📍 {open.location ? `Depart ${open.location}` : "Location TBC"}</Text>
 
-        {open.source === "strava" && open.strava_url && (
-          <TouchableOpacity onPress={() => Linking.openURL(open.strava_url)} testID="ride-strava-link">
-            <Text style={s.stravaLink}>OPEN IN STRAVA →</Text>
-          </TouchableOpacity>
-        )}
-
         <View style={{ marginTop: 16 }}>
           <RouteMap name={open.name} mapUrl={open.map_url} />
         </View>
@@ -175,24 +166,19 @@ export default function RidesTab() {
             );
           })}
         </View>
-        {open.source === "strava" && open.strava_url && (
-          <Text style={s.rsvpHint}>Tapping Going also opens the ride on Strava so you can RSVP there</Text>
-        )}
 
-        {!!open.cafe && (
-          <View style={s.cafe} testID="cafe-block">
-            <Text style={s.cafeEyebrow}>☕ CAFÉ STOP</Text>
-            <Text style={s.cafeName}>{open.cafe}</Text>
-            <TouchableOpacity
-              onPress={() => sendRound(open)}
-              disabled={isPending}
-              style={[s.cafeBtn, isPending && { opacity: 0.5 }]}
-              testID="cafe-send-round-button"
-            >
-              <Text style={s.cafeBtnTxt}>I'M AT THE CAFÉ</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={s.cafe} testID="cafe-block">
+          <Text style={s.cafeEyebrow}>☕ CAFÉ STOP</Text>
+          <Text style={s.cafeName}>{open.cafe || "Café TBC"}</Text>
+          <TouchableOpacity
+            onPress={() => sendRound(open)}
+            disabled={isPending}
+            style={[s.cafeBtn, isPending && { opacity: 0.5 }]}
+            testID="cafe-send-round-button"
+          >
+            <Text style={s.cafeBtnTxt}>I'M AT THE CAFÉ</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={s.sectionLabel}>GOING · {going.length}</Text>
         {going.length === 0 && <Text style={{ color: colors.textMuted, fontSize: 12 }}>Nobody yet — be the first.</Text>}
@@ -311,12 +297,10 @@ const s = StyleSheet.create({
   statLabel: { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
   statVal: { color: colors.textPrimary, fontSize: 18, fontWeight: "900", marginTop: 4 },
   locLine: { color: colors.textSecondary, fontSize: 12, marginTop: 12 },
-  stravaLink: { color: colors.stravaOrange, fontSize: 11, letterSpacing: 2, fontWeight: "700", marginTop: 8 },
   sectionLabel: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "700", marginTop: 20, marginBottom: 8 },
   rsvpRow: { flexDirection: "row", gap: 8 },
   rsvpBtn: { flex: 1, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.bgSecondary, paddingVertical: 10, borderRadius: radius.md, alignItems: "center" },
   rsvpTxt: { color: colors.textSecondary, fontSize: 11, letterSpacing: 2, fontWeight: "700" },
-  rsvpHint: { color: colors.textMuted, fontSize: 10, letterSpacing: 1, marginTop: 8 },
 
   cafe: { marginTop: 20, padding: 14, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(201,152,106,0.30)", backgroundColor: "rgba(44,30,24,0.6)" },
   cafeEyebrow: { color: colors.accentCoffee, fontSize: 10, letterSpacing: 3, fontWeight: "700" },

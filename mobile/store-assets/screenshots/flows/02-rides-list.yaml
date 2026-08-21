@@ -1,0 +1,16 @@
+appId: com.greylynncc.app
+name: 02 · Rides list
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+# Sign in as the reviewer test rider (regular member — no admin badges,
+# looks cleanest on the marketing screenshot).
+- tapOn: "Email"
+- inputText: "leo@glcc.club"
+- tapOn: "Password"
+- inputText: "cycle123"
+- tapOn: "SIGN IN"
+- waitForAnimationToEnd
+# Rides tab is the default landing tab.
+- assertVisible: "RIDES CALENDAR"

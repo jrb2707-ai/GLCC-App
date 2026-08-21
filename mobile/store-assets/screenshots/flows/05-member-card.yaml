@@ -1,0 +1,10 @@
+appId: com.greylynncc.app
+name: 05 · Member card
+---
+- tapOn: "Riders"
+- waitForAnimationToEnd
+# Tap Jason Bryant (El Presidente) — always #1, cleanest card.
+- tapOn: "Jason Bryant"
+- waitForAnimationToEnd
+# The Rapha-style member card is the modal that pops up for other riders.
+- assertVisible: "MEMBER CARD"

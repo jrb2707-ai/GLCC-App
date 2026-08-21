@@ -24,21 +24,6 @@ export default function RidePreviewScreen({ rideId, onSignIn }) {
     return () => { cancelled = true; };
   }, [rideId]);
 
-  function openInApp() {
-    // Try to hand off to the installed native app via the custom scheme.
-    // If nothing intercepts within 900ms we fall back to the sign-in flow.
-    const before = Date.now();
-    const fallback = setTimeout(() => {
-      if (Date.now() - before < 1600) onSignIn();
-    }, 900);
-    window.addEventListener(
-      "visibilitychange",
-      () => { if (document.hidden) clearTimeout(fallback); },
-      { once: true }
-    );
-    window.location.href = `glcc://ride/${rideId}`;
-  }
-
   if (loading) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-bg-primary" data-testid="ride-preview-loading">
@@ -125,31 +110,12 @@ export default function RidePreviewScreen({ rideId, onSignIn }) {
         </div>
 
         <button
-          onClick={openInApp}
-          className="mt-8 w-full py-4 rounded-xl bg-accent-volt text-black font-black uppercase tracking-[0.2em] text-sm shadow-lg shadow-accent-volt/20"
-          data-testid="ride-preview-open-app"
-        >
-          Open in GLCC app
-        </button>
-        <button
           onClick={onSignIn}
-          className="mt-3 w-full py-3 rounded-xl border border-border-subtle text-text-secondary font-bold uppercase tracking-[0.2em] text-xs"
-          data-testid="ride-preview-signin"
+          className="mt-8 w-full py-3 rounded-xl border border-border-subtle text-text-secondary font-bold uppercase tracking-[0.2em] text-xs"
+          data-testid="ride-preview-close"
         >
-          Or sign in on web
+          Back to GLCC
         </button>
-
-        {ride.source === "strava" && ride.strava_url && (
-          <a
-            href={ride.strava_url}
-            target="_blank"
-            rel="noreferrer"
-            className="block mt-6 text-center text-[10px] tracking-[0.3em] font-bold uppercase text-strava-orange"
-            data-testid="ride-preview-strava"
-          >
-            View on Strava →
-          </a>
-        )}
 
         <div className="mt-8 text-center text-[10px] tracking-[0.35em] uppercase text-text-muted">
           GLCC · 4th best cycle club in Grey Lynn

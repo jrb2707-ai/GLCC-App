@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
 import Avatar from "../Avatar";
-import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route, ExternalLink } from "lucide-react";
+import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route } from "lucide-react";
 import { toast } from "sonner";
 import StravaPanel from "../StravaPanel";
 
@@ -162,18 +162,6 @@ export default function RidesTab({ onNavigate }) {
           <span>{open.location ? `Depart ${open.location}` : "Location TBC"}</span>
         </div>
 
-        {open.source === "strava" && open.strava_url && (
-          <a
-            href={open.strava_url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold text-[#FC4C02] hover:underline"
-            data-testid="ride-strava-link"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> Open in Strava
-          </a>
-        )}
-
         <div className="mt-4">
           <RouteMap name={open.name} mapUrl={open.map_url} />
         </div>
@@ -186,15 +174,7 @@ export default function RidesTab({ onNavigate }) {
             {RSVP_OPTIONS.map((o) => (
               <button
                 key={o.key}
-                onClick={() => {
-                  setRsvp(open.id, o.key);
-                  // When a rider marks Going on a Strava-sourced ride, also
-                  // pop the Strava event page in a new tab so they can hit
-                  // "I'm going" on Strava with one extra tap.
-                  if (o.key === "going" && open.source === "strava" && open.strava_url) {
-                    window.open(open.strava_url, "_blank", "noopener,noreferrer");
-                  }
-                }}
+                onClick={() => setRsvp(open.id, o.key)}
                 disabled={isPending}
                 className={`flex-1 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed ${
                   myRsvp === o.key ? o.color : "bg-bg-secondary text-text-secondary border-border-subtle"
@@ -205,30 +185,23 @@ export default function RidesTab({ onNavigate }) {
               </button>
             ))}
           </div>
-          {open.source === "strava" && open.strava_url && (
-            <div className="mt-2 text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-              Tapping Going will also open the ride on Strava so you can RSVP there
-            </div>
-          )}
         </div>
 
-        {open.cafe && (
-          <div className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/30 rounded-2xl p-4" data-testid="cafe-block">
-            <div className="flex items-center gap-2 text-accent-coffee">
-              <Coffee className="w-4 h-4" />
-              <span className="text-[10px] uppercase tracking-widest font-mono-stat">Café stop</span>
-            </div>
-            <div className="font-heading text-xl font-bold mt-1">{open.cafe}</div>
-            <button
-              onClick={() => sendRound(open)}
-              disabled={isPending}
-              className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-              data-testid="cafe-send-round-button"
-            >
-              <Coffee className="w-4 h-4" /> I&apos;m At The Café
-            </button>
+        <div className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/30 rounded-2xl p-4" data-testid="cafe-block">
+          <div className="flex items-center gap-2 text-accent-coffee">
+            <Coffee className="w-4 h-4" />
+            <span className="text-[10px] uppercase tracking-widest font-mono-stat">Café stop</span>
           </div>
-        )}
+          <div className="font-heading text-xl font-bold mt-1">{open.cafe || "Café TBC"}</div>
+          <button
+            onClick={() => sendRound(open)}
+            disabled={isPending}
+            className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            data-testid="cafe-send-round-button"
+          >
+            <Coffee className="w-4 h-4" /> I&apos;m At The Café
+          </button>
+        </div>
 
         <div className="mt-5">
           <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">

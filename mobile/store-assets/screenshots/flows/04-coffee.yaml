@@ -1,0 +1,9 @@
+appId: com.greylynncc.app
+name: 04 · Coffee tab
+---
+# Pop back to the rides list, then across to Coffee.
+- tapOn: "← BACK TO RIDES"
+- waitForAnimationToEnd
+- tapOn: "Coffee"
+- waitForAnimationToEnd
+- assertVisible: "COFFEE ORDER"

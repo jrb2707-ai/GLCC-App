@@ -1,0 +1,11 @@
+appId: com.greylynncc.app
+name: 03 · Ride detail
+---
+# Assumes the app is already signed in from 02-rides-list.
+- assertVisible: "RIDES CALENDAR"
+# Tap the first ride card. Any card with the SAT/SUN/etc eyebrow works —
+# fall back to the first ride-card testID if the label changes.
+- tapOn:
+    id: "ride-card-.*"
+- waitForAnimationToEnd
+- assertVisible: "YOUR RSVP"

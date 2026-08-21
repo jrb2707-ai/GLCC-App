@@ -1,0 +1,10 @@
+appId: com.greylynncc.app
+name: 01 · Auth screen
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+# Sit on the AuthScreen (hero + GLCC glass panel). Nothing else to do —
+# the hero image + panel + Sign in / Join Club pills are already the pitch.
+- assertVisible: "GLCC."
+- assertVisible: "SIGN IN"
