@@ -79,6 +79,15 @@ See `/app/memory/test_credentials.md`.
     - Web RidersTab: matching collapsible reports block with dismiss + delete-message actions. Web ChatTab handles `chat.deleted` too.
     - Verified end-to-end via curl: Leo reports JB's message, JB sees it in `/admin/reports`, tapping delete-message purges the message and drops open count to 0 and message list confirms it's gone.
     - Screenshots docs updated in `APP_STORE_LISTING.md` — user captures 6.7" iPhone shots on their Mac from the Simulator after the first `eas build`.
+  - **Phase 4.2 (Feb 2026): DONE** — Café auto-suggest:
+    - Backend `suggest_cafe(*text_fields)` matches an incoming ride's location/route/name against a curated 25-neighbourhood → café list (Devonport → The Depot, Piha → Piha Café, Waiheke → Charlie Farley's, etc). Overridable via `CAFE_OVERRIDES` env var without a redeploy.
+    - Applied automatically in `_strava_event_to_ride_doc` (weekend rides) and `POST /rides` (manual create with empty café). Weekday rides still lock to The Brunchery.
+    - New endpoint `GET /api/rides/cafe-suggest?q=...` for live suggestion in future create-ride forms.
+    - Verified via curl: Devonport → Depot, Piha → Piha Café, Waiheke → Charlie Farley's, Antarctica → null. Manual POST /rides with location "North Head, Devonport" auto-fills "The Depot Eatery · Devonport".
+  - **Phase 4.3 (Feb 2026): DONE** — Ride route labels always from Strava:
+    - `_fetch_route_stats` now caches the Strava route `description` alongside name/distance/elevation; entries missing the field are re-fetched (self-healing cache).
+    - `_event_to_ride` builds `route` from a strict fallback chain: fetched Strava route name → event-embedded route name → first sentence of event description → empty. Never falls back to a raw URL anymore.
+    - Verified via live Strava sync: rides now display readable labels like "Monday Rooster", "GLCC Brian, Not Tamaki Revised.", "Café Ride", "Jail Break Alt route" instead of `strava.com/clubs/…/group_events/…`.
   - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
   - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.

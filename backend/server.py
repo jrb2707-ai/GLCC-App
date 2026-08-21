@@ -594,6 +594,68 @@ async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: 
         await send_expo_push(tokens, title, body, data)
 
 
+# ---------- Café auto-suggest ----------
+# Small curated map of Auckland cycling neighbourhoods → the café GLCC
+# tends to stop at. Ordered specific → generic; first match wins so
+# "Grey Lynn West" beats "West Auckland". Editable via `CAFE_OVERRIDES`
+# env var: "neighbourhood=Café Name, neighbourhood=Café Name".
+_CAFE_MAP: list[tuple[str, str]] = [
+    ("grey lynn", "The Brunchery · 318 Richmond Rd, Grey Lynn"),
+    ("ponsonby", "Ceremony Coffee · Ponsonby"),
+    ("freemans bay", "Ceremony Coffee · Ponsonby"),
+    ("westmere", "Daily Bread · Westmere"),
+    ("herne bay", "Little & Friday · Herne Bay"),
+    ("pt chevalier", "The Original · Pt Chevalier"),
+    ("point chevalier", "The Original · Pt Chevalier"),
+    ("sandringham", "Duo Sandringham"),
+    ("mt eden", "Circus Circus · Mt Eden"),
+    ("mount eden", "Circus Circus · Mt Eden"),
+    ("kingsland", "Kokako Café · Kingsland"),
+    ("newmarket", "Best Ugly Bagels · Newmarket"),
+    ("parnell", "Coffee Supreme · Parnell"),
+    ("mission bay", "Bird On A Wire · Mission Bay"),
+    ("kohimarama", "Ripe Deli · Kohimarama"),
+    ("st heliers", "Sisters Yarn · St Heliers"),
+    ("devonport", "The Depot Eatery · Devonport"),
+    ("takapuna", "Takapuna Beach Cafe"),
+    ("browns bay", "Deco Eatery · Browns Bay"),
+    ("titirangi", "Deco Eatery · Titirangi"),
+    ("piha", "Piha Café"),
+    ("muriwai", "Sand Dunz Beach Cafe · Muriwai"),
+    ("bethells", "Bethells Beach Café"),
+    ("whangaparaoa", "Silo Cafe · Whangaparaoa"),
+    ("waiheke", "Charlie Farley's · Waiheke"),
+    ("cornwall park", "Cornerstone · One Tree Hill"),
+    ("one tree hill", "Cornerstone · One Tree Hill"),
+    ("epsom", "Little Sister · Epsom"),
+]
+
+
+def _load_cafe_overrides() -> list[tuple[str, str]]:
+    raw = os.environ.get("CAFE_OVERRIDES", "")
+    out: list[tuple[str, str]] = []
+    for pair in raw.split(","):
+        if "=" not in pair:
+            continue
+        k, v = pair.split("=", 1)
+        if k.strip() and v.strip():
+            out.append((k.strip().lower(), v.strip()))
+    return out
+
+
+def suggest_cafe(*fields: Optional[str]) -> Optional[str]:
+    """Given any combination of ride text (name, route, location, city),
+    return the neighbourhood's default café if we recognise it. Returns
+    None if no keyword matches so callers can fall back to their own default."""
+    blob = " ".join((f or "").lower() for f in fields if f)
+    if not blob.strip():
+        return None
+    for needle, cafe in _load_cafe_overrides() + _CAFE_MAP:
+        if needle in blob:
+            return cafe
+    return None
+
+
 # ---------- Content filter (Apple 1.2 fallback) ----------
 # Small NZ/AU-flavoured list. Can be overridden via PROFANITY_WORDS env var
 # (comma-separated) so admins can tune without a redeploy.
@@ -830,7 +892,7 @@ async def _fetch_route_stats(route_id: str, token: str) -> Optional[dict]:
     if not route_id:
         return None
     cached = await db.strava_routes.find_one({"_id": route_id})
-    if cached and cached.get("cached_at"):
+    if cached and cached.get("cached_at") and "description" in cached:
         cached_at = cached["cached_at"]
         if cached_at.tzinfo is None:
             cached_at = cached_at.replace(tzinfo=timezone.utc)
@@ -852,6 +914,7 @@ async def _fetch_route_stats(route_id: str, token: str) -> Optional[dict]:
         "distance_m": d.get("distance"),
         "elevation_m": d.get("elevation_gain"),
         "name": d.get("name"),
+        "description": d.get("description"),
         "cached_at": now_utc(),
     }
     await db.strava_routes.update_one({"_id": route_id}, {"$set": doc}, upsert=True)
@@ -900,11 +963,32 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
             distance = f"{round(d_m / 1000)} km"
         if isinstance(e_m, (int, float)) and e_m > 0:
             elevation = f"{round(e_m)} m"
-    # Weekday rides (Mon–Fri) always stop at The Brunchery
+    # Weekday rides (Mon–Fri) always stop at The Brunchery. Weekend rides
+    # try to guess from the neighbourhood the route ends in so ride
+    # captains don't have to hand-set a café every Sunday.
     cafe = None
     if weekday is not None and weekday <= 4:
         cafe = "The Brunchery · 318 Richmond Rd, Grey Lynn"
+    else:
+        cafe = suggest_cafe(
+            ev.get("address"),
+            ev.get("title"),
+            route.get("name") if isinstance(route, dict) else None,
+        )
     strava_url = f"https://www.strava.com/clubs/{STRAVA_CLUB_ID}/group_events/{event_id}"
+    # Prefer the authoritative Strava route name (fetched from /routes/{id}),
+    # fall back to the event-embedded route name, then to the event
+    # description. Never fall back to the raw URL — that used to show up on
+    # rides that had a description-only event which looked awful on the card.
+    route_label = None
+    if route_stats and route_stats.get("name"):
+        route_label = route_stats["name"]
+    elif isinstance(route, dict) and route.get("name"):
+        route_label = route["name"]
+    elif ev.get("description"):
+        # Take just the first sentence so the card stays clean.
+        desc = str(ev["description"]).strip()
+        route_label = re.split(r"[.\n]", desc, maxsplit=1)[0][:120]
     return {
         "strava_event_id": event_id,
         "source": "strava",
@@ -916,7 +1000,7 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
         "distance": distance,
         "elevation": elevation,
         "location": ev.get("address"),
-        "route": (route.get("name") if isinstance(route, dict) and route.get("name") else strava_url),
+        "route": route_label,
         "strava_url": strava_url,
         "map_url": map_url,
         "polyline": polyline,
@@ -1403,6 +1487,11 @@ async def public_ride(ride_id: str):
 @api.post("/rides")
 async def create_ride(body: RideCreateIn, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
+    # If the captain didn't set a café, try to guess from the route/location.
+    if not doc.get("cafe"):
+        guess = suggest_cafe(doc.get("location"), doc.get("route"), doc.get("name"))
+        if guess:
+            doc["cafe"] = guess
     doc["rsvps"] = {}
     doc["created_at"] = now_utc()
     doc["sort_key"] = doc["created_at"].isoformat()
@@ -1410,6 +1499,13 @@ async def create_ride(body: RideCreateIn, admin: dict = Depends(require_admin)):
     doc["_id"] = r.inserted_id
     await manager.broadcast({"type": "ride.created", "ride": serialize_ride(doc)})
     return serialize_ride(doc)
+
+
+@api.get("/rides/cafe-suggest")
+async def rides_cafe_suggest(q: str = "", user: dict = Depends(get_current_user)):
+    """Live suggestion for the manual create-ride form. Accepts any blob of
+    route/location text and returns the matching neighbourhood café."""
+    return {"suggestion": suggest_cafe(q)}
 
 @api.post("/rides/{ride_id}/rsvp")
 async def rsvp(ride_id: str, body: RSVPIn, user: dict = Depends(require_approved)):
