@@ -617,7 +617,7 @@ export default function RidersTab() {
         ))}
       </div>
 
-      {openRider && (
+      {openRider && !openRider.__edit && (
         openRider.id === user.id ? (
           <ProfileModal
             rider={openRider}
