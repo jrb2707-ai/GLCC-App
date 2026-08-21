@@ -186,7 +186,15 @@ export default function RidesTab({ onNavigate }) {
             {RSVP_OPTIONS.map((o) => (
               <button
                 key={o.key}
-                onClick={() => setRsvp(open.id, o.key)}
+                onClick={() => {
+                  setRsvp(open.id, o.key);
+                  // When a rider marks Going on a Strava-sourced ride, also
+                  // pop the Strava event page in a new tab so they can hit
+                  // "I'm going" on Strava with one extra tap.
+                  if (o.key === "going" && open.source === "strava" && open.strava_url) {
+                    window.open(open.strava_url, "_blank", "noopener,noreferrer");
+                  }
+                }}
                 disabled={isPending}
                 className={`flex-1 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed ${
                   myRsvp === o.key ? o.color : "bg-bg-secondary text-text-secondary border-border-subtle"
@@ -197,6 +205,11 @@ export default function RidesTab({ onNavigate }) {
               </button>
             ))}
           </div>
+          {open.source === "strava" && open.strava_url && (
+            <div className="mt-2 text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
+              Tapping Going will also open the ride on Strava so you can RSVP there
+            </div>
+          )}
         </div>
 
         {open.cafe && (

@@ -252,6 +252,143 @@ async def _fetch_openweather() -> Optional[dict]:
     }
 
 
+async def _fetch_forecast_at(when: datetime) -> Optional[dict]:
+    """Return an OpenWeather forecast summary for the 3-hour window closest to `when`."""
+    if not OPENWEATHER_API_KEY:
+        return None
+    params = {"lat": WEATHER_LAT, "lon": WEATHER_LON, "units": "metric", "appid": OPENWEATHER_API_KEY}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as h:
+            r = await h.get("https://api.openweathermap.org/data/2.5/forecast", params=params)
+            r.raise_for_status()
+            data = r.json()
+    except Exception as exc:
+        log.warning("OpenWeather forecast failed: %s", exc)
+        return None
+    target = when.timestamp()
+    best = None
+    for entry in data.get("list", []):
+        gap = abs(entry.get("dt", 0) - target)
+        if best is None or gap < best[0]:
+            best = (gap, entry)
+    if not best:
+        return None
+    entry = best[1]
+    m = entry.get("main", {}) or {}
+    w = (entry.get("weather") or [{}])[0]
+    wind = entry.get("wind", {}) or {}
+    wind_kph = round((wind.get("speed") or 0) * 3.6)
+    return {
+        "temp_c": round(m.get("temp", 0)),
+        "condition": (w.get("description") or "").capitalize() or "—",
+        "wind_kph": wind_kph,
+        "rain_chance": round((entry.get("pop") or 0) * 100),
+    }
+
+
+async def _send_ride_reminder(ride: dict, going_users: list[dict]) -> int:
+    """Email each `going` rider (with a real email + password_hash) a reminder."""
+    if not RESEND_API_KEY:
+        return 0
+    starts_at = ride.get("starts_at")
+    if not isinstance(starts_at, datetime):
+        return 0
+    forecast = await _fetch_forecast_at(starts_at)
+    going_names = ", ".join(u.get("name") or "" for u in going_users) or "You're the only one so far"
+    time_label = starts_at.astimezone().strftime("%A %-d %b · %H:%M")
+    forecast_line = (
+        f"{forecast['temp_c']}°C · {forecast['condition']} · {forecast['rain_chance']}% rain · wind {forecast['wind_kph']}kph"
+        if forecast else "Weather forecast unavailable"
+    )
+    cafe_line = f"{ride.get('cafe') or 'Café TBC'}"
+    ride_url = f"{PUBLIC_APP_URL}"
+    sent = 0
+    for u in going_users:
+        to_email = u.get("email")
+        if not to_email or not u.get("password_hash"):
+            continue
+        html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#0b0d10;padding:32px 16px;color:#e6edf3">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;background:#12151a;border-radius:20px;border:1px solid #2a2e36">
+            <tr><td style="padding:28px 28px 8px 28px">
+              <div style="font-family:Impact,'Arial Black',sans-serif;font-size:32px;letter-spacing:2px;color:#D4FF00">GLCC.</div>
+              <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#8b949e;margin-top:2px">Ride tomorrow</div>
+            </td></tr>
+            <tr><td style="padding:12px 28px">
+              <h1 style="font-size:22px;color:#e6edf3;margin:0 0 10px 0">{ride.get('name') or 'Ride'}</h1>
+              <p style="color:#c9d1d9;line-height:1.5;margin:0 0 16px 0">Kia ora {u.get('name') or 'rider'} — you&#39;re marked <b style="color:#22c55e">Going</b> for tomorrow.</p>
+              <div style="border:1px solid #2a2e36;border-radius:14px;padding:16px;margin-bottom:12px">
+                <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b949e">When</div>
+                <div style="color:#e6edf3;margin-top:2px">{time_label}</div>
+              </div>
+              <div style="border:1px solid #2a2e36;border-radius:14px;padding:16px;margin-bottom:12px">
+                <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b949e">Weather</div>
+                <div style="color:#e6edf3;margin-top:2px">{forecast_line}</div>
+              </div>
+              <div style="border:1px solid #2a2e36;border-radius:14px;padding:16px;margin-bottom:12px">
+                <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b949e">Café stop</div>
+                <div style="color:#e6edf3;margin-top:2px">{cafe_line}</div>
+              </div>
+              <div style="border:1px solid #2a2e36;border-radius:14px;padding:16px;margin-bottom:20px">
+                <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8b949e">Riders going</div>
+                <div style="color:#e6edf3;margin-top:2px">{going_names}</div>
+              </div>
+              <a href="{ride_url}" style="display:inline-block;background:#D4FF00;color:#0b0d10;font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:13px;padding:14px 24px;border-radius:12px;text-decoration:none">Open GLCC</a>
+            </td></tr>
+            <tr><td style="padding:16px 28px 28px 28px;border-top:1px solid #2a2e36">
+              <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#6e7681">GLCC · 4th best cycle club in Grey Lynn</div>
+            </td></tr>
+          </table>
+        </div>"""
+        text = f"GLCC Ride Tomorrow — {ride.get('name')}\n{time_label}\nWeather: {forecast_line}\nCafé: {cafe_line}\nGoing: {going_names}\n\nOpen: {ride_url}"
+        try:
+            await asyncio.to_thread(resend.Emails.send, {
+                "from": f"GLCC <{SENDER_EMAIL}>",
+                "to": [to_email],
+                "subject": f"GLCC · {ride.get('name')} · Ride tomorrow",
+                "html": html,
+                "text": text,
+            })
+            sent += 1
+        except Exception as exc:
+            log.warning("ride reminder to %s failed: %s", to_email, exc)
+    return sent
+
+
+async def send_pending_ride_reminders() -> dict:
+    """Find rides starting in the next 12-30 hours whose reminders haven't been
+    sent yet, and email every going rider. Idempotent via `reminder_sent_at`."""
+    if not RESEND_API_KEY:
+        return {"sent": 0, "skipped": 0, "reason": "no-resend-key"}
+    now = now_utc()
+    window_start = now + timedelta(hours=12)
+    window_end = now + timedelta(hours=30)
+    cursor = db.rides.find({
+        "starts_at": {"$gte": window_start, "$lte": window_end},
+        "reminder_sent_at": {"$exists": False},
+    })
+    total_sent = 0
+    reminded = 0
+    async for ride in cursor:
+        going_ids = ride.get("going", []) or []
+        if not going_ids:
+            continue
+        oids = []
+        for i in going_ids:
+            try:
+                oids.append(ObjectId(i))
+            except Exception:
+                pass
+        if not oids:
+            continue
+        users = await db.users.find({"_id": {"$in": oids}}).to_list(200)
+        sent = await _send_ride_reminder(ride, users)
+        await db.rides.update_one({"_id": ride["_id"]}, {"$set": {"reminder_sent_at": now_utc(), "reminder_recipients": sent}})
+        total_sent += sent
+        reminded += 1
+    return {"rides_reminded": reminded, "emails_sent": total_sent}
+
+
 async def get_weather() -> dict:
     now = now_utc()
     cached = _weather_cache["data"]
@@ -888,8 +1025,15 @@ async def _send_reset_email(*, to_email: str, name: str, link: str) -> bool:
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotPasswordIn):
     """Always returns success to prevent email enumeration. Emails are sent only for real,
-    non-invited users with a password_hash on file."""
+    non-invited users with a password_hash on file. Rate limited to 3 requests per email per hour."""
     email = body.email.lower().strip()
+    # Rate limit: max 3 reset requests per email per rolling hour.
+    since = now_utc() - timedelta(hours=1)
+    recent = await db.password_reset_requests.count_documents({"email": email, "requested_at": {"$gte": since}})
+    if recent >= 3:
+        raise HTTPException(status_code=429, detail="Too many reset requests — try again in an hour")
+    await db.password_reset_requests.insert_one({"email": email, "requested_at": now_utc()})
+
     user = await db.users.find_one({"email": email})
     generic_ok = {"ok": True, "message": "If that email is on file, a reset link is on its way."}
     if not user or not user.get("password_hash"):
@@ -1020,7 +1164,9 @@ async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)
 
 @api.patch("/riders/me")
 async def update_me(body: ProfileUpdateIn, user: dict = Depends(require_approved)):
-    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "bio", "coffee", "photo"}}
+    # Riders can only self-edit their name and coffee. Role, bio, photo, join
+    # date and member number are all managed elsewhere (admin route / server).
+    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "coffee"}}
     if not update:
         return serialize_rider(user)
     await db.users.update_one({"_id": user["_id"]}, {"$set": update})
@@ -1152,6 +1298,13 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(require_approved)
         {"type": "coffee.round", "round_id": str(result.inserted_id)},
     ))
     return payload_round
+
+@api.post("/admin/send-ride-reminders")
+async def admin_send_ride_reminders(admin: dict = Depends(require_admin)):
+    """Manual trigger for the evening-before ride reminder emails."""
+    result = await send_pending_ride_reminders()
+    return result
+
 
 # ---------- Chat ----------
 @api.get("/chat/messages")
@@ -1341,6 +1494,9 @@ async def seed():
     # Auto-delete used/expired password reset tokens
     await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
     await db.password_resets.create_index("token_hash", unique=True)
+    # Track forgot-password requests for rate limiting (auto-clean after 2h)
+    await db.password_reset_requests.create_index("requested_at", expireAfterSeconds=7200)
+    await db.password_reset_requests.create_index("email")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "jb@glcc.club").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Roenick2707")
@@ -1441,13 +1597,28 @@ async def on_startup():
             await asyncio.sleep(3600)
     app.state.strava_task = asyncio.create_task(_sync_loop())
 
+    # Ride reminder loop — every 30 minutes we look for rides starting in the
+    # next 12-30 hours and email their "going" list.
+    async def _reminder_loop():
+        await asyncio.sleep(60)
+        while True:
+            try:
+                result = await send_pending_ride_reminders()
+                if result.get("emails_sent"):
+                    log.info("Ride reminders: %s", result)
+            except Exception as exc:
+                log.warning("Ride reminder loop error: %s", exc)
+            await asyncio.sleep(1800)
+    app.state.reminder_task = asyncio.create_task(_reminder_loop())
+
 @app.on_event("shutdown")
 async def on_shutdown():
-    task = getattr(app.state, "strava_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except Exception:
-            pass
+    for name in ("strava_task", "reminder_task"):
+        task = getattr(app.state, name, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except Exception:
+                pass
     client.close()

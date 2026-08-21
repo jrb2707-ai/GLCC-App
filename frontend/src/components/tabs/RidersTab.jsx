@@ -212,7 +212,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
     try {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
       const body = isMe
-        ? { name, bio, coffee, photo }
+        ? { name, coffee }
         : { name, role, bio, photo };
       const { data } = await api.patch(url, body);
       if (isMe) await refreshMe();
@@ -242,7 +242,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar name={rider.name} photo={photo} size="lg" testId="profile-avatar" />
-            {canEditAll && (
+            {canEditAll && !isMe && (
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -297,6 +297,7 @@ function ProfileModal({ rider, onClose, onSaved }) {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Rider name"
               className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm"
               data-testid="profile-name"
             />
@@ -309,14 +310,16 @@ function ProfileModal({ rider, onClose, onSaved }) {
                 data-testid="profile-role"
               />
             )}
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              rows={3}
-              placeholder="Bio"
-              className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm resize-none"
-              data-testid="profile-bio"
-            />
+            {user.is_admin && !isMe && (
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="Bio"
+                className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm resize-none"
+                data-testid="profile-bio"
+              />
+            )}
             {isMe && (
               <div>
                 <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted mb-1">Coffee</div>
@@ -335,6 +338,22 @@ function ProfileModal({ rider, onClose, onSaved }) {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+            {isMe && rider.created_at && (
+              <div className="mt-1 flex items-center justify-between rounded-xl border border-border-subtle bg-bg-primary px-3 py-2.5" data-testid="profile-since">
+                <div>
+                  <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted">Member since</div>
+                  <div className="text-sm text-text-primary">
+                    {new Date(rider.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  </div>
+                </div>
+                {rider.member_no != null && (
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted">Member No.</div>
+                    <div className="font-heading text-sm font-black tabular-nums text-text-primary">#{String(rider.member_no).padStart(4, "0")}</div>
+                  </div>
+                )}
               </div>
             )}
           </div>

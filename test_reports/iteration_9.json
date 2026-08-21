@@ -1,0 +1,32 @@
+{
+  "summary": "Ran all 6 requested checks across backend + frontend for iteration 9 (self-edit guard, forgot-password rate limit, admin ride-reminder trigger, self ProfileModal DOM, admin editing others, Strava RSVP deep-link + persistence). All 6 pass.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1624 lines — starting to feel large; splitting auth/rides/riders into routers would help maintainability but not urgent.",
+    "send_pending_ride_reminders returns a differently-shaped dict when RESEND_API_KEY is missing ({sent, skipped, reason}) vs when present ({rides_reminded, emails_sent}). Callers/tests need to branch. Consider always returning the same keys for consistency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": { "backend": "100% (4/4)", "frontend": "100% (3/3)" },
+  "test_credentials": "jb@glcc.club / Roenick2707 (admin), sam@glcc.club / cycle123 (member)",
+  "seed_data_creation": "Test 3 seeds one existing ride's starts_at to now+24h; no new documents created. Rate-limit test clears/repopulates password_reset_requests and cleans up after itself.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login flow requires the native-setter workaround because the phone-frame mock keeps the auth screen slightly out of Playwright's default visibility. Correct testids: submit-auth (not login-submit), tab-riders, tab-rides, rider-card-{id}, ride-card-{id}, member-card-edit, profile-close. RSVPs on rides are persisted in the ride's `rsvps` dict keyed by user id (values 'going'/'maybe'/'cant'); the top-level `going` array is null on Strava rides — that's expected, don't chase it.",
+  "rca of the issue": "n/a — no bugs found in this iteration",
+  "test_results_detail": {
+    "test1_self_edit_restricted": "PASS — PATCH /api/riders/me kept bio/role/photo intact, only name+coffee updated (role stays 'El Presidente').",
+    "test2_forgot_password_rate_limit": "PASS — first 3 return 200, 4th returns 429 with 'Too many reset requests' detail; different email still returns 200.",
+    "test3_admin_ride_reminder_trigger": "PASS — /api/admin/send-ride-reminders returns 200 with {rides_reminded, emails_sent}; both are ints. Seeded-ride variant returns rides_reminded >= 1 when the going list has users, else 0 (documented healthy no-op).",
+    "test4_self_profile_modal_dom": "PASS — For self, profile-bio and profile-photo-button are NOT in DOM; profile-name + coffee grid + profile-since block ('Member since August 2026' + '#0001') are all present.",
+    "test5_admin_edit_other_rider": "PASS — Clicking another rider opens MemberCard (with member-card-edit button). Clicking Edit profile renders ProfileModal exposing profile-name, profile-role, profile-bio, and profile-photo-button.",
+    "test6_strava_rsvp_deep_link": "PASS — Popup event fired on Going click for a source==='strava' ride; popup URL was https://www.strava.com/clubs/50775/group_events/... . Subsequent GET /api/rides shows rsvps[<my_uid>] == 'going' on that ride."
+  }
+}
