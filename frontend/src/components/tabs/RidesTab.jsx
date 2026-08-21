@@ -63,6 +63,8 @@ export default function RidesTab({ onNavigate }) {
   const [rides, setRides] = useState([]);
   const [riders, setRiders] = useState([]);
   const [openId, setOpenId] = useState(null);
+  const [routeExpanded, setRouteExpanded] = useState(false);
+  useEffect(() => { setRouteExpanded(false); }, [openId]);
   const isPending = user.status === "pending";
 
   const load = useCallback(async () => {
@@ -140,7 +142,32 @@ export default function RidesTab({ onNavigate }) {
           {open.day} · {open.date} · {open.time}
         </div>
         <h2 className="font-heading text-3xl font-black uppercase leading-tight mt-1">{open.name}</h2>
-        <p className="text-text-secondary text-sm mt-1">{open.route}</p>
+        {open.route && (
+          <button
+            type="button"
+            onClick={() => setRouteExpanded((v) => !v)}
+            disabled={!open.route_description}
+            className={`text-left mt-1 ${open.route_description ? "cursor-pointer" : "cursor-default"}`}
+            data-testid="ride-route-line"
+          >
+            <div className="flex items-center gap-1 text-text-secondary text-sm">
+              <span>{open.route}</span>
+              {open.route_description && (
+                <span className="text-[10px] font-mono-stat tracking-widest text-accent-volt">
+                  {routeExpanded ? "▲" : "▼"}
+                </span>
+              )}
+            </div>
+            {routeExpanded && open.route_description && (
+              <div
+                className="mt-2 p-3 rounded-xl bg-bg-secondary border border-border-subtle text-[13px] text-text-primary whitespace-pre-wrap leading-relaxed"
+                data-testid="ride-route-description"
+              >
+                {open.route_description}
+              </div>
+            )}
+          </button>
+        )}
 
         <div className="grid grid-cols-3 gap-2 mt-4">
           <div className="bg-bg-secondary border border-border-subtle rounded-xl p-3">

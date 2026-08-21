@@ -30,6 +30,7 @@ export default function RidesTab() {
   const [rides, setRides] = useState([]);
   const [riders, setRiders] = useState([]);
   const [openId, setOpenId] = useState(null);
+  const [routeExpanded, setRouteExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
@@ -95,6 +96,11 @@ export default function RidesTab() {
     });
   }, [subscribe, load]);
 
+  useEffect(() => {
+    // Reset route-description expansion when the user opens a different ride.
+    setRouteExpanded(false);
+  }, [openId]);
+
   async function setRsvp(rideId, status, _ride) {
     try {
       const { data } = await api.post(`/rides/${rideId}/rsvp`, { status });
@@ -107,8 +113,7 @@ export default function RidesTab() {
   async function sendRound(ride) {
     try {
       const { data } = await api.post("/coffee/rounds", { ride_id: ride.id });
-      Alert.alert("Round sent", `${data.coffee} · ${ride.cafe || "the group"}`);
-    } catch (e) {
+      Alert.alert("Round sent", `${data.coffee} · ${ride.cafe || "the group"}`);    } catch (e) {
       Alert.alert("Coffee", formatDetail(e));
     }
   }
@@ -131,7 +136,26 @@ export default function RidesTab() {
 
         <Text style={s.detailEyebrow}>{[open.day, open.date, open.time].filter(Boolean).join(" · ") || "TBC"}</Text>
         <Text style={s.detailTitle}>{open.name}</Text>
-        {!!open.route && <Text style={s.detailRoute}>{open.route}</Text>}
+        {!!open.route && (
+          <TouchableOpacity
+            onPress={() => setRouteExpanded((v) => !v)}
+            activeOpacity={open.route_description ? 0.7 : 1}
+            disabled={!open.route_description}
+            testID="ride-route-line"
+          >
+            <View style={{ flexDirection: "row", alignItems: "flex-start", flexWrap: "wrap" }}>
+              <Text style={s.detailRoute}>{open.route}</Text>
+              {!!open.route_description && (
+                <Text style={s.routeChevron}> {routeExpanded ? "▲" : "▼"}</Text>
+              )}
+            </View>
+            {routeExpanded && !!open.route_description && (
+              <Text style={s.routeDescription} testID="ride-route-description">
+                {open.route_description}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View style={s.statsRow}>
           <StatCell label="Distance" value={open.distance || "—"} />
@@ -292,6 +316,8 @@ const s = StyleSheet.create({
   detailEyebrow: { color: colors.accentVolt, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   detailTitle: { color: colors.textPrimary, fontSize: 26, fontWeight: "900", letterSpacing: -0.5, textTransform: "uppercase", marginTop: 4 },
   detailRoute: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
+  routeChevron: { color: colors.accentVolt, fontSize: 10, marginTop: 6, letterSpacing: 2, fontWeight: "700" },
+  routeDescription: { color: colors.textPrimary, fontSize: 13, lineHeight: 19, marginTop: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.bgSecondary, borderWidth: 1, borderColor: colors.borderSubtle },
   statsRow: { flexDirection: "row", gap: 8, marginTop: 14 },
   statCell: { flex: 1, backgroundColor: colors.bgSecondary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, padding: 10 },
   statLabel: { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" },

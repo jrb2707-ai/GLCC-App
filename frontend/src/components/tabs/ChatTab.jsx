@@ -157,6 +157,35 @@ export default function ChatTab() {
         </div>
       </div>
 
+      {/* Clubhouse welcome banner — permanent, glass, sits just under weather */}
+      <div
+        className="mx-3 mt-2 px-4 py-2.5 rounded-2xl bg-white/70 backdrop-blur-md border border-neutral-200/60 shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+        data-testid="chat-clubhouse-banner"
+      >
+        <div className="text-[12px] leading-snug text-neutral-800">
+          <span className="font-extrabold text-neutral-900">Welcome to the GLCC clubhouse.</span>{" "}
+          {(() => {
+            const rain = weather?.rain_chance ?? 0;
+            const wind = weather?.wind_kph ?? 0;
+            if (rain >= 60) {
+              return (
+                <span className="font-bold text-status-cant" data-testid="clubhouse-warn">
+                  🌧 {rain}% rain forecast — ride may be cancelled.
+                </span>
+              );
+            }
+            if (wind >= 40) {
+              return (
+                <span className="font-bold text-status-cant" data-testid="clubhouse-warn">
+                  💨 {wind} kph wind — ride may be cancelled.
+                </span>
+              );
+            }
+            return <span className="italic text-neutral-500">Weather check. Watch this space.</span>;
+          })()}
+        </div>
+      </div>
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-1.5 bg-white" data-testid="chat-messages">
         {isPending ? (

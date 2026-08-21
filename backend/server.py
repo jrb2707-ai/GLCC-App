@@ -116,6 +116,7 @@ def serialize_ride(doc: dict) -> dict:
         "elevation": doc.get("elevation"),
         "location": doc.get("location"),
         "route": doc.get("route"),
+        "route_description": doc.get("route_description"),
         "cafe": doc.get("cafe"),
         "pace": doc.get("pace", "28–31 kph"),
         "rsvps": doc.get("rsvps", {}),  # {user_id: "going"|"maybe"|"no"}
@@ -600,6 +601,19 @@ async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: 
 # "Grey Lynn West" beats "West Auckland". Editable via `CAFE_OVERRIDES`
 # env var: "neighbourhood=Café Name, neighbourhood=Café Name".
 _CAFE_MAP: list[tuple[str, str]] = [
+    # Named ride shortcuts — checked first via ordering so route-specific
+    # rules beat generic neighbourhoods.
+    ("julie andrews", "Daily Bread · Federal St, Auckland Central"),
+    ("airport loop", "Daily Bread · Federal St, Auckland Central"),
+    ("airport ride", "Daily Bread · Federal St, Auckland Central"),
+    # Anywhere through the Waitakere Ranges we stop at Little Sister on
+    # Great North Rd. (Daily Bread is a fine alternate when Little Sister
+    # is closed — override via CAFE_OVERRIDES if you need to swap.)
+    ("waitakere", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("waitakeres", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("scenic drive", "Little Sister · 3 Onslow Ave, Epsom"),
+    ("henderson valley", "Little Sister · 3 Onslow Ave, Epsom"),
+    # Neighbourhood defaults
     ("grey lynn", "The Brunchery · 318 Richmond Rd, Grey Lynn"),
     ("ponsonby", "Ceremony Coffee · Ponsonby"),
     ("freemans bay", "Ceremony Coffee · Ponsonby"),
@@ -627,7 +641,7 @@ _CAFE_MAP: list[tuple[str, str]] = [
     ("waiheke", "Charlie Farley's · Waiheke"),
     ("cornwall park", "Cornerstone · One Tree Hill"),
     ("one tree hill", "Cornerstone · One Tree Hill"),
-    ("epsom", "Little Sister · Epsom"),
+    ("epsom", "Little Sister · 3 Onslow Ave, Epsom"),
 ]
 
 
@@ -989,6 +1003,13 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
         # Take just the first sentence so the card stays clean.
         desc = str(ev["description"]).strip()
         route_label = re.split(r"[.\n]", desc, maxsplit=1)[0][:120]
+    # Full route description (from the fetched Strava route) so the app can
+    # reveal it on tap without a Strava round-trip.
+    route_description = None
+    if route_stats and route_stats.get("description"):
+        route_description = route_stats["description"]
+    elif ev.get("description"):
+        route_description = str(ev["description"]).strip() or None
     return {
         "strava_event_id": event_id,
         "source": "strava",
@@ -1001,6 +1022,7 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
         "elevation": elevation,
         "location": ev.get("address"),
         "route": route_label,
+        "route_description": route_description,
         "strava_url": strava_url,
         "map_url": map_url,
         "polyline": polyline,
@@ -1473,6 +1495,7 @@ async def public_ride(ride_id: str):
         "pace": doc.get("pace", "28-31 kph"),
         "location": doc.get("location"),
         "route": doc.get("route"),
+        "route_description": doc.get("route_description"),
         "cafe": doc.get("cafe"),
         "source": doc.get("source", "manual"),
         "strava_url": doc.get("strava_url"),

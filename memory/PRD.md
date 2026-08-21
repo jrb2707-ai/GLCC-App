@@ -88,8 +88,16 @@ See `/app/memory/test_credentials.md`.
     - `_fetch_route_stats` now caches the Strava route `description` alongside name/distance/elevation; entries missing the field are re-fetched (self-healing cache).
     - `_event_to_ride` builds `route` from a strict fallback chain: fetched Strava route name → event-embedded route name → first sentence of event description → empty. Never falls back to a raw URL anymore.
     - Verified via live Strava sync: rides now display readable labels like "Monday Rooster", "GLCC Brian, Not Tamaki Revised.", "Café Ride", "Jail Break Alt route" instead of `strava.com/clubs/…/group_events/…`.
-  - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
-  - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
+  - **Phase 4.4 (Feb 2026): DONE** — Chat clubhouse banner + café rules refresh + route reveal:
+    - New café rules: Waitakeres / Scenic Drive / Henderson Valley routes → Little Sister · 3 Onslow Ave Epsom. "Airport loop" and "Julie Andrews" → Daily Bread · Federal St, Auckland Central. All ordered before generic neighbourhoods so named-ride keywords win.
+    - Ride detail route line now taps to reveal the full Strava route description (both native + web). Backend exposes `route_description` on the ride payload (drawn from `_fetch_route_stats` — cache self-heals for entries missing the field).
+    - Chat clubhouse banner: sits under the weather header, rounded glass card (translucent white, backdrop-blur on web). Reads *"Welcome to the GLCC clubhouse."* + a dynamic tail: `Weather check. Watch this space.` normally, but flips to red *"🌧 {rain_chance}% rain forecast — ride may be cancelled"* when rain ≥ 60 % or *"💨 {wind_kph} kph wind — ride may be cancelled"* when wind ≥ 40 kph. Uses the existing `/api/weather` payload.
+    - Removed the leftover manual test ride "Devonport Coastal" from production Mongo.
+  - **Phase 5 (Feb 2026): DONE** — App Store submission playbook consolidated:
+    - `/app/mobile/store-assets/SUBMISSION_PLAYBOOK.md` — single-source-of-truth checklist covering EAS setup, privacy/support URL requirements, `eas build`, Maestro screenshot capture, ASC metadata paste, review notes with reviewer credentials, and the rejection recovery loop.
+    - Visual sign-off on the sticky glass clubhouse banner completed on the web preview at chat tab (Playwright screenshot, banner text "Welcome to the GLCC clubhouse. Weather check. Watch this space." rendered correctly, profanity filter visible on messages).
+    - App is now functionally App Store-ready. Remaining work is user-side: fill Apple IDs in `eas.json`, publish greylynncc.com/privacy + /support, run `eas build` + `eas submit` on Mac, capture screenshots via Maestro.
+- Phase 6 (Backlog): Refactor `/app/backend/server.py` (2100+ lines) into `/routes`, `/models`, `/services` modules.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.
 
 ## Latest Verified Test Report

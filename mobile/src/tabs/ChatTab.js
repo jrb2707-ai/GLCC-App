@@ -160,6 +160,34 @@ export default function ChatTab() {
         </View>
       </View>
 
+      {/* Sticky clubhouse welcome banner */}
+      <View style={s.clubhouseBanner} testID="chat-clubhouse-banner">
+        <Text style={s.clubhouseText}>
+          <Text style={s.clubhouseBold}>Welcome to the GLCC clubhouse.</Text>{" "}
+          {(() => {
+            const rain = weather?.rain_chance ?? 0;
+            const wind = weather?.wind_kph ?? 0;
+            if (rain >= 60) {
+              return (
+                <Text style={s.clubhouseWarn} testID="clubhouse-warn">
+                  🌧  {rain}% rain forecast — ride may be cancelled.
+                </Text>
+              );
+            }
+            if (wind >= 40) {
+              return (
+                <Text style={s.clubhouseWarn} testID="clubhouse-warn">
+                  💨  {wind} kph wind — ride may be cancelled.
+                </Text>
+              );
+            }
+            return (
+              <Text style={s.clubhouseMuted}>Weather check. Watch this space.</Text>
+            );
+          })()}
+        </Text>
+      </View>
+
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1, backgroundColor: "#fff" }}
@@ -273,6 +301,11 @@ export default function ChatTab() {
 const s = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bgPrimary, alignItems: "center", justifyContent: "center" },
   weather: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#fafafa", borderBottomWidth: 1, borderBottomColor: "#e5e5e5" },
+  clubhouseBanner: { marginHorizontal: 10, marginTop: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.7)", borderWidth: 1, borderColor: "rgba(0,0,0,0.06)", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  clubhouseText: { color: "#111", fontSize: 12, letterSpacing: 0.2, lineHeight: 17 },
+  clubhouseBold: { fontWeight: "800", color: "#0a0d10" },
+  clubhouseMuted: { color: "#555", fontStyle: "italic" },
+  clubhouseWarn: { color: "#c1272d", fontWeight: "700" },
   weatherIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: "rgba(0,122,255,0.15)", alignItems: "center", justifyContent: "center" },
   weatherEyebrow: { color: "#666", fontSize: 10, letterSpacing: 2, fontWeight: "700" },
   weatherMain: { color: "#111", fontSize: 14, fontWeight: "700", marginTop: 2 },
