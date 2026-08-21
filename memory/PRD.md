@@ -109,6 +109,15 @@ See `/app/memory/test_credentials.md`.
     - Up'n'over (5 spellings) + Jailbreak + Struggle Street + West / Waitakeres / Scenic Drive / Henderson Valley all stop at `Little Sister · 91 Central Park Dr, Henderson` (address corrected from earlier Epsom placeholder).
     - Backfilled all existing rides in Mongo to the new addresses.
   - **Phase 5.3 (Feb 2026): DONE** — El Presidente self-edit + invite flow enhancements:
+    - JB can now change his own profile photo. Backend `PATCH /riders/me` accepts `photo`.
+    - `POST /riders/invite` gained `email`, `phone`, `photo`, `send_email` fields with a Resend-backed invite email + shareable `/?invite={id}` link.
+    - New RegisterRiderModal: photo picker + email + phone + three delivery buttons (Send email / Send text / Add without inviting).
+    - MongoDB users email index recreated with `partialFilterExpression` so null-email invited riders no longer collide.
+  - **Phase 5.4 (Feb 2026): DONE** — Swipe-down dismiss on rider profiles:
+    - New shared hook `/app/frontend/src/lib/usePullToDismiss.js` with pointer-capture semantics, downward-only tracking, snap-back on release below threshold, dismiss above.
+    - `ProfileModal` (bottom sheet) — drag handle sits on the grabber pill area with 90px threshold, backdrop click also dismisses.
+    - `MemberCard` (full screen) — drag handle spans the top bar with a 120px threshold; the X close button uses `onPointerDown={stopPropagation}` so a tap doesn't hijack the drag.
+    - Verified via Playwright: small pull (40px) snaps back, big pull (200px) dismisses.
     - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
     - Same fix applies to every approved rider — anyone can now update their own avatar.
     - Verified: only `is_president=True` can promote/demote admins (`make_admin`/`remove_admin` returns 403 for non-president admins — pre-existing correct behaviour).

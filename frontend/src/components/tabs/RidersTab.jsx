@@ -4,6 +4,7 @@ import { useAuth, useEvents } from "../../lib/store";
 import { COFFEES } from "../../lib/util";
 import Avatar from "../Avatar";
 import { resizeAvatarFile } from "../../lib/image";
+import { usePullToDismiss } from "../../lib/usePullToDismiss";
 import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail, MessageCircle, CreditCard } from "lucide-react";
 import MemberCard from "../MemberCard";
 import { toast } from "sonner";
@@ -191,6 +192,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
   const selfPending = isMe && user.status === "pending";
   const canEditAll = (user.is_admin || isMe) && !selfPending;
   const isPresident = user.is_president;
+  const { handlers: dragHandlers, dy, dragging } = usePullToDismiss({ onDismiss: onClose });
 
   async function toggleBlock() {
     try {
@@ -267,9 +269,25 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
   }
 
   return (
-    <div className="absolute inset-0 z-30 bg-black/60 flex items-end" data-testid="profile-modal">
-      <div className="w-full max-h-[85%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
-        <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
+    <div
+      className="absolute inset-0 z-30 bg-black/60 flex items-end"
+      data-testid="profile-modal"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-h-[85%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down"
+        style={{
+          transform: dy ? `translateY(${dy}px)` : undefined,
+          transition: dragging ? "none" : "transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1)",
+        }}
+      >
+        <div
+          {...dragHandlers}
+          className="pt-1 pb-3 -mx-5 px-5 -mt-5 mb-1 select-none"
+          data-testid="profile-drag-handle"
+        >
+          <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto" />
+        </div>
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar name={rider.name} photo={photo} size="lg" testId="profile-avatar" />

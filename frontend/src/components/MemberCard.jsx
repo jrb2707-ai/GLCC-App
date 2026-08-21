@@ -2,10 +2,12 @@ import React from "react";
 import { X, Pencil, Ban } from "lucide-react";
 import { api, formatDetail } from "../lib/api";
 import { toast } from "sonner";
+import { usePullToDismiss } from "../lib/usePullToDismiss";
 
 // Rapha-style GLCC member card. Full-screen dark modal with a floating card,
 // club watermark, and permanent member number.
 export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, canBlock, onBlockChange }) {
+  const { handlers: dragHandlers, dy, dragging } = usePullToDismiss({ onDismiss: onClose, threshold: 120 });
   if (!rider) return null;
   const initials = (rider.name || "?")
     .split(/\s+/)
@@ -22,7 +24,14 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
     : "—";
 
   return (
-    <div className="absolute inset-0 z-50 bg-[#0e1310] flex flex-col overflow-hidden" data-testid="member-card-modal">
+    <div
+      className="absolute inset-0 z-50 bg-[#0e1310] flex flex-col overflow-hidden"
+      data-testid="member-card-modal"
+      style={{
+        transform: dy ? `translateY(${dy}px)` : undefined,
+        transition: dragging ? "none" : "transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1)",
+      }}
+    >
       {/* Watermark */}
       <div
         aria-hidden
@@ -33,17 +42,22 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
         </div>
       </div>
 
-      {/* Top bar */}
-      <div className="relative z-10 flex-none flex items-center justify-between px-5 pt-6">
+      {/* Top bar (also acts as pull-to-dismiss handle) */}
+      <div
+        {...dragHandlers}
+        className="relative z-10 flex-none flex items-center justify-between px-5 pt-6 pb-3 select-none"
+        data-testid="member-card-drag-handle"
+      >
         <button
           onClick={onClose}
+          onPointerDown={(e) => e.stopPropagation()}
           className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-95"
           data-testid="member-card-close"
         >
           <X className="w-4 h-4" />
         </button>
         <span className="font-mono-stat text-[10px] uppercase tracking-[0.35em] text-white/40">
-          Member Card
+          Pull down · Member Card
         </span>
         <div className="w-9" />
       </div>
