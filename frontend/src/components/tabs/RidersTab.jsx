@@ -4,7 +4,7 @@ import { useAuth, useEvents } from "../../lib/store";
 import { COFFEES } from "../../lib/util";
 import Avatar from "../Avatar";
 import { resizeAvatarFile } from "../../lib/image";
-import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail, CreditCard } from "lucide-react";
+import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail, MessageCircle, CreditCard } from "lucide-react";
 import MemberCard from "../MemberCard";
 import { toast } from "sonner";
 
@@ -243,7 +243,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
     try {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
       const body = isMe
-        ? { name, coffee }
+        ? { name, coffee, photo }
         : { name, role, bio, photo };
       const { data } = await api.patch(url, body);
       if (isMe) await refreshMe();
@@ -273,7 +273,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar name={rider.name} photo={photo} size="lg" testId="profile-avatar" />
-            {canEditAll && !isMe && (
+            {canEditAll && (
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -542,14 +542,68 @@ function RegisterRiderModal({ onClose }) {
   const [name, setName] = useState("");
   const [coffee, setCoffee] = useState("Medium Flat White");
   const [role, setRole] = useState("Member");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const fileRef = useRef(null);
 
-  async function submit() {
+  async function pickPhoto(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await resizeAvatarFile(file);
+      setPhoto(dataUrl);
+    } catch (err) {
+      toast.error("Couldn't process that photo");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function submit(mode) {
+    // mode: "email" | "text" | "roster-only"
     if (!name.trim() || submitting) return;
+    if (mode === "email" && !email.trim()) {
+      toast.error("Add an email to send an email invite");
+      return;
+    }
     setSubmitting(true);
     try {
-      await api.post("/riders/invite", { name: name.trim(), coffee, role });
-      toast("Rider invited", { description: `${name.trim()} added to the roster` });
+      const { data } = await api.post("/riders/invite", {
+        name: name.trim(),
+        coffee,
+        role,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        photo,
+        send_email: mode === "email",
+      });
+      if (mode === "email") {
+        toast(data.email_sent ? "Invite emailed" : "Rider added — email failed", {
+          description: `${data.name} joins the roster`,
+        });
+      } else if (mode === "text") {
+        // Native share sheet (iOS/Android) or clipboard fallback
+        const message = `You're invited to GLCC — Grey Lynn Cycle Club. Sign up here: ${data.invite_link}`;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: "GLCC invite", text: message });
+          } else if (navigator.clipboard) {
+            await navigator.clipboard.writeText(message);
+            toast("Invite link copied — paste into a text message");
+          } else {
+            window.prompt("Copy this invite link", data.invite_link);
+          }
+        } catch (_) {
+          /* user cancelled share sheet — silent */
+        }
+      } else {
+        toast("Rider added to roster", { description: `${data.name}` });
+      }
       onClose();
     } catch (e) {
       toast.error(formatDetail(e));
@@ -559,15 +613,53 @@ function RegisterRiderModal({ onClose }) {
   }
 
   return (
-    <div className="absolute inset-0 z-30 bg-black/60 flex items-end" data-testid="register-modal">
-      <div className="w-full bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
+    <div className="absolute inset-0 z-30 bg-black/60 flex items-end" data-testid="register-modal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-h-[92%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down">
         <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto mb-4" />
         <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Invite a rider</div>
         <h3 className="font-heading text-2xl font-black uppercase mt-1">New rider</h3>
         <p className="text-[11px] text-text-muted mt-1">
           They&apos;ll appear as <span className="text-status-maybe">Invited</span> until they sign up with their own email.
         </p>
-        <div className="space-y-2 mt-3">
+
+        {/* Photo picker */}
+        <div className="flex items-center gap-3 mt-4">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="relative w-16 h-16 rounded-full overflow-hidden bg-bg-primary border border-dashed border-border-subtle flex items-center justify-center text-text-muted active:scale-95"
+            data-testid="register-photo-button"
+          >
+            {photo ? (
+              <img src={photo} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            ) : (
+              <Camera className="w-5 h-5" />
+            )}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={pickPhoto}
+            data-testid="register-photo-input"
+          />
+          <div className="flex-1 text-[11px] text-text-muted leading-relaxed">
+            {uploading ? "Resizing…" : photo ? "Tap the avatar to change photo." : "Optional — tap the avatar to add a photo."}
+          </div>
+          {photo && !uploading && (
+            <button
+              type="button"
+              onClick={() => setPhoto(null)}
+              className="text-[10px] uppercase tracking-widest text-status-cant"
+              data-testid="register-photo-remove"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-2 mt-4">
           <input
             placeholder="Name"
             value={name}
@@ -592,18 +684,59 @@ function RegisterRiderModal({ onClose }) {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+          <input
+            type="email"
+            placeholder="Email (for email invite)"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm"
+            data-testid="register-email"
+          />
+          <input
+            type="tel"
+            placeholder="Phone (for text invite)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm"
+            data-testid="register-phone"
+          />
         </div>
-        <div className="mt-4 flex gap-2">
-          <button onClick={onClose} className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2.5 rounded-xl" data-testid="register-cancel">
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => submit("email")}
+            disabled={!name.trim() || !email.trim() || submitting}
+            className="bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-40 inline-flex items-center justify-center gap-1.5"
+            data-testid="register-send-email"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            {submitting ? "Sending…" : "Send email"}
+          </button>
+          <button
+            onClick={() => submit("text")}
+            disabled={!name.trim() || submitting}
+            className="bg-white text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-40 inline-flex items-center justify-center gap-1.5"
+            data-testid="register-send-text"
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            Send text
+          </button>
+        </div>
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2.5 rounded-xl"
+            data-testid="register-cancel"
+          >
             Cancel
           </button>
           <button
-            onClick={submit}
+            onClick={() => submit("roster-only")}
             disabled={!name.trim() || submitting}
-            className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-50"
-            data-testid="register-submit"
+            className="flex-1 border border-brand-accent/40 text-brand-accent uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-40"
+            data-testid="register-roster-only"
           >
-            {submitting ? "Inviting…" : "Add to roster"}
+            Add without inviting
           </button>
         </div>
       </div>

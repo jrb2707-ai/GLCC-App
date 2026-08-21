@@ -104,6 +104,18 @@ See `/app/memory/test_credentials.md`.
     - Live at `https://greylynncc.com/privacy` and `/support` after deploy.
   - **Phase 5.2 (Feb 2026): DONE** — Café rules refresh (user's authoritative version):
     - Weekday rides (Mon-Fri) stop at The Brunchery (unchanged).
+    - Airport loop + Julie Andrews + Sunday spin now stop at `Daily Bread · Britomart`.
+    - Devonport loop + any Devonport ride now stops at `Calliope Rd Cafe · Devonport`.
+    - Up'n'over (5 spellings) + Jailbreak + Struggle Street + West / Waitakeres / Scenic Drive / Henderson Valley all stop at `Little Sister · 91 Central Park Dr, Henderson` (address corrected from earlier Epsom placeholder).
+    - Backfilled all existing rides in Mongo to the new addresses.
+  - **Phase 5.3 (Feb 2026): DONE** — El Presidente self-edit + invite flow enhancements:
+    - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
+    - Same fix applies to every approved rider — anyone can now update their own avatar.
+    - Verified: only `is_president=True` can promote/demote admins (`make_admin`/`remove_admin` returns 403 for non-president admins — pre-existing correct behaviour).
+    - `POST /riders/invite` gained optional `email`, `phone`, `photo`, `send_email` fields. If `send_email=true`, sends a branded Resend invite email with a shareable `/?invite={id}` link. Response always returns `invite_link` so admins can share via SMS via the browser's native `navigator.share` sheet.
+    - New RegisterRiderModal in the web SPA: photo picker, email + phone fields, three delivery buttons ("Send email" / "Send text" / "Add without inviting"), backdrop-tap dismiss.
+    - MongoDB users email index recreated with `partialFilterExpression: {email: {$type: "string"}}` so multiple null-email invited riders no longer collide.
+    - Weekday rides (Mon-Fri) stop at The Brunchery (unchanged).
     - Airport loop + Julie Andrews now stop at `Daily Bread · Britomart` (was Federal St).
     - Devonport loop + any Devonport ride now stops at `Calliope Rd Cafe · Devonport` (was The Depot Eatery).
     - West Auckland + Waitakeres + Scenic Drive + Henderson Valley + "out west" all stop at Little Sister.

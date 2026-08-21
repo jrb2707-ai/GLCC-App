@@ -668,6 +668,54 @@ def _load_cafe_overrides() -> list[tuple[str, str]]:
     return out
 
 
+# In-memory cache of DB-backed cafe rules, refreshed on write.
+# Falls back to _CAFE_MAP if the DB is empty or unavailable.
+_cafe_rules_cache: list[tuple[str, str]] = list(_CAFE_MAP)
+
+
+async def refresh_cafe_rules_cache() -> None:
+    """Reload the cafe rules cache from Mongo, ordered by `order` ascending
+    then created_at. If the collection is empty we keep the seed list."""
+    global _cafe_rules_cache
+    try:
+        rules = await db.cafe_rules.find().sort([("order", 1), ("created_at", 1)]).to_list(500)
+    except Exception as exc:  # pragma: no cover - defensive
+        log.warning("cafe_rules cache load failed: %s", exc)
+        return
+    if not rules:
+        _cafe_rules_cache = list(_CAFE_MAP)
+        return
+    _cafe_rules_cache = [
+        (str(r.get("pattern", "")).lower(), str(r.get("cafe", "")))
+        for r in rules
+        if r.get("pattern") and r.get("cafe")
+    ]
+
+
+async def seed_cafe_rules_if_empty() -> None:
+    """First-boot seed: copies the hard-coded `_CAFE_MAP` into Mongo so admins
+    can edit it via the app afterwards. Idempotent — later calls are no-ops."""
+    try:
+        count = await db.cafe_rules.count_documents({})
+    except Exception:
+        return
+    if count:
+        return
+    now = now_utc()
+    docs = [
+        {
+            "pattern": needle.lower(),
+            "cafe": cafe,
+            "order": i,
+            "created_at": now,
+            "updated_at": now,
+        }
+        for i, (needle, cafe) in enumerate(_CAFE_MAP)
+    ]
+    if docs:
+        await db.cafe_rules.insert_many(docs)
+
+
 def suggest_cafe(*fields: Optional[str]) -> Optional[str]:
     """Given any combination of ride text (name, route, location, city),
     return the neighbourhood's default café if we recognise it. Returns
@@ -675,7 +723,7 @@ def suggest_cafe(*fields: Optional[str]) -> Optional[str]:
     blob = " ".join((f or "").lower() for f in fields if f)
     if not blob.strip():
         return None
-    for needle, cafe in _load_cafe_overrides() + _CAFE_MAP:
+    for needle, cafe in _load_cafe_overrides() + _cafe_rules_cache:
         if needle in blob:
             return cafe
     return None
@@ -772,6 +820,10 @@ class RiderInviteIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     coffee: str = "Medium Flat White"
     role: str = "Member"
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(default=None, max_length=32)
+    photo: Optional[str] = Field(default=None, max_length=800_000)
+    send_email: bool = False
 
 class CoffeeRoundIn(BaseModel):
     coffee: Optional[str] = None
@@ -1384,18 +1436,66 @@ async def list_riders(user: dict = Depends(get_current_user)):
             approved.append(serialize_rider(r, viewer=user))
     return {"riders": approved, "pending": pending if user.get("is_admin") else []}
 
+async def _send_invite_email(*, to_email: str, name: str, inviter_name: str, link: str) -> bool:
+    """Send an invite email via Resend. Returns True on success."""
+    if not RESEND_API_KEY:
+        log.warning("RESEND_API_KEY not set — skipping invite email")
+        return False
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#0b0d10;padding:32px 16px;color:#e6edf3">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;background:#12151a;border-radius:20px;border:1px solid #2a2e36">
+        <tr><td style="padding:28px 28px 8px 28px">
+          <div style="font-family:Impact,'Arial Black',sans-serif;font-size:32px;letter-spacing:2px;color:#D4FF00">GLCC</div>
+          <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#8b949e;margin-top:2px">Grey Lynn Cycle Club</div>
+        </td></tr>
+        <tr><td style="padding:20px 28px">
+          <h1 style="font-size:22px;color:#e6edf3;margin:0 0 8px 0">You're invited to GLCC</h1>
+          <p style="color:#c9d1d9;line-height:1.5;margin:0 0 20px 0">Kia ora {name or 'rider'} — {inviter_name or 'an admin'} just added you to the Grey Lynn Cycle Club roster. Sign up with your own email to unlock rides, coffee rounds and the peloton chat.</p>
+          <a href="{link}" style="display:inline-block;background:#D4FF00;color:#0b0d10;font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:13px;padding:14px 24px;border-radius:12px;text-decoration:none">Join the club</a>
+          <p style="color:#8b949e;font-size:12px;line-height:1.5;margin:24px 0 0 0">If the button doesn&#39;t work, paste this link into your browser:<br><a href="{link}" style="color:#D4FF00;word-break:break-all">{link}</a></p>
+        </td></tr>
+        <tr><td style="padding:16px 28px 28px 28px;border-top:1px solid #2a2e36">
+          <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#6e7681">GLCC · 4th best cycle club in Grey Lynn</div>
+        </td></tr>
+      </table>
+    </div>"""
+    text = f"You've been invited to GLCC by {inviter_name or 'an admin'}. Sign up: {link}"
+    params = {
+        "from": f"GLCC <{SENDER_EMAIL}>",
+        "to": [to_email],
+        "subject": "You're invited to GLCC",
+        "html": html,
+        "text": text,
+    }
+    try:
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        log.info("resend invite email sent: %s", result.get("id") if isinstance(result, dict) else result)
+        return True
+    except Exception as e:
+        log.error("resend invite send failed: %s", e)
+        return False
+
+
 @api.post("/riders/invite")
 async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)):
     """Admin creates a placeholder rider that appears in the roster with status='invited'.
-    They have no email/password and cannot log in until they self-register with their real email."""
+    Optionally emails an invite link if `send_email` is true and `email` is set. Always
+    returns a shareable `invite_link` the admin can paste into a text message."""
+    email = (body.email or "").strip().lower() or None
+    phone = (body.phone or "").strip() or None
+    if email:
+        clash = await db.users.find_one({"email": email})
+        if clash:
+            raise HTTPException(status_code=409, detail="A rider with that email is already on the roster")
     doc = {
-        "email": None,               # no auth identity yet
-        "password_hash": None,       # cannot log in
+        "email": email,
+        "password_hash": None,
         "name": body.name.strip(),
         "coffee": body.coffee,
         "role": body.role,
         "bio": "",
-        "photo": None,
+        "photo": body.photo or None,
+        "phone": phone,
         "is_admin": False,
         "is_president": False,
         "status": "invited",
@@ -1406,13 +1506,26 @@ async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)
     result = await db.users.insert_one(doc)
     doc["_id"] = result.inserted_id
     await manager.broadcast({"type": "rider.updated", "rider": serialize_rider(doc)})
-    return serialize_rider(doc, viewer=admin)
+    invite_link = f"{PUBLIC_APP_URL}/?invite={result.inserted_id}"
+    email_sent = False
+    if body.send_email and email:
+        email_sent = await _send_invite_email(
+            to_email=email,
+            name=doc["name"],
+            inviter_name=admin.get("name") or "GLCC",
+            link=invite_link,
+        )
+    return {
+        **serialize_rider(doc, viewer=admin),
+        "invite_link": invite_link,
+        "email_sent": email_sent,
+    }
 
 @api.patch("/riders/me")
 async def update_me(body: ProfileUpdateIn, user: dict = Depends(require_approved)):
-    # Riders can only self-edit their name and coffee. Role, bio, photo, join
-    # date and member number are all managed elsewhere (admin route / server).
-    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "coffee", "ride_reminders"}}
+    # Self-editable fields: name, coffee, photo, ride reminders. Role, bio,
+    # join date and member number are managed via the admin route.
+    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "coffee", "photo", "ride_reminders"}}
     if not update:
         return serialize_rider(user)
     await db.users.update_one({"_id": user["_id"]}, {"$set": update})
@@ -1540,6 +1653,102 @@ async def rides_cafe_suggest(q: str = "", user: dict = Depends(get_current_user)
     """Live suggestion for the manual create-ride form. Accepts any blob of
     route/location text and returns the matching neighbourhood café."""
     return {"suggestion": suggest_cafe(q)}
+
+
+# ---------- Café Rules Admin ----------
+class CafeRuleIn(BaseModel):
+    pattern: str = Field(..., min_length=1, max_length=80)
+    cafe: str = Field(..., min_length=1, max_length=160)
+    order: Optional[int] = None
+
+
+class CafeRulePatchIn(BaseModel):
+    pattern: Optional[str] = Field(None, min_length=1, max_length=80)
+    cafe: Optional[str] = Field(None, min_length=1, max_length=160)
+    order: Optional[int] = None
+
+
+def _serialize_cafe_rule(doc: dict) -> dict:
+    return {
+        "id": str(doc["_id"]),
+        "pattern": doc.get("pattern", ""),
+        "cafe": doc.get("cafe", ""),
+        "order": doc.get("order", 0),
+        "updated_at": (doc.get("updated_at") or doc.get("created_at") or now_utc()).isoformat(),
+    }
+
+
+@api.get("/admin/cafe-rules")
+async def admin_list_cafe_rules(admin: dict = Depends(require_admin)):
+    rules = await db.cafe_rules.find().sort([("order", 1), ("created_at", 1)]).to_list(500)
+    return {"rules": [_serialize_cafe_rule(r) for r in rules]}
+
+
+@api.post("/admin/cafe-rules")
+async def admin_create_cafe_rule(body: CafeRuleIn, admin: dict = Depends(require_admin)):
+    pattern = body.pattern.strip().lower()
+    cafe = body.cafe.strip()
+    if not pattern or not cafe:
+        raise HTTPException(status_code=400, detail="Pattern and café required")
+    if await db.cafe_rules.find_one({"pattern": pattern}):
+        raise HTTPException(status_code=409, detail="A rule with that pattern already exists")
+    order = body.order
+    if order is None:
+        last = await db.cafe_rules.find().sort("order", -1).limit(1).to_list(1)
+        order = (last[0].get("order", 0) + 1) if last else 0
+    now = now_utc()
+    doc = {"pattern": pattern, "cafe": cafe, "order": int(order), "created_at": now, "updated_at": now}
+    r = await db.cafe_rules.insert_one(doc)
+    doc["_id"] = r.inserted_id
+    await refresh_cafe_rules_cache()
+    return _serialize_cafe_rule(doc)
+
+
+@api.patch("/admin/cafe-rules/{rule_id}")
+async def admin_update_cafe_rule(rule_id: str, body: CafeRulePatchIn, admin: dict = Depends(require_admin)):
+    try:
+        oid = ObjectId(rule_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rule id")
+    update: dict = {}
+    if body.pattern is not None:
+        p = body.pattern.strip().lower()
+        if not p:
+            raise HTTPException(status_code=400, detail="Pattern required")
+        clash = await db.cafe_rules.find_one({"pattern": p, "_id": {"$ne": oid}})
+        if clash:
+            raise HTTPException(status_code=409, detail="Another rule already uses that pattern")
+        update["pattern"] = p
+    if body.cafe is not None:
+        c = body.cafe.strip()
+        if not c:
+            raise HTTPException(status_code=400, detail="Café required")
+        update["cafe"] = c
+    if body.order is not None:
+        update["order"] = int(body.order)
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    update["updated_at"] = now_utc()
+    res = await db.cafe_rules.update_one({"_id": oid}, {"$set": update})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    r = await db.cafe_rules.find_one({"_id": oid})
+    await refresh_cafe_rules_cache()
+    return _serialize_cafe_rule(r)
+
+
+@api.delete("/admin/cafe-rules/{rule_id}")
+async def admin_delete_cafe_rule(rule_id: str, admin: dict = Depends(require_admin)):
+    try:
+        oid = ObjectId(rule_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rule id")
+    r = await db.cafe_rules.delete_one({"_id": oid})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    await refresh_cafe_rules_cache()
+    return {"ok": True}
+
 
 @api.post("/rides/{ride_id}/rsvp")
 async def rsvp(ride_id: str, body: RSVPIn, user: dict = Depends(require_approved)):
@@ -1966,7 +2175,23 @@ SEED_RIDES = [
 ]
 
 async def seed():
-    await db.users.create_index("email", unique=True)
+    # Email is unique for riders that have one — invited riders (no email) don't collide.
+    try:
+        info = await db.users.index_information()
+        for name, meta in info.items():
+            if name == "_id_":
+                continue
+            keys = meta.get("key", [])
+            if keys and keys[0][0] == "email":
+                # Recreate with partial filter so nulls don't collide
+                await db.users.drop_index(name)
+    except Exception:
+        pass
+    await db.users.create_index(
+        "email",
+        unique=True,
+        partialFilterExpression={"email": {"$type": "string"}},
+    )
     await db.rides.create_index("sort_key")
     await db.rides.create_index("strava_event_id", unique=True, sparse=True)
     await db.messages.create_index("created_at")
@@ -2078,6 +2303,10 @@ async def seed():
 @app.on_event("startup")
 async def on_startup():
     await seed()
+    await db.cafe_rules.create_index("pattern", unique=True)
+    await db.cafe_rules.create_index("order")
+    await seed_cafe_rules_if_empty()
+    await refresh_cafe_rules_cache()
     # Hourly Strava sync loop (silently skips if not connected)
     async def _sync_loop():
         # Small initial delay to let the app finish booting
