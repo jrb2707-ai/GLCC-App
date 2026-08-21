@@ -1,8 +1,82 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
-import { Cloud, Send } from "lucide-react";
+import { Cloud, Send, Flag } from "lucide-react";
 import { toast } from "sonner";
+
+const REPORT_REASONS = [
+  "Spam or scam",
+  "Harassment or bullying",
+  "Hate speech",
+  "Sexual or explicit content",
+  "Violence or threats",
+  "Something else",
+];
+
+function ReportSheet({ message, onClose }) {
+  const [reason, setReason] = useState(null);
+  const [other, setOther] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (busy) return;
+    const finalReason = reason === "Something else" ? other.trim() : reason;
+    if (!finalReason) { toast.error("Pick a reason (or add details)"); return; }
+    setBusy(true);
+    try {
+      await api.post(`/chat/messages/${message.id}/report`, { reason: finalReason });
+      toast("Thanks", { description: "The GLCC admins will review this shortly." });
+      onClose();
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="absolute inset-0 z-50 bg-black/60 flex items-end" data-testid="report-sheet" onClick={onClose}>
+      <div className="w-full bg-white rounded-t-3xl p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+        <div className="mx-auto w-10 h-1 rounded-full bg-neutral-300 mb-3" />
+        <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-status-cant">Report message</div>
+        <div className="text-xl font-black text-neutral-900 mt-0.5">What's wrong here?</div>
+        <div className="rounded-xl bg-neutral-100 p-3 mt-3" data-testid="report-snapshot">
+          <div className="text-[11px] font-bold text-neutral-500">{message.name}</div>
+          <div className="text-sm text-neutral-900 mt-1 line-clamp-4">{message.text}</div>
+        </div>
+        <div className="mt-2 max-h-72 overflow-y-auto">
+          {REPORT_REASONS.map((r) => (
+            <button
+              key={r}
+              onClick={() => setReason(r)}
+              className={`w-full text-left py-2.5 px-3 rounded-lg border mt-1.5 text-[13px] ${
+                reason === r ? "border-status-cant bg-status-cant/10 text-status-cant font-bold" : "border-neutral-200 text-neutral-900"
+              }`}
+              data-testid={`report-reason-${r.replace(/\W+/g, "-").toLowerCase()}`}
+            >
+              {r}
+            </button>
+          ))}
+          {reason === "Something else" && (
+            <textarea
+              value={other}
+              onChange={(e) => setOther(e.target.value)}
+              placeholder="Tell us what happened"
+              className="w-full border border-neutral-300 rounded-lg px-3 py-2 mt-2 min-h-[70px] text-sm"
+              data-testid="report-other-input"
+            />
+          )}
+        </div>
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="mt-4 w-full bg-status-cant text-white rounded-xl py-3 font-black uppercase tracking-widest text-xs disabled:opacity-50"
+          data-testid="report-submit"
+        >
+          {busy ? "…" : "Send report"}
+        </button>
+        <button onClick={onClose} className="mt-2 w-full py-3 text-neutral-500 uppercase tracking-widest text-xs font-bold" data-testid="report-cancel">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function ChatTab() {
   const { user } = useAuth();
@@ -10,6 +84,7 @@ export default function ChatTab() {
   const [messages, setMessages] = useState([]);
   const [weather, setWeather] = useState(null);
   const [text, setText] = useState("");
+  const [reportMessage, setReportMessage] = useState(null);
   const scrollRef = useRef(null);
   const isPending = user.status === "pending";
 
@@ -102,21 +177,33 @@ export default function ChatTab() {
           }
           const mine = m.user_id === user.id;
           return (
-            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`msg-${m.id}`}>
+            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} group`} data-testid={`msg-${m.id}`}>
               <div className="max-w-[78%]">
                 {!mine && (
                   <div className="text-[10px] uppercase font-mono-stat tracking-widest text-neutral-500 mb-0.5 ml-3">
                     {m.name} · {fmtTime(m.created_at)}
                   </div>
                 )}
-                <div
-                  className={
-                    mine
-                      ? "px-3.5 py-2 rounded-2xl rounded-br-md bg-[#007AFF] text-white"
-                      : "px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#E9E9EB] text-neutral-900"
-                  }
-                >
-                  <div className="text-sm whitespace-pre-wrap break-words leading-snug">{m.text}</div>
+                <div className="flex items-start gap-1.5">
+                  <div
+                    className={
+                      mine
+                        ? "px-3.5 py-2 rounded-2xl rounded-br-md bg-[#007AFF] text-white"
+                        : "px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#E9E9EB] text-neutral-900"
+                    }
+                  >
+                    <div className="text-sm whitespace-pre-wrap break-words leading-snug">{m.text}</div>
+                  </div>
+                  {!mine && (
+                    <button
+                      onClick={() => setReportMessage(m)}
+                      className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity mt-1 p-1 rounded text-neutral-500 hover:text-status-cant"
+                      title="Report this message"
+                      data-testid={`report-open-${m.id}`}
+                    >
+                      <Flag className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
                 {mine && (
                   <div className="text-[9px] text-neutral-400 font-mono-stat text-right mt-0.5 mr-2">
@@ -128,6 +215,8 @@ export default function ChatTab() {
           );
         })}
       </div>
+
+      {reportMessage && <ReportSheet message={reportMessage} onClose={() => setReportMessage(null)} />}
 
       {/* Input */}
       <div className="px-3 py-3 border-t border-neutral-200 bg-neutral-50 flex items-center gap-2">

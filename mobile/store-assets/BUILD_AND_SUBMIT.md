@@ -52,13 +52,20 @@ When Apple rejects, they email you a Guideline reference (e.g. 1.2, 2.1, 5.1.1).
 Read the Guideline, fix the code or the listing, `eas build` again with a
 bumped `buildNumber`, then `eas submit`. Usually 1-2 loops for a first-time app.
 
-## Common phase-2 add-ons (BEFORE App Store review approval)
+## Common phase-2 add-ons (BEFORE App Store review approval) — ✅ DONE
 
-Track these in `PRD.md` — Apple will hold up 1.0 without them:
+All of the below now ship in v1.0. Just include this note in App Review
+Information when submitting so the reviewer knows where to look:
 
-1. Report button on chat messages (Guideline 1.2)
-2. Block user from profile modal (Guideline 1.2)
-3. Delete-my-account inside the app (Guideline 5.1.1(v))
-4. Terms of Service URL (highly recommended)
-5. iPad support — either enable it and test, or explicitly declare
-   iPhone-only in `app.json` → `ios.supportsTablet: false` (already done here).
+```
+GLCC has full Apple 1.2 moderation:
+- Report: long-press any chat message → pick a reason (6 categories + free text).
+- Block: Member Card → Block this rider (blocks are two-way in chat).
+- Delete my account: Profile modal → Delete my account (password-confirmed).
+Test with: leo@glcc.club / cycle123
+```
+
+Also declared:
+- iPhone-only (`ios.supportsTablet: false` in app.json)
+- Privacy policy URL (see APP_STORE_LISTING.md for draft copy — publish at
+  https://greylynncc.com/privacy before submit)

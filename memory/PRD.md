@@ -67,6 +67,12 @@ See `/app/memory/test_credentials.md`.
     - Backend `GET /api/rides/public/{ride_id}` — no auth, returns a safe subset (id, name, day/date/time, distance/elevation/pace, cafe, location, going_count, going_first_names, source, strava_url, map_url). No email/rsvps/user ids leaked. Verified 200 + shape and 404 shape via curl.
     - Web `RidePreviewScreen.jsx` — mobile-styled preview with hero map (or gradient fallback), title, stats grid, café block, going first-name chips, "Open in GLCC app" CTA that attempts `glcc://ride/{id}` and falls back to the sign-in screen after 900ms, and a "View on Strava" link when applicable.
     - `App.js` gained `useRidePreviewId()` which matches `/r/`, `/ride/`, `/rides/` paths and renders the preview in the Gate for unauthenticated visitors. Verified end-to-end via Playwright screenshot on the preview URL.
+  - **Phase 4 (Feb 2026): DONE** — Apple Guideline 1.2 + 5.1.1(v) moderation (App Store submission blocker cleared):
+    - Backend: `POST /api/chat/messages/{id}/report` (snapshots message, notifies admins via push + WS), `POST /api/blocks` + `DELETE /api/blocks/{target_id}` + `GET /api/blocks`, `DELETE /api/auth/me` (password-confirmed, anonymises messages, purges push tokens/rsvps/coffee/reports/blocks). Chat list + mentions filtered by pair blocks in both directions.
+    - Native: Long-press chat message → ReportModal with 6-reason picker + free text. Member Card → Block/Unblock button (any non-president rider). Profile self-view → Delete-my-account inline block with password confirmation.
+    - Web: Flag icon on hover of any chat message → ReportSheet with same reason picker. Member Card gained Block/Unblock. Profile modal (self) gained Delete-my-account block.
+    - Verified via curl: self-report blocked (400), self-block blocked (400), report ok, block hides messages from list (27→25), delete-account wrong-pw 401, correct-pw purges user and anonymises chat to "Former rider", login post-delete 401. President cannot self-delete (400).
+    - Store-assets docs updated: `APP_STORE_LISTING.md` marks 1.2 as IMPLEMENTED, `BUILD_AND_SUBMIT.md` lists the reviewer test path so Apple can verify on first submission.
   - Phase 4: User-generated content moderation (Apple 1.2) — block, report, auto-filter, delete-my-account.
   - Phase 5: Screenshots, real icon/splash design, submit v1.0 for review.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.

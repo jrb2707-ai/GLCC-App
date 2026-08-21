@@ -13,10 +13,11 @@ import { pickAvatar } from "../lib/imagePicker";
 import { readCache, writeCache } from "../lib/cache";
 
 export default function RidersTab() {
-  const { user, refreshMe } = useAuth();
+  const { user, refreshMe, logout } = useAuth();
   const { subscribe } = useEvents();
   const [riders, setRiders] = useState([]);
   const [pending, setPending] = useState([]);
+  const [blockedIds, setBlockedIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [openRider, setOpenRider] = useState(null); // { rider, mode: 'card'|'edit' }
@@ -24,11 +25,15 @@ export default function RidersTab() {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/riders");
-      setRiders(data.riders || []);
-      setPending(data.pending || []);
-      writeCache("riders", data.riders || []);
-      writeCache("pending", data.pending || []);
+      const [r, b] = await Promise.all([
+        api.get("/riders"),
+        api.get("/blocks").catch(() => ({ data: { blocked_ids: [] } })),
+      ]);
+      setRiders(r.data.riders || []);
+      setPending(r.data.pending || []);
+      setBlockedIds(b.data.blocked_ids || []);
+      writeCache("riders", r.data.riders || []);
+      writeCache("pending", r.data.pending || []);
     } catch (e) { /* ignore */ }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -128,6 +133,9 @@ export default function RidersTab() {
           rider={openRider.rider}
           onClose={() => setOpenRider(null)}
           onEditProfile={user?.is_admin ? () => setOpenRider({ rider: openRider.rider, mode: "edit" }) : undefined}
+          canBlock={!openRider.rider.is_president && openRider.rider.id !== user?.id}
+          isBlocked={blockedIds.includes(openRider.rider.id)}
+          onBlockChange={load}
         />
       )}
 
@@ -135,6 +143,8 @@ export default function RidersTab() {
       {openRider?.mode === "edit" && (
         <ProfileModal
           rider={openRider.rider}
+          isBlocked={blockedIds.includes(openRider.rider.id)}
+          onLogout={logout}
           onClose={() => setOpenRider(null)}
           onSaved={async () => { await load(); await refreshMe(); }}
         />
@@ -148,7 +158,7 @@ export default function RidersTab() {
 }
 
 // -------------------- Profile Modal --------------------
-function ProfileModal({ rider, onClose, onSaved }) {
+function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
   const { user } = useAuth();
   const [name, setName] = useState(rider.name || "");
   const [role, setRole] = useState(rider.role || "Member");
@@ -161,11 +171,55 @@ function ProfileModal({ rider, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [testingPush, setTestingPush] = useState(false);
+  const [deletePwd, setDeletePwd] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const isMe = rider.id === user?.id;
   const selfPending = isMe && user?.status === "pending";
   const canEdit = (user?.is_admin || isMe) && !selfPending;
   const canEditPhoto = user?.is_admin && !isMe; // matches web parity
   const isPresident = user?.is_president;
+
+  async function toggleBlock() {
+    try {
+      if (isBlocked) {
+        await api.delete(`/blocks/${rider.id}`);
+      } else {
+        Alert.alert(
+          "Block this rider?",
+          "You won't see their chat messages and they can't @mention you. You can unblock any time.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Block", style: "destructive",
+              onPress: async () => {
+                try {
+                  await api.post("/blocks", { target_id: rider.id });
+                  await onSaved?.();
+                  onClose();
+                } catch (e) { Alert.alert("Block", formatDetail(e)); }
+              },
+            },
+          ]
+        );
+        return;
+      }
+      await onSaved?.();
+    } catch (e) { Alert.alert("Block", formatDetail(e)); }
+  }
+
+  async function deleteAccount() {
+    if (deletingAccount) return;
+    if (!deletePwd) return Alert.alert("Delete", "Enter your password to confirm.");
+    setDeletingAccount(true);
+    try {
+      await api.delete("/auth/me", { data: { password: deletePwd } });
+      Alert.alert("Account deleted", "Your rider account has been removed.");
+      onLogout?.();
+    } catch (e) {
+      Alert.alert("Delete", formatDetail(e));
+    } finally { setDeletingAccount(false); }
+  }
 
   async function onPickPhoto() {
     if (uploading) return;
@@ -345,9 +399,69 @@ function ProfileModal({ rider, onClose, onSaved }) {
               </TouchableOpacity>
             )}
 
+            {!isMe && !rider.is_president && (
+              <TouchableOpacity
+                onPress={toggleBlock}
+                style={[s.blockBtn, isBlocked && s.blockBtnActive]}
+                testID={isBlocked ? "unblock-rider" : "block-rider"}
+              >
+                <Text style={[s.blockBtnTxt, isBlocked && { color: "#fff" }]}>
+                  {isBlocked ? "✓ BLOCKED · TAP TO UNBLOCK" : "🚫 BLOCK THIS RIDER"}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {isMe && user?.status === "approved" && (
               <View style={{ marginTop: 12 }}>
                 <ChangePasswordBlock />
+              </View>
+            )}
+
+            {isMe && !isPresident && (
+              <View style={{ marginTop: 12 }}>
+                {!deleteOpen ? (
+                  <TouchableOpacity
+                    onPress={() => setDeleteOpen(true)}
+                    style={s.deleteBtn}
+                    testID="delete-account-open"
+                  >
+                    <Text style={s.deleteBtnTxt}>DELETE MY ACCOUNT</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={s.deleteBlock} testID="delete-account-block">
+                    <Text style={s.miniLabel}>DELETE ACCOUNT</Text>
+                    <Text style={s.deleteHint}>
+                      Your rider profile is removed. Chat messages you sent stay in the history but appear as "Former rider".
+                    </Text>
+                    <TextInput
+                      secureTextEntry
+                      value={deletePwd}
+                      onChangeText={setDeletePwd}
+                      placeholder="Password"
+                      placeholderTextColor={colors.textMuted}
+                      style={s.pInputSm}
+                      testID="delete-account-password"
+                    />
+                    <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => { setDeleteOpen(false); setDeletePwd(""); }}
+                        style={s.pwdCancel}
+                        testID="delete-account-cancel"
+                      >
+                        <Text style={s.closeTxt}>CANCEL</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={deleteAccount}
+                        disabled={deletingAccount || !deletePwd}
+                        style={[s.deleteConfirm, (!deletePwd || deletingAccount) && { opacity: 0.5 }]}
+                        testID="delete-account-confirm"
+                      >
+                        {deletingAccount && <ActivityIndicator color="#fff" style={{ marginRight: 6 }} />}
+                        <Text style={s.deleteConfirmTxt}>DELETE FOREVER</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
               </View>
             )}
 
@@ -598,4 +712,15 @@ const s = StyleSheet.create({
 
   pushBtn: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(212,255,0,0.10)", borderColor: "rgba(212,255,0,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 12 },
   pushBtnTxt: { color: colors.accentVolt, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+
+  blockBtn: { marginTop: 8, borderWidth: 1, borderColor: "rgba(239,68,68,0.40)", backgroundColor: "rgba(239,68,68,0.10)", borderRadius: radius.md, paddingVertical: 12, alignItems: "center" },
+  blockBtnActive: { backgroundColor: colors.statusCant, borderColor: colors.statusCant },
+  blockBtnTxt: { color: colors.statusCant, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+
+  deleteBtn: { borderWidth: 1, borderColor: "rgba(239,68,68,0.40)", borderRadius: radius.md, paddingVertical: 12, alignItems: "center" },
+  deleteBtnTxt: { color: colors.statusCant, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+  deleteBlock: { borderWidth: 1, borderColor: "rgba(239,68,68,0.40)", borderRadius: radius.md, padding: 12, backgroundColor: "rgba(239,68,68,0.05)" },
+  deleteHint: { color: colors.textSecondary, fontSize: 11, marginVertical: 6 },
+  deleteConfirm: { flex: 1, backgroundColor: colors.statusCant, borderRadius: radius.sm, paddingVertical: 10, alignItems: "center", flexDirection: "row", justifyContent: "center" },
+  deleteConfirmTxt: { color: "#fff", fontWeight: "900", letterSpacing: 2, fontSize: 11 },
 });

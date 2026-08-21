@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
 import { colors, radius } from "../constants/theme";
@@ -15,6 +15,15 @@ function toHandle(name) {
   return String(name || "").replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+const REPORT_REASONS = [
+  "Spam or scam",
+  "Harassment or bullying",
+  "Hate speech",
+  "Sexual or explicit content",
+  "Violence or threats",
+  "Something else",
+];
+
 export default function ChatTab() {
   const { user } = useAuth();
   const { subscribe } = useEvents();
@@ -26,6 +35,7 @@ export default function ChatTab() {
   const [mentionQuery, setMentionQuery] = useState(null); // null | { start, term }
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [reportMessage, setReportMessage] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const isPending = user?.status === "pending";
@@ -169,19 +179,34 @@ export default function ChatTab() {
             }
             const mine = m.user_id === user?.id;
             return (
-              <View key={m.id} style={[s.bubbleWrap, { alignItems: mine ? "flex-end" : "flex-start" }]}>
-                {!mine && (
-                  <Text style={s.who}>{m.name} · {fmtTime(m.created_at)}</Text>
-                )}
-                <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
-                  <Text style={{ color: mine ? "#fff" : "#111", fontSize: 14 }}>{m.text}</Text>
+              <TouchableOpacity
+                key={m.id}
+                activeOpacity={0.8}
+                onLongPress={() => { if (!mine) setReportMessage(m); }}
+                delayLongPress={350}
+                testID={`chat-message-${m.id}`}
+              >
+                <View style={[s.bubbleWrap, { alignItems: mine ? "flex-end" : "flex-start" }]}>
+                  {!mine && (
+                    <Text style={s.who}>{m.name} · {fmtTime(m.created_at)}</Text>
+                  )}
+                  <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
+                    <Text style={{ color: mine ? "#fff" : "#111", fontSize: 14 }}>{m.text}</Text>
+                  </View>
+                  {mine && <Text style={s.mineTime}>{fmtTime(m.created_at)}</Text>}
                 </View>
-                {mine && <Text style={s.mineTime}>{fmtTime(m.created_at)}</Text>}
-              </View>
+              </TouchableOpacity>
             );
           })
         )}
       </ScrollView>
+
+      {reportMessage && (
+        <ReportModal
+          message={reportMessage}
+          onClose={() => setReportMessage(null)}
+        />
+      )}
 
       {mentionCandidates.length > 0 && (
         <ScrollView
@@ -270,4 +295,90 @@ const s = StyleSheet.create({
   mentionEyebrow: { color: "#666", fontSize: 9, letterSpacing: 3, fontWeight: "700", marginRight: 4 },
   mentionChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#fff", borderColor: "#d0d0d0", borderWidth: 1, borderRadius: 999, paddingLeft: 4, paddingRight: 10, paddingVertical: 3 },
   mentionName: { color: "#111", fontSize: 12, fontWeight: "700" },
+
+  reportOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  reportSheet: { backgroundColor: "#fff", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 30 },
+  reportHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: "#d0d0d0", marginBottom: 12 },
+  reportEyebrow: { color: "#ef4444", fontSize: 10, letterSpacing: 3, fontWeight: "700" },
+  reportTitle: { color: "#111", fontSize: 22, fontWeight: "900", letterSpacing: -0.5, marginTop: 2 },
+  reportSnapshot: { backgroundColor: "#f5f5f5", borderRadius: 10, padding: 10, marginTop: 12 },
+  reportSnapshotName: { color: "#666", fontSize: 11, fontWeight: "700" },
+  reportSnapshotText: { color: "#111", fontSize: 13, marginTop: 4 },
+  reportReasonBtn: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e5e5e5", marginTop: 6 },
+  reportReasonActive: { borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.08)" },
+  reportReasonTxt: { color: "#111", fontSize: 13 },
+  reportOther: { borderWidth: 1, borderColor: "#d0d0d0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 8, minHeight: 60, textAlignVertical: "top" },
+  reportSend: { marginTop: 14, backgroundColor: "#ef4444", borderRadius: 12, paddingVertical: 12, alignItems: "center", flexDirection: "row", justifyContent: "center" },
+  reportSendTxt: { color: "#fff", fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+  reportCancel: { marginTop: 8, paddingVertical: 12, alignItems: "center" },
+  reportCancelTxt: { color: "#666", fontWeight: "700", letterSpacing: 2, fontSize: 12 },
 });
+
+function ReportModal({ message, onClose }) {
+  const [reason, setReason] = useState(null);
+  const [other, setOther] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (busy) return;
+    const finalReason = reason === "Something else" ? other.trim() : reason;
+    if (!finalReason) {
+      Alert.alert("Report", "Pick a reason (or add details).");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.post(`/chat/messages/${message.id}/report`, { reason: finalReason });
+      Alert.alert("Thanks", "The GLCC admins will review this shortly.");
+      onClose();
+    } catch (e) {
+      Alert.alert("Report", formatDetail(e));
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={s.reportOverlay}>
+        <View style={s.reportSheet}>
+          <View style={s.reportHandle} />
+          <Text style={s.reportEyebrow}>REPORT MESSAGE</Text>
+          <Text style={s.reportTitle}>What's wrong here?</Text>
+          <View style={s.reportSnapshot} testID="report-snapshot">
+            <Text style={s.reportSnapshotName}>{message.name}</Text>
+            <Text style={s.reportSnapshotText} numberOfLines={4}>{message.text}</Text>
+          </View>
+          <ScrollView style={{ maxHeight: 320, marginTop: 8 }}>
+            {REPORT_REASONS.map((r) => (
+              <TouchableOpacity
+                key={r}
+                onPress={() => setReason(r)}
+                style={[s.reportReasonBtn, reason === r && s.reportReasonActive]}
+                testID={`report-reason-${r.replace(/\W+/g, "-").toLowerCase()}`}
+              >
+                <Text style={[s.reportReasonTxt, reason === r && { color: "#ef4444", fontWeight: "700" }]}>{r}</Text>
+              </TouchableOpacity>
+            ))}
+            {reason === "Something else" && (
+              <TextInput
+                value={other}
+                onChangeText={setOther}
+                placeholder="Tell us what happened"
+                placeholderTextColor="#999"
+                multiline
+                style={s.reportOther}
+                testID="report-other-input"
+              />
+            )}
+          </ScrollView>
+          <TouchableOpacity onPress={submit} disabled={busy} style={s.reportSend} testID="report-submit">
+            {busy && <ActivityIndicator color="#fff" style={{ marginRight: 6 }} />}
+            <Text style={s.reportSendTxt}>SEND REPORT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={s.reportCancel} testID="report-cancel">
+            <Text style={s.reportCancelTxt}>CANCEL</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}

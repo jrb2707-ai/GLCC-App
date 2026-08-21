@@ -1,11 +1,13 @@
-import React from "react";
-import { View, Text, Image, Modal, TouchableOpacity, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Image, Modal, TouchableOpacity, StyleSheet, ScrollView, Alert, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "../constants/theme";
 import { pad4 } from "../lib/util";
+import { api, formatDetail } from "../lib/api";
 
-export default function MemberCard({ rider, onClose, onEditProfile }) {
+export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, canBlock, onBlockChange }) {
   const { width } = useWindowDimensions();
+  const [busy, setBusy] = useState(false);
   if (!rider) return null;
   const initials = (rider.name || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const firstName = (rider.name || "").trim().split(/\s+/)[0] || "";
@@ -72,6 +74,47 @@ export default function MemberCard({ rider, onClose, onEditProfile }) {
                 <Text style={s.editBtnTxt}>EDIT PROFILE</Text>
               </TouchableOpacity>
             )}
+            {canBlock && (
+              <TouchableOpacity
+                disabled={busy}
+                onPress={async () => {
+                  if (isBlocked) {
+                    setBusy(true);
+                    try {
+                      await api.delete(`/blocks/${rider.id}`);
+                      await onBlockChange?.();
+                    } catch (e) { Alert.alert("Block", formatDetail(e)); }
+                    finally { setBusy(false); }
+                  } else {
+                    Alert.alert(
+                      "Block this rider?",
+                      "You won't see their chat messages and they can't @mention you. You can unblock any time.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Block", style: "destructive",
+                          onPress: async () => {
+                            setBusy(true);
+                            try {
+                              await api.post("/blocks", { target_id: rider.id });
+                              await onBlockChange?.();
+                              onClose?.();
+                            } catch (e) { Alert.alert("Block", formatDetail(e)); }
+                            finally { setBusy(false); }
+                          },
+                        },
+                      ]
+                    );
+                  }
+                }}
+                style={[s.blockBtn, isBlocked && s.blockBtnActive]}
+                testID={isBlocked ? "member-card-unblock" : "member-card-block"}
+              >
+                <Text style={[s.blockBtnTxt, isBlocked && { color: "#fff" }]}>
+                  {isBlocked ? "✓ BLOCKED · TAP TO UNBLOCK" : "🚫 BLOCK THIS RIDER"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -122,4 +165,7 @@ const s = StyleSheet.create({
 
   editBtn: { width: "100%", backgroundColor: colors.accentVolt, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", marginTop: 8 },
   editBtnTxt: { color: "#000", fontWeight: "900", letterSpacing: 3, fontSize: 12 },
+  blockBtn: { width: "100%", borderWidth: 1, borderColor: "rgba(239,68,68,0.40)", backgroundColor: "rgba(239,68,68,0.15)", borderRadius: radius.md, paddingVertical: 14, alignItems: "center", marginTop: 8 },
+  blockBtnActive: { backgroundColor: colors.statusCant, borderColor: colors.statusCant },
+  blockBtnTxt: { color: colors.statusCant, fontWeight: "900", letterSpacing: 3, fontSize: 12 },
 });

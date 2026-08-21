@@ -597,6 +597,17 @@ async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: 
 # ---------- Mention parsing ----------
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z][A-Za-z0-9_\-\.]*)")
 
+
+async def _blocked_pair_ids(viewer_id: str) -> set[str]:
+    """Users the viewer has blocked OR who have blocked the viewer. Chat
+    messages from any of these are hidden from the viewer's feed."""
+    vid = str(viewer_id)
+    out: set[str] = set()
+    async for b in db.blocks.find({"$or": [{"user_id": vid}, {"target_id": vid}]}):
+        out.add(b.get("target_id") if b.get("user_id") == vid else b.get("user_id"))
+    out.discard(vid)
+    return out
+
 async def resolve_mentions(text: str) -> List[dict]:
     """Return list of mentioned user docs. Matches on first-token lowercase of the rider's name."""
     handles = {m.lower() for m in MENTION_RE.findall(text or "")}
@@ -684,6 +695,15 @@ class RideCreateIn(BaseModel):
     route: str
     cafe: Optional[str] = None
     pace: str = "28–31 kph"
+
+class ReportIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+class BlockIn(BaseModel):
+    target_id: str
+
+class DeleteAccountIn(BaseModel):
+    password: str = Field(min_length=1)
 
 # ---------- App ----------
 app = FastAPI(title="GLCC API")
@@ -1431,8 +1451,10 @@ async def list_messages(user: dict = Depends(get_current_user)):
     # Pending riders cannot read the chat — the feed only opens once an admin approves them.
     if user.get("status") == "pending":
         return {"messages": []}
+    blocked = await _blocked_pair_ids(str(user["_id"]))
+    query = {"user_id": {"$nin": list(blocked)}} if blocked else {}
     msgs = []
-    async for m in db.messages.find({}).sort("created_at", -1).limit(100):
+    async for m in db.messages.find(query).sort("created_at", -1).limit(100):
         msgs.append(serialize_message(m))
     msgs.reverse()
     return {"messages": msgs}
@@ -1452,9 +1474,13 @@ async def post_message(body: ChatMessageIn, user: dict = Depends(require_approve
     payload = serialize_message(doc)
     await manager.broadcast({"type": "chat.message", "message": payload})
 
-    # Resolve @mentions (skip self-mention)
+    # Resolve @mentions (skip self-mention + anyone the sender is blocking or blocked by)
     mentioned = await resolve_mentions(text)
-    mention_user_ids = [str(m["_id"]) for m in mentioned if str(m["_id"]) != str(user["_id"])]
+    sender_blocked = await _blocked_pair_ids(str(user["_id"]))
+    mention_user_ids = [
+        str(m["_id"]) for m in mentioned
+        if str(m["_id"]) != str(user["_id"]) and str(m["_id"]) not in sender_blocked
+    ]
     if mention_user_ids:
         preview = text[:140]
         # Targeted WS event (browser fallback)
@@ -1472,6 +1498,112 @@ async def post_message(body: ChatMessageIn, user: dict = Depends(require_approve
             {"type": "chat.mention", "message_id": payload["id"]},
         ))
     return payload
+
+
+# ---------- Moderation (Apple Guideline 1.2) ----------
+@api.post("/chat/messages/{message_id}/report")
+async def report_message(message_id: str, body: ReportIn, user: dict = Depends(require_approved)):
+    """File a report on a chat message. Snapshots the message so admins can
+    review even if the author later deletes it. Emails all admins."""
+    try:
+        oid = ObjectId(message_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid message id")
+    msg = await db.messages.find_one({"_id": oid})
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if str(msg.get("user_id")) == str(user["_id"]):
+        raise HTTPException(status_code=400, detail="You can't report your own message")
+    report = {
+        "reporter_id": str(user["_id"]),
+        "reporter_name": user.get("name"),
+        "message_id": str(oid),
+        "message_snapshot": {
+            "text": msg.get("text"),
+            "user_id": str(msg.get("user_id")),
+            "name": msg.get("name"),
+            "created_at": msg.get("created_at"),
+        },
+        "reason": body.reason.strip()[:500],
+        "status": "open",
+        "created_at": now_utc(),
+    }
+    await db.chat_reports.insert_one(report)
+    # Notify all admins via push + WS
+    admin_ids = [str(a["_id"]) async for a in db.users.find({"is_admin": True})]
+    if admin_ids:
+        asyncio.create_task(push_to_users(
+            admin_ids,
+            "Message reported",
+            f"{user.get('name')} reported a chat message",
+            {"type": "chat.report"},
+        ))
+        for aid in admin_ids:
+            await manager.send_user(aid, {"type": "chat.report"})
+    return {"ok": True}
+
+
+@api.get("/blocks")
+async def list_blocks(user: dict = Depends(get_current_user)):
+    docs = await db.blocks.find({"user_id": str(user["_id"])}).to_list(200)
+    return {"blocked_ids": [d.get("target_id") for d in docs]}
+
+
+@api.post("/blocks")
+async def create_block(body: BlockIn, user: dict = Depends(get_current_user)):
+    if body.target_id == str(user["_id"]):
+        raise HTTPException(status_code=400, detail="You can't block yourself")
+    try:
+        target_oid = ObjectId(body.target_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rider id")
+    target = await db.users.find_one({"_id": target_oid})
+    if not target:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    await db.blocks.update_one(
+        {"user_id": str(user["_id"]), "target_id": body.target_id},
+        {"$setOnInsert": {"created_at": now_utc()}},
+        upsert=True,
+    )
+    return {"ok": True, "target_id": body.target_id}
+
+
+@api.delete("/blocks/{target_id}")
+async def remove_block(target_id: str, user: dict = Depends(get_current_user)):
+    await db.blocks.delete_one({"user_id": str(user["_id"]), "target_id": target_id})
+    return {"ok": True}
+
+
+@api.delete("/auth/me")
+async def delete_my_account(body: DeleteAccountIn, user: dict = Depends(get_current_user)):
+    """Rider-initiated account deletion (Apple Guideline 5.1.1(v)). Removes
+    the user + push tokens + password reset tokens + blocks + chat reports
+    they filed. Chat messages the rider posted are anonymised so club
+    history stays intact but their name is scrubbed."""
+    if not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Password is incorrect")
+    if user.get("is_president"):
+        raise HTTPException(status_code=400, detail="El Presidente can't self-delete. Transfer the role first.")
+    uid = str(user["_id"])
+    # Anonymise messages instead of deleting so replies don't dangle.
+    await db.messages.update_many(
+        {"user_id": uid},
+        {"$set": {"name": "Former rider", "user_id": None}},
+    )
+    await db.push_tokens.delete_many({"user_id": uid})
+    await db.password_resets.delete_many({"user_id": uid})
+    await db.blocks.delete_many({"$or": [{"user_id": uid}, {"target_id": uid}]})
+    await db.chat_reports.delete_many({"reporter_id": uid})
+    await db.coffee_rounds.delete_many({"rider_id": uid})
+    # Pull user out of ride RSVPs so counts stay accurate.
+    await db.rides.update_many(
+        {f"rsvps.{uid}": {"$exists": True}},
+        {"$unset": {f"rsvps.{uid}": ""}},
+    )
+    await db.users.delete_one({"_id": user["_id"]})
+    await manager.broadcast({"type": "rider.deleted", "rider_id": uid})
+    return {"ok": True}
+
 
 # ---------- Push tokens ----------
 @api.post("/push/register")
@@ -1615,6 +1747,8 @@ async def seed():
     await db.password_resets.create_index("token_hash", unique=True)
     # Track forgot-password requests for rate limiting (auto-clean after 2h)
     await db.password_reset_requests.create_index("requested_at", expireAfterSeconds=7200)
+    await db.blocks.create_index([("user_id", 1), ("target_id", 1)], unique=True)
+    await db.chat_reports.create_index("created_at")
     await db.password_reset_requests.create_index("email")
 
     admin_email = os.environ.get("ADMIN_EMAIL", "jb@glcc.club").lower()

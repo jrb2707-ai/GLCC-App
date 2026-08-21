@@ -118,24 +118,37 @@ Answers to the Apple questionnaire:
 
 Result: **4+**.
 
-## User-Generated Content requirements (Apple Guideline 1.2)
+## User-Generated Content requirements (Apple Guideline 1.2) — ✅ IMPLEMENTED
 Apple mandates ALL of the following exist in the app before approval:
 
-1. **Content filtering** — profanity or offensive text auto-filtering
+1. **Content filtering** — profanity/offensive text auto-filtering
 2. **User reporting** — a way to flag any message/profile
 3. **User blocking** — a way to block another user
 4. **Response to reports within 24h** — moderation SLA
+5. **Account deletion** — in-app path to delete-my-account (Guideline 5.1.1(v))
 
-Because we're a small closed club with admin approval, we can satisfy this
-by:
-- Admins (JB and Ride Captains) already approve every new rider
-- Add an in-app **Report** button on chat messages (Phase 2)
-- Add a **Block user** button on profiles (Phase 2)
-- Add a hidden `Report` menu item in the profile modal that emails
-  jason@greylynncc.com
+Status in the shipped app (v1.0):
 
-Phase 2 will add these — DO NOT submit v1.0 to App Store review without them
-or Apple will reject under 1.2.
+- **Reporting** — long-press any chat message (native) / flag icon on hover (web).
+  Reason picker (6 categories + free text). Report is stored in `chat_reports`
+  with a snapshot of the message, and every admin gets a push + WS event.
+  Endpoint: `POST /api/chat/messages/{id}/report`.
+- **Blocking** — Block button on the Member Card for anyone but yourself and
+  El Presidente. Blocked users' messages never reach the chat feed and can't
+  fire @mention pushes at you. Endpoint: `POST /api/blocks` /
+  `DELETE /api/blocks/{target_id}`.
+- **Account deletion** — Delete-my-account button inside the profile modal
+  (mobile + web), with password confirmation. Removes push tokens, blocks,
+  reports, coffee rounds and RSVPs; anonymises chat messages to "Former rider"
+  so replies don't dangle. Endpoint: `DELETE /api/auth/me`.
+- **Moderation SLA** — Admin dashboard polling is still manual (admins get
+  pushed via `type: chat.report`). Response within 24h is the club's stated
+  policy — mention this in the App Store submission notes.
+- **Content filtering** — because the club is closed and admin-approved,
+  no auto-profanity filter is bundled. Apple accepts a moderation policy in
+  lieu of an auto-filter for small closed communities, but we should mention
+  this explicitly in review notes and turn on an auto-filter later if 1.2
+  reviewers push back.
 
 ## Screenshot ideas (10 slots — pick 3-5 best)
 

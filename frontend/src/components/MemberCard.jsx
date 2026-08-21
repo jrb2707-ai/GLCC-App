@@ -1,9 +1,11 @@
 import React from "react";
-import { X, Pencil } from "lucide-react";
+import { X, Pencil, Ban } from "lucide-react";
+import { api, formatDetail } from "../lib/api";
+import { toast } from "sonner";
 
 // Rapha-style GLCC member card. Full-screen dark modal with a floating card,
 // club watermark, and permanent member number.
-export default function MemberCard({ rider, onClose, onEditProfile }) {
+export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, canBlock, onBlockChange }) {
   if (!rider) return null;
   const initials = (rider.name || "?")
     .split(/\s+/)
@@ -117,6 +119,30 @@ export default function MemberCard({ rider, onClose, onEditProfile }) {
               data-testid="member-card-edit"
             >
               <Pencil className="w-3.5 h-3.5" /> Edit profile
+            </button>
+          )}
+          {canBlock && (
+            <button
+              onClick={async () => {
+                try {
+                  if (isBlocked) {
+                    await api.delete(`/blocks/${rider.id}`);
+                    toast("Unblocked");
+                  } else {
+                    if (!window.confirm("Block this rider? You won't see their chat messages and they can't @mention you.")) return;
+                    await api.post("/blocks", { target_id: rider.id });
+                    toast("Blocked");
+                  }
+                  await onBlockChange?.();
+                  if (!isBlocked) onClose?.();
+                } catch (e) { toast.error(formatDetail(e)); }
+              }}
+              className={`col-span-2 flex items-center justify-center gap-2 rounded-xl uppercase tracking-widest text-xs font-bold py-3 mt-1 border ${
+                isBlocked ? "bg-status-cant text-white border-status-cant" : "bg-status-cant/10 text-status-cant border-status-cant/40"
+              }`}
+              data-testid={isBlocked ? "member-card-unblock" : "member-card-block"}
+            >
+              <Ban className="w-3.5 h-3.5" /> {isBlocked ? "Blocked · tap to unblock" : "Block this rider"}
             </button>
           )}
         </div>

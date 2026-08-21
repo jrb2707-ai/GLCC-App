@@ -174,7 +174,7 @@ function ChangePasswordBlock() {
   );
 }
 
-function ProfileModal({ rider, onClose, onSaved }) {
+function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockChange }) {
   const { user, refreshMe } = useAuth();
   const [name, setName] = useState(rider.name);
   const [role, setRole] = useState(rider.role || "Member");
@@ -183,11 +183,42 @@ function ProfileModal({ rider, onClose, onSaved }) {
   const [photo, setPhoto] = useState(rider.photo || null);
   const [uploading, setUploading] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePwd, setDeletePwd] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const fileRef = useRef(null);
   const isMe = rider.id === user.id;
   const selfPending = isMe && user.status === "pending";
   const canEditAll = (user.is_admin || isMe) && !selfPending;
   const isPresident = user.is_president;
+
+  async function toggleBlock() {
+    try {
+      if (isBlocked) {
+        await api.delete(`/blocks/${rider.id}`);
+        toast("Unblocked");
+      } else {
+        if (!window.confirm("Block this rider? You won't see their chat messages and they can't @mention you.")) return;
+        await api.post("/blocks", { target_id: rider.id });
+        toast("Blocked");
+      }
+      await onBlockChange?.();
+      if (!isBlocked) onClose();
+    } catch (e) { toast.error(formatDetail(e)); }
+  }
+
+  async function submitDeleteAccount() {
+    if (deleting) return;
+    if (!deletePwd) return toast.error("Enter your password to confirm");
+    setDeleting(true);
+    try {
+      await api.delete("/auth/me", { data: { password: deletePwd } });
+      toast("Account deleted");
+      onLogout?.();
+    } catch (e) {
+      toast.error(formatDetail(e));
+    } finally { setDeleting(false); }
+  }
 
   async function pickFile(e) {
     const file = e.target.files?.[0];
@@ -396,6 +427,66 @@ function ProfileModal({ rider, onClose, onSaved }) {
           </>
         )}
 
+        {!isMe && !rider.is_president && (
+          <button
+            onClick={toggleBlock}
+            className={`mt-3 w-full text-xs uppercase tracking-widest font-bold py-3 rounded-xl border ${
+              isBlocked
+                ? "bg-status-cant text-white border-status-cant"
+                : "bg-status-cant/10 text-status-cant border-status-cant/40"
+            }`}
+            data-testid={isBlocked ? "unblock-rider" : "block-rider"}
+          >
+            {isBlocked ? "✓ Blocked · tap to unblock" : "🚫 Block this rider"}
+          </button>
+        )}
+
+        {isMe && !isPresident && (
+          <div className="mt-4">
+            {!deleteOpen ? (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="w-full text-xs uppercase tracking-widest font-bold py-3 rounded-xl border border-status-cant/40 text-status-cant"
+                data-testid="delete-account-open"
+              >
+                Delete my account
+              </button>
+            ) : (
+              <div className="rounded-xl border border-status-cant/40 bg-status-cant/5 p-3" data-testid="delete-account-block">
+                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">Delete account</div>
+                <p className="text-[11px] text-text-secondary my-2">
+                  Your rider profile is removed. Chat messages you sent stay in the history but appear as "Former rider".
+                </p>
+                <input
+                  type="password"
+                  value={deletePwd}
+                  onChange={(e) => setDeletePwd(e.target.value)}
+                  placeholder="Password"
+                  className="w-full bg-bg-secondary border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary"
+                  data-testid="delete-account-password"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => { setDeleteOpen(false); setDeletePwd(""); }}
+                    className="flex-1 border border-border-subtle rounded-lg py-2 text-xs uppercase tracking-widest text-text-secondary"
+                    data-testid="delete-account-cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitDeleteAccount}
+                    disabled={deleting || !deletePwd}
+                    className="flex-1 bg-status-cant text-white rounded-lg py-2 text-xs uppercase tracking-widest font-bold disabled:opacity-50"
+                    data-testid="delete-account-confirm"
+                  >
+                    {deleting ? "…" : "Delete forever"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {user.is_admin && !isMe && (
           <div className="mt-5 pt-4 border-t border-border-subtle">
             <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">Admin actions</div>
@@ -521,18 +612,23 @@ function RegisterRiderModal({ onClose }) {
 }
 
 export default function RidersTab() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { subscribe } = useEvents();
   const [riders, setRiders] = useState([]);
   const [pending, setPending] = useState([]);
+  const [blockedIds, setBlockedIds] = useState([]);
   const [openRider, setOpenRider] = useState(null);
   const [registerOpen, setRegisterOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/riders");
-      setRiders(data.riders);
-      setPending(data.pending);
+      const [r, b] = await Promise.all([
+        api.get("/riders"),
+        api.get("/blocks").catch(() => ({ data: { blocked_ids: [] } })),
+      ]);
+      setRiders(r.data.riders);
+      setPending(r.data.pending);
+      setBlockedIds(b.data.blocked_ids || []);
     } catch (e) {
       // ignore
     }
@@ -642,12 +738,18 @@ export default function RidersTab() {
             rider={openRider}
             onClose={() => setOpenRider(null)}
             onSaved={() => load()}
+            onLogout={logout}
+            onBlockChange={load}
+            isBlocked={blockedIds.includes(openRider.id)}
           />
         ) : (
           <MemberCard
             rider={openRider}
             onClose={() => setOpenRider(null)}
             onEditProfile={user.is_admin ? () => setOpenRider({ ...openRider, __edit: true }) : undefined}
+            canBlock={!openRider.is_president}
+            isBlocked={blockedIds.includes(openRider.id)}
+            onBlockChange={load}
           />
         )
       )}
@@ -656,6 +758,9 @@ export default function RidersTab() {
           rider={openRider}
           onClose={() => setOpenRider(null)}
           onSaved={() => load()}
+          onLogout={logout}
+          onBlockChange={load}
+          isBlocked={blockedIds.includes(openRider.id)}
         />
       )}
       {registerOpen && <RegisterRiderModal onClose={() => { setRegisterOpen(false); load(); }} />}
