@@ -8,11 +8,15 @@ import * as Device from "expo-device";
 import { api } from "./api";
 
 // Show incoming push as a heads-up notification when the app is foregrounded.
+// `shouldShowBanner` and `shouldShowList` are the Expo SDK 52+ replacements for
+// the deprecated `shouldShowAlert` — required for iOS 15+ lock-screen banners.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
@@ -31,11 +35,17 @@ export async function registerForPush() {
   if (status !== "granted") return null;
 
   if (Platform.OS === "android") {
+    // MAX importance is required for full-screen / lock-screen heads-up alerts.
     await Notifications.setNotificationChannelAsync("default", {
       name: "GLCC",
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#D4FF00",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: false,
+      enableVibrate: true,
+      sound: "default",
+      showBadge: true,
     });
   }
 

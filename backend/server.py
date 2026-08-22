@@ -146,6 +146,8 @@ def serialize_message(doc: dict) -> dict:
         "name": doc.get("name"),
         "text": doc.get("text"),
         "system": doc.get("system", False),
+        "announcement": doc.get("announcement", False),
+        "mechanical": doc.get("mechanical") or None,
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -412,6 +414,64 @@ WEATHER_ALERT_RAIN_PCT = 60
 WEATHER_ALERT_WIND_KPH = 40
 
 
+async def send_pending_ride_1h_pushes() -> dict:
+    """Every ride starting in the next 55–90 minutes gets one "starts in 1h"
+    push per RSVP='going' rider — includes weather + cafe. Idempotent via
+    `hour_reminder_sent_at`."""
+    now = now_utc()
+    window_start = now + timedelta(minutes=55)
+    window_end = now + timedelta(minutes=90)
+    cursor = db.rides.find({
+        "starts_at": {"$gte": window_start, "$lte": window_end},
+        "hour_reminder_sent_at": {"$exists": False},
+    })
+    pushes = 0
+    rides = 0
+    async for ride in cursor:
+        users = await _going_user_docs(ride)
+        if not users:
+            # still mark as sent so we don't recheck endlessly
+            await db.rides.update_one(
+                {"_id": ride["_id"]},
+                {"$set": {"hour_reminder_sent_at": now_utc(), "hour_reminder_recipients": 0}},
+            )
+            continue
+        forecast = await _fetch_forecast_at(ride["starts_at"])
+        parts = []
+        if forecast:
+            temp = forecast.get("temp_c")
+            rain = forecast.get("rain_chance")
+            wind = forecast.get("wind_kph")
+            if temp is not None:
+                parts.append(f"{round(temp)}°C")
+            if rain is not None:
+                parts.append(f"{rain}% rain")
+            if wind is not None:
+                parts.append(f"{wind} kph wind")
+        cafe = ride.get("cafe")
+        if cafe:
+            parts.append(f"☕ {cafe}")
+        ride_name = ride.get("name") or "Club ride"
+        title = f"⏰ {ride_name} in 1h"
+        body = " · ".join(parts) if parts else "See you at the start."
+        await push_to_users(
+            [str(u["_id"]) for u in users],
+            title,
+            body,
+            {"type": "ride.hour_reminder", "ride_id": str(ride["_id"])},
+        )
+        await db.rides.update_one(
+            {"_id": ride["_id"]},
+            {"$set": {
+                "hour_reminder_sent_at": now_utc(),
+                "hour_reminder_recipients": len(users),
+            }},
+        )
+        pushes += len(users)
+        rides += 1
+    return {"rides_notified": rides, "pushes_sent": pushes}
+
+
 async def send_pending_weather_alerts() -> dict:
     """Every ride starting in the next 2-14 hours whose forecast turns nasty
     (rain > 60% or wind > 40 kph) gets one push per going rider so they can
@@ -552,7 +612,18 @@ async def send_expo_push(tokens: List[str], title: str, body: str, data: Optiona
     if not tokens:
         return
     messages = [
-        {"to": t, "title": title, "body": body, "data": data or {}, "sound": "default"}
+        {
+            "to": t,
+            "title": title,
+            "body": body,
+            "data": data or {},
+            "sound": "default",
+            "priority": "high",            # iOS + Android lock-screen delivery
+            "channelId": "default",        # Android channel bind
+            "_displayInForeground": True,  # legacy iOS foreground display hint
+            "_contentAvailable": True,     # wake iOS app in background
+            "interruptionLevel": "active", # iOS 15+ Focus/lock-screen visibility
+        }
         for t in tokens
     ]
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -831,6 +902,14 @@ class CoffeeRoundIn(BaseModel):
 
 class ChatMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=800)
+    announcement: bool = False
+
+
+class MechanicalIn(BaseModel):
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    text: Optional[str] = Field(default=None, max_length=200)
+    ride_id: Optional[str] = None
 
 class PushRegisterIn(BaseModel):
     expo_push_token: str = Field(min_length=20)
@@ -1836,11 +1915,14 @@ async def list_messages(user: dict = Depends(get_current_user)):
 @api.post("/chat/messages")
 async def post_message(body: ChatMessageIn, user: dict = Depends(require_approved)):
     text = filter_profanity(body.text.strip())
+    # Only El Presidente can flag a message as an official club announcement.
+    is_announcement = bool(body.announcement) and bool(user.get("is_president"))
     doc = {
         "user_id": str(user["_id"]),
         "name": user.get("name"),
         "text": text,
         "system": False,
+        "announcement": is_announcement,
         "created_at": now_utc(),
     }
     r = await db.messages.insert_one(doc)
@@ -1871,6 +1953,71 @@ async def post_message(body: ChatMessageIn, user: dict = Depends(require_approve
             preview,
             {"type": "chat.mention", "message_id": payload["id"]},
         ))
+
+    # El Presidente announcements push to every rider except the sender.
+    if is_announcement:
+        asyncio.create_task(push_to_all_except(
+            str(user["_id"]),
+            "📣 GLCC Announcement",
+            f"{user.get('name')}: {text[:140]}",
+            {"type": "chat.announcement", "message_id": payload["id"]},
+        ))
+    return payload
+
+
+class MechanicalPushException(HTTPException):
+    pass
+
+
+@api.post("/chat/mechanical")
+async def report_mechanical(body: MechanicalIn, user: dict = Depends(require_approved)):
+    """Broadcasts a mechanical alert to the whole club — creates a system chat
+    message with the reporter's live location (if provided) and fires a push
+    notification to everyone except the reporter."""
+    lat = body.lat
+    lng = body.lng
+    maps_link: Optional[str] = None
+    if lat is not None and lng is not None:
+        # Google Maps universal link — opens the pin in the reporter's location
+        maps_link = f"https://maps.google.com/?q={lat:.6f},{lng:.6f}"
+    extra = (body.text or "").strip()[:200]
+    text_parts = [f"🔧 {user.get('name')} has a mechanical."]
+    if extra:
+        text_parts.append(extra)
+    if maps_link:
+        text_parts.append(f"Location → {maps_link}")
+    else:
+        text_parts.append("(No location shared — reply if you know where they are.)")
+    text = " ".join(text_parts)
+    doc = {
+        "user_id": str(user["_id"]),
+        "name": user.get("name"),
+        "text": text,
+        "system": True,
+        "announcement": False,
+        "mechanical": {
+            "lat": lat,
+            "lng": lng,
+            "maps_link": maps_link,
+            "ride_id": body.ride_id,
+        },
+        "created_at": now_utc(),
+    }
+    r = await db.messages.insert_one(doc)
+    doc["_id"] = r.inserted_id
+    payload = serialize_message(doc)
+    await manager.broadcast({"type": "chat.message", "message": payload})
+    asyncio.create_task(push_to_all_except(
+        str(user["_id"]),
+        "🔧 Mechanical",
+        f"{user.get('name')} has a mechanical — tap for location.",
+        {
+            "type": "chat.mechanical",
+            "message_id": payload["id"],
+            "maps_link": maps_link,
+            "reporter": user.get("name"),
+        },
+    ))
     return payload
 
 
@@ -2369,6 +2516,21 @@ async def on_startup():
                 log.warning("Weather alert loop error: %s", exc)
             await asyncio.sleep(1200)
     app.state.weather_alert_task = asyncio.create_task(_weather_alert_loop())
+
+    # 1-hour ride reminder loop — every 10 minutes we check rides starting
+    # in the next 55–90 minutes and push a "starts in 1h + weather + cafe"
+    # notification to each rider who RSVP'd going. Idempotent per ride.
+    async def _hour_reminder_loop():
+        await asyncio.sleep(120)
+        while True:
+            try:
+                result = await send_pending_ride_1h_pushes()
+                if result.get("pushes_sent"):
+                    log.info("1h ride pushes: %s", result)
+            except Exception as exc:
+                log.warning("1h reminder loop error: %s", exc)
+            await asyncio.sleep(600)
+    app.state.hour_reminder_task = asyncio.create_task(_hour_reminder_loop())
 
 @app.on_event("shutdown")
 async def on_shutdown():

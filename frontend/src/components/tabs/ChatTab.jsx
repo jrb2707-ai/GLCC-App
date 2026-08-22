@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
-import { Cloud, Send, Flag } from "lucide-react";
+import { Cloud, Send, Flag, Megaphone, Wrench, AtSign } from "lucide-react";
 import { toast } from "sonner";
 
 const REPORT_REASONS = [
@@ -85,18 +85,28 @@ export default function ChatTab() {
   const [weather, setWeather] = useState(null);
   const [text, setText] = useState("");
   const [reportMessage, setReportMessage] = useState(null);
+  const [announcement, setAnnouncement] = useState(false);
+  const [riders, setRiders] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState(null); // null when picker closed, else the token after "@"
+  const [mechanicalBusy, setMechanicalBusy] = useState(false);
+  const inputRef = useRef(null);
   const scrollRef = useRef(null);
   const isPending = user.status === "pending";
 
   const load = useCallback(async () => {
     try {
-      const [m, w] = await Promise.all([api.get("/chat/messages"), api.get("/weather")]);
+      const [m, w, r] = await Promise.all([
+        api.get("/chat/messages"),
+        api.get("/weather"),
+        api.get("/riders"),
+      ]);
       setMessages(isPending ? [] : m.data.messages);
       setWeather(w.data);
+      setRiders((r.data.riders || []).filter((rd) => rd.status === "approved" && rd.id !== user.id));
     } catch (e) {
       // ignore
     }
-  }, [isPending]);
+  }, [isPending, user.id]);
 
   useEffect(() => {
     load();
@@ -126,8 +136,11 @@ export default function ChatTab() {
     const t = text.trim();
     if (!t) return;
     setText("");
+    const wasAnnouncement = announcement;
+    setAnnouncement(false);
+    setMentionQuery(null);
     try {
-      await api.post("/chat/messages", { text: t });
+      await api.post("/chat/messages", { text: t, announcement: wasAnnouncement });
     } catch (e) {
       toast.error(formatDetail(e));
     }
@@ -142,6 +155,63 @@ export default function ChatTab() {
       toast.error(formatDetail(e));
     }
   }
+
+  async function sendMechanical() {
+    if (mechanicalBusy || isPending) return;
+    if (!window.confirm("Broadcast a mechanical alert to the whole club? Your current location will be shared if you grant permission.")) return;
+    setMechanicalBusy(true);
+    const post = async (coords) => {
+      try {
+        await api.post("/chat/mechanical", coords);
+        toast("Mechanical broadcast sent");
+      } catch (e) {
+        toast.error(formatDetail(e));
+      } finally {
+        setMechanicalBusy(false);
+      }
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => post({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => post({}), // user denied → still broadcast, just without location
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+      );
+    } else {
+      await post({});
+    }
+  }
+
+  // Update mention query as the user types "@..."
+  function onTextChange(e) {
+    const v = e.target.value;
+    setText(v);
+    const caret = e.target.selectionStart ?? v.length;
+    const prefix = v.slice(0, caret);
+    const m = prefix.match(/@([\w\-]{0,32})$/);
+    setMentionQuery(m ? m[1].toLowerCase() : null);
+  }
+
+  function pickMention(rider) {
+    if (!inputRef.current) return;
+    const el = inputRef.current;
+    const caret = el.selectionStart ?? text.length;
+    const before = text.slice(0, caret).replace(/@([\w\-]{0,32})$/, `@${rider.name.replace(/\s+/g, "")} `);
+    const after = text.slice(caret);
+    const next = before + after;
+    setText(next);
+    setMentionQuery(null);
+    setTimeout(() => {
+      el.focus();
+      const pos = before.length;
+      try { el.setSelectionRange(pos, pos); } catch (_) {}
+    }, 0);
+  }
+
+  const filteredMentions = mentionQuery !== null
+    ? riders
+        .filter((r) => r.name.toLowerCase().replace(/\s+/g, "").includes(mentionQuery))
+        .slice(0, 6)
+    : [];
 
   function fmtTime(iso) {
     if (!iso) return "";
@@ -226,10 +296,49 @@ export default function ChatTab() {
           </div>
         ) : messages.map((m) => {
           if (m.system) {
+            const isMech = !!m.mechanical;
+            const mapsLink = m.mechanical?.maps_link;
             return (
               <div key={m.id} className="text-center py-1" data-testid={`msg-${m.id}`}>
-                <div className="inline-block bg-neutral-100 text-neutral-600 text-[11px] px-3 py-1 rounded-full">
-                  {m.text}
+                {isMech ? (
+                  <div className="inline-block max-w-[92%] bg-status-cant/10 border border-status-cant/30 text-status-cant text-[12px] px-4 py-2 rounded-2xl text-left" data-testid={`mechanical-${m.id}`}>
+                    <div className="font-black uppercase tracking-widest text-[10px] mb-0.5 inline-flex items-center gap-1">
+                      <Wrench className="w-3 h-3" /> Mechanical alert
+                    </div>
+                    <div className="text-neutral-800 text-[12.5px] leading-snug">{m.text}</div>
+                    {mapsLink && (
+                      <a
+                        href={mapsLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1.5 inline-block text-[11px] font-bold underline underline-offset-2 text-status-cant"
+                        data-testid={`mechanical-map-${m.id}`}
+                      >
+                        Open in Google Maps ↗
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <div className="inline-block bg-neutral-100 text-neutral-600 text-[11px] px-3 py-1 rounded-full">
+                    {m.text}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          if (m.announcement) {
+            return (
+              <div key={m.id} className="py-1.5" data-testid={`msg-${m.id}`}>
+                <div className="bg-brand-accent/15 border border-brand-accent/40 rounded-2xl px-4 py-2.5" data-testid={`announcement-${m.id}`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Megaphone className="w-3.5 h-3.5 text-neutral-900" />
+                    <span className="font-black text-[10px] uppercase tracking-widest text-neutral-900">
+                      El Prez · {m.name} · {fmtTime(m.created_at)}
+                    </span>
+                  </div>
+                  <div className="text-sm text-neutral-900 font-semibold leading-snug whitespace-pre-wrap break-words">
+                    {m.text}
+                  </div>
                 </div>
               </div>
             );
@@ -278,24 +387,81 @@ export default function ChatTab() {
       {reportMessage && <ReportSheet message={reportMessage} onClose={() => setReportMessage(null)} />}
 
       {/* Input */}
-      <div className="px-3 py-3 border-t border-neutral-200 bg-neutral-50 flex items-center gap-2">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !isPending && send()}
-          placeholder={isPending ? "Awaiting admin approval to post…" : "Message the peloton — @mention a rider"}
-          disabled={isPending}
-          className="flex-1 bg-white border border-neutral-300 rounded-full px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#007AFF] disabled:bg-neutral-100 disabled:text-neutral-400 disabled:cursor-not-allowed"
-          data-testid="chat-input"
-        />
-        <button
-          onClick={send}
-          disabled={isPending}
-          className="w-11 h-11 rounded-full bg-[#007AFF] text-white flex items-center justify-center active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-          data-testid="chat-send"
-        >
-          <Send className="w-4 h-4" />
-        </button>
+      <div className="border-t border-neutral-200 bg-neutral-50">
+        {filteredMentions.length > 0 && (
+          <div
+            className="max-h-40 overflow-y-auto no-scrollbar bg-white border-b border-neutral-200 shadow-sm"
+            data-testid="chat-mention-picker"
+          >
+            {filteredMentions.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => pickMention(r)}
+                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-neutral-50 active:bg-neutral-100 text-left"
+                data-testid={`chat-mention-${r.id}`}
+              >
+                <AtSign className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="text-sm font-bold text-neutral-900">{r.name}</span>
+                <span className="text-[11px] text-neutral-500 uppercase tracking-widest ml-auto">
+                  {r.role || "Member"}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="px-3 pt-2 flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={sendMechanical}
+            disabled={isPending || mechanicalBusy}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-bold border border-status-cant text-status-cant hover:bg-status-cant/10 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="chat-mechanical-btn"
+          >
+            <Wrench className="w-3.5 h-3.5" /> {mechanicalBusy ? "Sending…" : "I've a mechanical"}
+          </button>
+          {user.is_president && (
+            <button
+              type="button"
+              onClick={() => setAnnouncement((v) => !v)}
+              disabled={isPending}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-bold border active:scale-95 ${announcement ? "bg-brand-accent text-black border-brand-accent" : "border-neutral-300 text-neutral-700 hover:bg-neutral-100"}`}
+              data-testid="chat-announce-btn"
+              aria-pressed={announcement}
+            >
+              <Megaphone className="w-3.5 h-3.5" /> {announcement ? "Announcement ON" : "Announce"}
+            </button>
+          )}
+        </div>
+        <div className="px-3 py-3 flex items-center gap-2">
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={onTextChange}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setMentionQuery(null);
+              if (e.key === "Enter" && !isPending) send();
+            }}
+            placeholder={
+              isPending
+                ? "Awaiting admin approval to post…"
+                : announcement
+                ? "Post an announcement — everyone gets a push"
+                : "Message the peloton — @mention a rider"
+            }
+            disabled={isPending}
+            className={`flex-1 border rounded-full px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-400 disabled:cursor-not-allowed ${announcement ? "bg-brand-accent/10 border-brand-accent focus:border-brand-accent" : "bg-white border-neutral-300 focus:border-[#007AFF]"}`}
+            data-testid="chat-input"
+          />
+          <button
+            onClick={send}
+            disabled={isPending}
+            className={`w-11 h-11 rounded-full text-white flex items-center justify-center active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${announcement ? "bg-black" : "bg-[#007AFF]"}`}
+            data-testid="chat-send"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -20,8 +20,10 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Used to take a photo for your rider profile.",
         "NSPhotoLibraryUsageDescription": "Used to pick a profile photo from your library.",
+        "NSLocationWhenInUseUsageDescription": "Used to share your location when you report a mechanical during a ride so the peloton can find you.",
         "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": false },
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["remote-notification"]
       },
       "associatedDomains": ["applinks:greylynncc.com"]
     },

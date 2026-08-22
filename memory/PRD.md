@@ -125,9 +125,15 @@ See `/app/memory/test_credentials.md`.
     - Admin-only `DELETE /api/chat/messages` endpoint + WS `chat.cleared` broadcast.
     - ChatTab "Wipe now" button + "Messages auto-clear after 7 days" hint.
   - **Phase 5.7 (Feb 2026): DONE** — Café Rules admin on native mobile:
-    - New `/app/mobile/src/components/CafeRulesAdmin.js` mirrors the web version — collapsible admin-only block on the Riders tab with filter, inline edit, add-new, delete. Uses the same `/api/admin/cafe-rules` endpoints.
-    - Both babel-parses clean under the Expo preset.
-    - JB can now add, edit or delete café rules from his phone.
+    - New `/app/mobile/src/components/CafeRulesAdmin.js` mirrors the web version.
+  - **Phase 5.8 (Feb 2026): DONE** — Chat push, El Prez announcements, @mentions, mechanical alert, 1-hour ride reminder, and lock-screen push:
+    - Backend: `ChatMessageIn.announcement` — only accepted from is_president. Announcements push to all riders via `push_to_all_except`.
+    - Backend: `POST /api/chat/mechanical` — accepts optional lat/lng, creates a system chat message with a Google Maps link, broadcasts push to everyone except the reporter.
+    - Backend: `send_pending_ride_1h_pushes` + 10-min loop — every ride starting in 55-90 min gets a "starts in 1h" push per RSVP=going rider with weather + cafe. Idempotent via `hour_reminder_sent_at`.
+    - Backend: Expo push payload now includes `priority: high`, `channelId: default`, `_contentAvailable: True`, `interruptionLevel: active` — required for iOS 15+ lock-screen banners and Android heads-up on lock screen.
+    - Mobile push.js: notification handler upgraded to Expo SDK 52+ API (`shouldShowBanner`, `shouldShowList`); Android channel bumped to `MAX` importance + `PUBLIC` lockscreen visibility.
+    - Mobile app.json: added `UIBackgroundModes: ["remote-notification"]` (silent-push wake), `NSLocationWhenInUseUsageDescription` (mechanical alert).
+    - Web ChatTab: @mention picker (dropdown of matching approved riders), El Prez Announcement toggle (megaphone icon, yellow banner rendering), Mechanical button (geolocation → red mechanical card with "Open in Google Maps" link).
     - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
     - Same fix applies to every approved rider — anyone can now update their own avatar.
     - Verified: only `is_president=True` can promote/demote admins (`make_admin`/`remove_admin` returns 403 for non-president admins — pre-existing correct behaviour).
