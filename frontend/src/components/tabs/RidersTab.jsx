@@ -466,7 +466,14 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
               onClick={async () => {
                 try {
                   const { data } = await api.post("/push/test");
-                  toast(data.ok ? `Test push sent to ${data.sent} device${data.sent === 1 ? "" : "s"} · check lock screen` : "No registered devices — open the app on your phone first");
+                  if (data.ok) {
+                    toast(`Test push sent to ${data.sent} device${data.sent === 1 ? "" : "s"} · check lock screen`);
+                  } else {
+                    toast("No registered devices yet", {
+                      description: "Push tokens come from the native GLCC app on iOS/Android. Install the app from TestFlight, open it, allow notifications — then this button will work.",
+                      duration: 8000,
+                    });
+                  }
                 } catch (e) {
                   toast.error(formatDetail(e));
                 }

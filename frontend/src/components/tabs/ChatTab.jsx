@@ -89,6 +89,8 @@ export default function ChatTab() {
   const [riders, setRiders] = useState([]);
   const [mentionQuery, setMentionQuery] = useState(null); // null when picker closed, else the token after "@"
   const [mechanicalBusy, setMechanicalBusy] = useState(false);
+  const [mechanicalOpen, setMechanicalOpen] = useState(false);
+  const [mechanicalStatus, setMechanicalStatus] = useState("");
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
   const isPending = user.status === "pending";
