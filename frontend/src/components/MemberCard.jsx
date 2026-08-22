@@ -19,8 +19,9 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
   const firstName = (rider.name || "").trim().split(/\s+/)[0] || "";
   const displayName = `${firstName.toUpperCase()} ${shortLast.toUpperCase()}.`;
   const memberNo = rider.member_no != null ? String(rider.member_no).padStart(4, "0") : "—";
-  const joinedLabel = rider.created_at
-    ? new Date(rider.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+  const joinedSource = rider.member_since || rider.created_at;
+  const joinedLabel = joinedSource
+    ? new Date(joinedSource).toLocaleDateString(undefined, { month: "short", year: "numeric" })
     : "—";
 
   return (
@@ -105,25 +106,25 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
         {/* Meta rows */}
         <div className="grid grid-cols-2 gap-3 px-5 pb-10 pt-2">
           <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/40">Member No.</div>
+            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Member No.</div>
             <div className="font-heading text-2xl font-black tabular-nums text-white mt-1">#{memberNo}</div>
           </div>
           <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/40">Role</div>
+            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Role</div>
             <div className="font-heading text-sm font-bold uppercase text-white mt-1 leading-tight truncate">
               {rider.is_president ? "El Presidente" : rider.role || "Member"}
             </div>
           </div>
           <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/40">Since</div>
+            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Since</div>
             <div className="font-heading text-sm font-bold uppercase text-white mt-1 leading-tight" data-testid="member-card-since">{joinedLabel}</div>
           </div>
           <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/40">Chapter</div>
+            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Chapter</div>
             <div className="font-heading text-sm font-bold uppercase text-white mt-1 leading-tight">Grey Lynn</div>
           </div>
           <div className="rounded-xl bg-white/5 border border-white/10 p-3 col-span-2">
-            <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/40">Coffee</div>
+            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Coffee</div>
             <div className="text-sm text-white mt-1">{rider.coffee || "—"}</div>
           </div>
           {onEditProfile && (

@@ -73,11 +73,25 @@ export default function ChatTab() {
       if (evt.type === "chat.message" && evt.message) {
         setMessages((prev) => (prev.some((m) => m.id === evt.message.id) ? prev : [...prev, evt.message]));
       }
+      if (evt.type === "chat.updated" && evt.message) {
+        setMessages((prev) => prev.map((m) => (m.id === evt.message.id ? evt.message : m)));
+      }
       if (evt.type === "chat.deleted" && evt.message_id) {
         setMessages((prev) => prev.filter((m) => m.id !== evt.message_id));
       }
     });
   }, [subscribe, isPending]);
+
+  async function resolveMechanical(messageId, status) {
+    try {
+      const { data } = await api.post(`/chat/mechanical/${messageId}/resolve`, { status });
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === messageId ? data.resolved : m));
+        if (!next.some((m) => m.id === data.followup.id)) next.push(data.followup);
+        return next;
+      });
+    } catch (e) { Alert.alert("Mechanical", formatDetail(e)); }
+  }
 
   async function send() {
     const t = text.trim();
@@ -230,21 +244,48 @@ export default function ChatTab() {
               const mech = m.mechanical;
               if (mech) {
                 const openMap = mech.maps_link ? () => Linking.openURL(mech.maps_link) : null;
+                const resolved = !!m.resolved;
+                const canClear = !resolved && (m.user_id === user?.id || user?.is_admin);
                 return (
-                  <TouchableOpacity
-                    key={m.id}
-                    activeOpacity={openMap ? 0.7 : 1}
-                    onPress={openMap || undefined}
-                    style={s.mechanicalCard}
-                    testID={`mechanical-${m.id}`}
-                    accessibilityRole={openMap ? "button" : undefined}
-                  >
-                    <Text style={s.mechanicalEyebrow}>🔧 MECHANICAL ALERT</Text>
-                    <Text style={s.mechanicalText}>{m.text}</Text>
-                    {mech.maps_link && (
-                      <Text style={s.mechanicalLink} testID={`mechanical-map-${m.id}`}>Open in Google Maps ↗</Text>
+                  <View key={m.id} style={{ alignItems: "center" }} testID={`mechanical-${m.id}`}>
+                    <TouchableOpacity
+                      activeOpacity={openMap && !resolved ? 0.7 : 1}
+                      onPress={!resolved ? (openMap || undefined) : undefined}
+                      style={[s.mechanicalCard, resolved && s.mechanicalCardResolved]}
+                      accessibilityRole={openMap && !resolved ? "button" : undefined}
+                    >
+                      <Text style={[s.mechanicalEyebrow, resolved && s.mechanicalEyebrowResolved]}>
+                        🔧 {resolved ? "MECHANICAL · RESOLVED" : "MECHANICAL ALERT"}
+                      </Text>
+                      <Text style={[s.mechanicalText, resolved && s.mechanicalTextResolved]}>{m.text}</Text>
+                      {mech.maps_link && !resolved && (
+                        <Text style={s.mechanicalLink} testID={`mechanical-map-${m.id}`}>Open in Google Maps ↗</Text>
+                      )}
+                      {resolved && m.resolution && (
+                        <Text style={s.mechanicalResolutionMeta} testID={`mechanical-resolution-${m.id}`}>
+                          {m.resolution.status === "fixed" ? "FIXED" : "CARRYING ON"} · BY {String(m.resolution.by_name || "").toUpperCase()}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                    {canClear && (
+                      <View style={s.mechClearRow} testID={`mechanical-clear-${m.id}`}>
+                        <TouchableOpacity
+                          onPress={() => resolveMechanical(m.id, "fixed")}
+                          style={s.mechFixedBtn}
+                          testID={`mechanical-fixed-${m.id}`}
+                        >
+                          <Text style={s.mechFixedTxt}>✅ FIXED, ON MY WAY</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => resolveMechanical(m.id, "carry_on")}
+                          style={s.mechCarryBtn}
+                          testID={`mechanical-carry-${m.id}`}
+                        >
+                          <Text style={s.mechCarryTxt}>🚴 CARRY ON</Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
-                  </TouchableOpacity>
+                  </View>
                 );
               }
               return (
@@ -397,9 +438,18 @@ const s = StyleSheet.create({
   announcementEyebrow: { color: "#111", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
   announcementText: { color: "#111", fontSize: 14, fontWeight: "600", lineHeight: 19 },
   mechanicalCard: { marginHorizontal: 6, marginVertical: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" },
+  mechanicalCardResolved: { backgroundColor: "#f4f4f5", borderColor: "#d4d4d8" },
   mechanicalEyebrow: { color: "#dc2626", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
+  mechanicalEyebrowResolved: { color: "#71717a" },
   mechanicalText: { color: "#111", fontSize: 13, lineHeight: 18 },
+  mechanicalTextResolved: { color: "#71717a", textDecorationLine: "line-through", textDecorationColor: "#a1a1aa" },
   mechanicalLink: { color: "#dc2626", fontSize: 12, fontWeight: "900", textDecorationLine: "underline", marginTop: 6 },
+  mechanicalResolutionMeta: { color: "#71717a", fontSize: 10, fontWeight: "700", letterSpacing: 2, marginTop: 6 },
+  mechClearRow: { flexDirection: "row", gap: 6, marginHorizontal: 6, marginTop: 2, marginBottom: 6, alignSelf: "stretch" },
+  mechFixedBtn: { flex: 1, backgroundColor: "rgba(34,197,94,0.15)", borderColor: "rgba(34,197,94,0.4)", borderWidth: 1, borderRadius: 12, paddingVertical: 8, alignItems: "center" },
+  mechFixedTxt: { color: "#16a34a", fontSize: 11, fontWeight: "900", letterSpacing: 1.5 },
+  mechCarryBtn: { flex: 1, backgroundColor: "#f4f4f5", borderColor: "#d4d4d8", borderWidth: 1, borderRadius: 12, paddingVertical: 8, alignItems: "center" },
+  mechCarryTxt: { color: "#3f3f46", fontSize: 11, fontWeight: "900", letterSpacing: 1.5 },
 
   locked: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, minHeight: 300 },
   lockedEyebrow: { color: "#999", letterSpacing: 3, fontSize: 10, fontWeight: "700" },

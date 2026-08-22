@@ -182,8 +182,16 @@ See `/app/memory/test_credentials.md`.
 - Added a two-step "Are you sure you want to delete this rider?" modal that gates the admin `admin-delete` action on both web and mobile.
 - Web (`RidersTab.jsx`): new `confirmDeleteRider` state + destructive overlay with `data-testid="confirm-delete-rider"`, `confirm-delete-cancel`, `confirm-delete-yes`. Overlay stacks on top of the ProfileModal (z-40) and shows the rider's name inline.
 - Mobile (`RidersTab.js`): `Alert.alert("Delete rider?", …)` with `destructive` Yes / `cancel` Cancel actions.
-- Verified via testing_agent (iteration_14) — 100% (4/4 scenarios): cancel keeps rider, confirm removes rider + closes both modals, president has no admin-delete button on self, all other admin actions (make/remove admin, send-reset-link) still work.
-- Fixed the oxlint pre-completion blocker: added `/app/.oxlintrc.json` + `/app/.oxlintignore` at the workspace root so `**/node_modules/**` is ignored during the emergent pre-check.
+- Verified via testing_agent (iteration_14) — 100% (4/4 scenarios).
+
+## Session Feb 22, 2026 — Mechanical Clear + Rider Card Fixes
+- **Clear own mechanical**: sender OR any admin can tap "Fixed, on my way" ✅ or "Carry on without me" 🚴 under a live mechanical card. Posts a follow-up chat bubble attributed to the original reporter and mutes the original card (grey background, strike-through body, "Mechanical · Resolved" eyebrow, resolution meta line).
+- **Backend**: `POST /api/chat/mechanical/{message_id}/resolve` body `{status: 'fixed'|'carry_on'}`. Auth: reporter or admin. Broadcasts `chat.updated` (muted original) + `chat.message` (follow-up). Serializer now emits `resolved`, `resolution`. Rejects double-resolve (400) and unauthorised (403). Regression tests at `/app/backend/tests/test_mechanical_resolve.py`.
+- **Web/Native ChatTab**: subscribes to `chat.updated` to restyle original in place. New buttons `mechanical-clear-<id>`, `mechanical-fixed-<id>`, `mechanical-carry-<id>` only render for sender + admin.
+- **Member Card Since**: card now reads `rider.member_since || rider.created_at`, so editing the "Member since" date on profile propagates instantly to the card (web + native).
+- **Member Card contrast**: meta grid labels (Since, Coffee, Role, Number, Chapter) bumped from `text-white/40` to `text-white/75` (web) and `rgba(255,255,255,0.4)` → `0.75` (native). Border also lifted for legibility.
+- **Swipe-back on Ride detail**: right-swipe > 65 px anywhere on the ride-detail view returns to the rides list. Web uses inline touch listeners; native uses `PanResponder` that only claims the gesture when clearly horizontal (`dx > 12 && |dx| > 1.6 * |dy|`). "Back to Rides · swipe →" hint added to the button (now visible on mobile after post-test fix).
+- Verified via testing_agent (iteration_15) — backend 4/4 pytest + frontend 5/5 scenarios PASS.
 
 ## Latest Verified Test Report
-`/app/test_reports/iteration_14.json` — 4/4 frontend delete-confirmation scenarios green. Previous iteration_13 (5-item UI batch), iteration_12 (mechanical maps fix), iteration_11 (web push) also 100%.
+`/app/test_reports/iteration_15.json` — mechanical resolve, member-since propagation, card contrast and swipe-back-to-rides all green.

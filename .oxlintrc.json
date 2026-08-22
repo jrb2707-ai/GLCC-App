@@ -1,28 +1,9 @@
 {
   "ignorePatterns": [
     "**/node_modules/**",
-    "frontend/node_modules/**",
-    "mobile/node_modules/**",
-    "backend/**",
     "**/build/**",
     "**/dist/**",
     "**/.expo/**",
-    "**/coverage/**",
-    "frontend/public/sw.js"
-  ],
-  "env": {
-    "browser": true,
-    "node": true,
-    "es2022": true,
-    "worker": true,
-    "serviceworker": true
-  },
-  "globals": {
-    "chrome": "readonly",
-    "self": "readonly",
-    "window": "readonly",
-    "document": "readonly",
-    "navigator": "readonly",
-    "location": "readonly"
-  }
+    "**/coverage/**"
+  ]
 }

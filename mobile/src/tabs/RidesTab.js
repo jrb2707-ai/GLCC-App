@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, PanResponder,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
@@ -122,16 +122,29 @@ export default function RidesTab() {
 
   const open = rides.find((r) => r.id === openId);
 
+  // Swipe-right anywhere on the ride-detail view returns to the rides list.
+  // Only claims the gesture when the drag is clearly horizontal (>1.6x
+  // vertical) and >12px to avoid stealing vertical scroll.
+  const detailPan = PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, g) => open && g.dx > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+    onPanResponderRelease: (_, g) => {
+      if (g.dx > 65 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6) setOpenId(null);
+    },
+    onPanResponderTerminate: () => {},
+  });
+
   if (open) {
     const myRsvp = open.rsvps?.[user?.id];
     const going = goingList(open, riders);
     return (
+      <View style={{ flex: 1 }} {...detailPan.panHandlers}>
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.bgPrimary }}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 64 }}
       >
         <TouchableOpacity onPress={() => setOpenId(null)} style={s.backBtn} testID="ride-back">
-          <Text style={s.backTxt}>← BACK TO RIDES</Text>
+          <Text style={s.backTxt}>← BACK TO RIDES <Text style={s.backHint}>· SWIPE →</Text></Text>
         </TouchableOpacity>
 
         <Text style={s.detailEyebrow}>{[open.day, open.date, open.time].filter(Boolean).join(" · ") || "TBC"}</Text>
@@ -215,6 +228,7 @@ export default function RidesTab() {
           ))}
         </View>
       </ScrollView>
+      </View>
     );
   }
 
@@ -313,6 +327,7 @@ const s = StyleSheet.create({
   // Detail
   backBtn: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.bgSecondary, borderWidth: 1, borderColor: colors.borderSubtle, marginBottom: 12 },
   backTxt: { color: colors.textPrimary, fontSize: 11, letterSpacing: 3, fontWeight: "700" },
+  backHint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700" },
   detailEyebrow: { color: colors.accentVolt, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   detailTitle: { color: colors.textPrimary, fontSize: 26, fontWeight: "900", letterSpacing: -0.5, textTransform: "uppercase", marginTop: 4 },
   detailRoute: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },

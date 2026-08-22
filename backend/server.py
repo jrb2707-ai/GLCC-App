@@ -146,6 +146,9 @@ def serialize_round(doc: dict) -> dict:
     }
 
 def serialize_message(doc: dict) -> dict:
+    resolution = doc.get("resolution")
+    if resolution and isinstance(resolution.get("at"), datetime):
+        resolution = {**resolution, "at": resolution["at"].isoformat()}
     return {
         "id": str(doc["_id"]),
         "user_id": doc.get("user_id"),
@@ -154,6 +157,8 @@ def serialize_message(doc: dict) -> dict:
         "system": doc.get("system", False),
         "announcement": doc.get("announcement", False),
         "mechanical": doc.get("mechanical") or None,
+        "resolved": bool(doc.get("resolved", False)),
+        "resolution": resolution,
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
     }
 
@@ -960,6 +965,10 @@ class MechanicalIn(BaseModel):
     lng: Optional[float] = None
     text: Optional[str] = Field(default=None, max_length=200)
     ride_id: Optional[str] = None
+
+
+class MechanicalResolveIn(BaseModel):
+    status: str = Field(pattern="^(fixed|carry_on)$")
 
 class PushRegisterIn(BaseModel):
     expo_push_token: str = Field(min_length=20)
@@ -2080,6 +2089,66 @@ async def report_mechanical(body: MechanicalIn, user: dict = Depends(require_app
         },
     ))
     return payload
+
+
+@api.post("/chat/mechanical/{message_id}/resolve")
+async def resolve_mechanical(message_id: str, body: MechanicalResolveIn, user: dict = Depends(require_approved)):
+    """Mark a mechanical alert as resolved. Only the original reporter or an
+    admin can resolve. Posts a follow-up chat message ("Fixed, on my way" or
+    "Carry on without me") from the reporter and broadcasts the updated
+    (muted) original message so clients stop showing the pulsing red state."""
+    try:
+        oid = ObjectId(message_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid message id")
+    msg = await db.messages.find_one({"_id": oid})
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if not msg.get("mechanical"):
+        raise HTTPException(status_code=400, detail="Not a mechanical alert")
+    is_reporter = str(msg.get("user_id")) == str(user["_id"])
+    if not is_reporter and not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only the reporter or an admin can resolve this")
+    if msg.get("resolved"):
+        raise HTTPException(status_code=400, detail="Already resolved")
+
+    now = now_utc()
+    resolution = {
+        "status": body.status,
+        "by_user_id": str(user["_id"]),
+        "by_name": user.get("name"),
+        "at": now,
+    }
+    await db.messages.update_one(
+        {"_id": oid},
+        {"$set": {"resolved": True, "resolution": resolution}},
+    )
+    # Broadcast the updated original so cards restyle everywhere
+    updated = await db.messages.find_one({"_id": oid})
+    updated_payload = serialize_message(updated)
+    await manager.broadcast({"type": "chat.updated", "message": updated_payload})
+
+    # Post the follow-up message. Attributed to the ORIGINAL reporter (so the
+    # bubble reads as if from them) — even when an admin resolves on their
+    # behalf. If an admin resolves, the resolution.by_name still records who
+    # actually pressed the button.
+    reporter_id = str(msg.get("user_id"))
+    reporter_name = msg.get("name") or user.get("name")
+    follow_text = "✅ Fixed — on my way." if body.status == "fixed" else "🚴 Carry on without me."
+    follow_doc = {
+        "user_id": reporter_id,
+        "name": reporter_name,
+        "text": follow_text,
+        "system": False,
+        "announcement": False,
+        "created_at": now,
+        "mechanical_followup_of": str(oid),
+    }
+    r = await db.messages.insert_one(follow_doc)
+    follow_doc["_id"] = r.inserted_id
+    follow_payload = serialize_message(follow_doc)
+    await manager.broadcast({"type": "chat.message", "message": follow_payload})
+    return {"resolved": updated_payload, "followup": follow_payload}
 
 
 # ---------- Moderation (Apple Guideline 1.2) ----------

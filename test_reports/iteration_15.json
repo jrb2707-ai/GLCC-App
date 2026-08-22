@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 15: verified the four shipped items — (1) mechanical resolve (Fixed / Carry on) chat flow, (2) Member Since propagates to Member Card, (3) Member Card meta-label contrast bumped to rgba(255,255,255,0.75), (4) swipe-right on ride-detail returns to rides list. Backend: 4/4 pytest pass covering reporter self-resolve+404/400/403 permissions and admin-carry-on attributed to reporter. Frontend: end-to-end verified on mobile viewport 390x844 as El Prez (jb@glcc.club).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "RideDetail (RidesTab.jsx line 164)",
+        "issues": [
+          "The new '· swipe →' hint next to 'Back to Rides' is wrapped in 'hidden sm:inline', so on the mobile viewport (390px) it is display:none. The swipe gesture itself works, but the on-screen affordance the review request asked for is NOT visible to actual mobile users. Consider removing the 'hidden sm:inline' or replacing with 'sm:inline' visibility that still shows on mobile."
+        ]
+      }
+    ]
+  },
+  "test_results": {
+    "backend_resolve_reporter_fixed": "PASS - resolved.resolved=true, resolution.status='fixed', by_name present; followup.text starts with '✅ Fixed'; followup.user_id === reporter; followup.system=false. GET /api/chat/messages includes muted original (resolved=true) + follow-up bubble.",
+    "backend_double_resolve_400": "PASS - second resolve on same id returns 400 'Already resolved'.",
+    "backend_non_reporter_non_admin_403": "PASS - sam trying to resolve mika's mechanical returns 403.",
+    "backend_admin_carry_on_attrib_to_reporter": "PASS - admin (jb) resolving sam's mechanical produces follow-up starting with '🚴 Carry on', followup.user_id === sam's id, resolution.by_name === admin name.",
+    "backend_invalid_message_id": "PASS - invalid ObjectId returns 400.",
+    "frontend_mechanical_fixed_e2e": "PASS - jb sends mechanical (no location), mechanical-clear-<id> row shows both mechanical-fixed-<id> and mechanical-carry-<id> buttons; tapping Fixed removes clear row, applies muted styling (text-neutral-500) with strikethrough on body, shows 'Mechanical · Resolved' eyebrow and 'Fixed · by Jason Bryant' resolution line; '✅ Fixed — on my way.' follow-up bubble appears in chat.",
+    "frontend_member_since_propagation": "PASS - Set member_since to 2019-01-15 in ProfileModal, saved, reopened profile -> VIEW MEMBER CARD -> data-testid='member-card-since' reads 'Jan 2019'.",
+    "frontend_member_card_contrast_self": "PASS - all five meta labels (Member No., Role, Since, Chapter, Coffee) computed color rgba(255,255,255,0.75).",
+    "frontend_member_card_contrast_other": "PASS - same verified for a non-self rider (Graeme Bean).",
+    "frontend_swipe_right_ride_detail": "PASS - CDP touch swipe from x=+50 to x=+280 across ride-detail closes it and restores rides-list. Swipe hint span exists in DOM but hidden at 390px (see design_issues)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mechanical_resolve.py",
+    "/app/test_reports/pytest/mechanical_resolve.xml"
+  ],
+  "action_items": [
+    "Optional: remove 'hidden sm:inline' from the '· swipe →' hint in RidesTab.jsx (line 164) so the affordance is visible on mobile viewports; otherwise the on-screen hint promised in the review request is invisible to mobile users."
+  ],
+  "critical_code_review_comments": [
+    "resolve_mechanical (server.py:2094-2151) correctly enforces reporter-or-admin, blocks double resolve, broadcasts chat.updated + chat.message, and attributes follow-up to the original reporter while retaining admin identity in resolution.by_name. Solid design.",
+    "ChatTab.jsx canClear guard `m.user_id === user.id || user.is_admin` matches backend permission model — no client-side leakage of the buttons to unauthorized viewers.",
+    "MemberCard.jsx joinedSource uses `rider.member_since || rider.created_at` which is correct fallback; MemberCard testid `member-card-since` reflects the new value.",
+    "RidesTab.jsx swipe uses threshold dx>65 AND |dx| > 1.6*|dy| — sane, avoids conflict with vertical scroll. But the visible hint is hidden on the exact viewport the app targets (mobile).",
+    "Roster note: sam@glcc.club, mika@glcc.club, aroha@glcc.club, leo@glcc.club are all missing from the preview DB roster shown in RidersTab (only 15 seed users, none of those emails). Backend tests re-register + admin-approve on the fly and pass, but any future manual tester should be aware seed drift persists from iteration_14."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mechanical_resolve.py (new)"
+  ],
+  "success_rate": { "backend": "100% (4/4 pytest)", "frontend": "100% (5/5 scenarios)" },
+  "test_credentials": "jb@glcc.club / Roenick2707 (El Prez, admin). sam/mika re-registered by backend test fixture using cycle123. Frontend UI test used only jb because the sam/mika/admin visibility permutations are already fully covered by backend permission tests (403 for non-reporter non-admin, 200 for admin attributed to reporter).",
+  "seed_data_creation": "Backend test auto-registered/approved sam@glcc.club and mika@glcc.club with password cycle123 if missing. Jason's member_since was updated to 2019-01-15 as part of the frontend flow (visible artifact — main agent may want to restore to a realistic date).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New endpoint POST /api/chat/mechanical/{id}/resolve is stable; regression file at /app/backend/tests/test_mechanical_resolve.py. Frontend ChatTab renders mechanical-clear-<id> / mechanical-fixed-<id> / mechanical-carry-<id> exactly as spec'd. Only outstanding cosmetic item: the '· swipe →' hint uses `hidden sm:inline` and is invisible on the app's actual mobile viewport."
+}

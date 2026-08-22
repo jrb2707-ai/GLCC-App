@@ -125,11 +125,35 @@ export default function RidesTab({ onNavigate }) {
 
   const open = rides.find((r) => r.id === openId);
 
+  // Swipe-right anywhere on the ride-detail view returns to the rides list.
+  // Uses touch events so it doesn't conflict with vertical scroll or with
+  // HomeShell's tab-swipe (which no-ops when already on the first tab).
+  const detailSwipe = React.useRef({ x: 0, y: 0, active: false });
+  const onDetailTouchStart = (e) => {
+    const t = e.touches[0];
+    detailSwipe.current = { x: t.clientX, y: t.clientY, active: true };
+  };
+  const onDetailTouchEnd = (e) => {
+    if (!detailSwipe.current.active) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - detailSwipe.current.x;
+    const dy = t.clientY - detailSwipe.current.y;
+    detailSwipe.current.active = false;
+    if (dx > 65 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      setOpenId(null);
+    }
+  };
+
   if (open) {
     const myRsvp = open.rsvps?.[user.id];
     const going = goingList(open, riders);
     return (
-      <div className="px-5 pt-4 pb-8" data-testid="ride-detail">
+      <div
+        className="px-5 pt-4 pb-8"
+        data-testid="ride-detail"
+        onTouchStart={onDetailTouchStart}
+        onTouchEnd={onDetailTouchEnd}
+      >
         <button
           onClick={() => setOpenId(null)}
           className="inline-flex items-center gap-1.5 mb-4 px-3 py-2 rounded-full bg-bg-secondary border border-border-subtle text-text-primary hover:border-accent-strava/50 active:scale-95 transition"
@@ -137,6 +161,7 @@ export default function RidesTab({ onNavigate }) {
         >
           <ArrowLeft className="w-4 h-4" />
           <span className="text-xs uppercase tracking-widest font-bold">Back to Rides</span>
+          <span className="text-[10px] text-text-muted font-mono-stat tracking-widest ml-1">· swipe →</span>
         </button>
         <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-brand-accent">
           {open.day} · {open.date} · {open.time}

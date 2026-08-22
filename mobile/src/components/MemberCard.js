@@ -14,8 +14,9 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
   const shortLast = (rider.name || "").trim().split(/\s+/).slice(-1)[0]?.[0] || "";
   const displayName = `${firstName.toUpperCase()} ${shortLast.toUpperCase()}.`;
   const memberNo = rider.member_no != null ? pad4(rider.member_no) : "—";
-  const joinedLabel = rider.created_at
-    ? new Date(rider.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+  const joinedSource = rider.member_since || rider.created_at;
+  const joinedLabel = joinedSource
+    ? new Date(joinedSource).toLocaleDateString(undefined, { month: "short", year: "numeric" })
     : "—";
 
   const cardWidth = Math.min(280, width * 0.72);
@@ -159,8 +160,8 @@ const s = StyleSheet.create({
   cardFooterChapter: { fontSize: 13, fontWeight: "900", color: "#000", marginTop: 2, letterSpacing: -0.3 },
 
   metaGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20, gap: 12 },
-  metaCell: { width: "47%", borderRadius: radius.md, backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", padding: 12 },
-  metaLabel: { color: "rgba(255,255,255,0.4)", fontSize: 9, letterSpacing: 3, fontWeight: "700" },
+  metaCell: { width: "47%", borderRadius: radius.md, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", padding: 12 },
+  metaLabel: { color: "rgba(255,255,255,0.75)", fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   metaValue: { color: "#fff", fontSize: 14, fontWeight: "700", marginTop: 4, textTransform: "uppercase" },
 
   editBtn: { width: "100%", backgroundColor: colors.accentVolt, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", marginTop: 8 },

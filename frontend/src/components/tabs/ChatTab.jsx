@@ -119,6 +119,9 @@ export default function ChatTab() {
       if (evt.type === "chat.message") {
         setMessages((prev) => (prev.find((m) => m.id === evt.message.id) ? prev : [...prev, evt.message]));
       }
+      if (evt.type === "chat.updated") {
+        setMessages((prev) => prev.map((m) => (m.id === evt.message.id ? evt.message : m)));
+      }
       if (evt.type === "chat.deleted") {
         setMessages((prev) => prev.filter((m) => m.id !== evt.message_id));
       }
@@ -198,6 +201,20 @@ export default function ChatTab() {
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
     );
+  }
+
+  async function resolveMechanical(messageId, status) {
+    try {
+      const { data } = await api.post(`/chat/mechanical/${messageId}/resolve`, { status });
+      // Optimistically apply — WS will also arrive and dedupe.
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === messageId ? data.resolved : m));
+        if (!next.find((m) => m.id === data.followup.id)) next.push(data.followup);
+        return next;
+      });
+    } catch (e) {
+      toast.error(formatDetail(e));
+    }
   }
 
   // Update mention query as the user types "@..."
@@ -305,26 +322,58 @@ export default function ChatTab() {
           if (m.system) {
             const isMech = !!m.mechanical;
             const mapsLink = m.mechanical?.maps_link;
+            const resolved = !!m.resolved;
+            const canClear = isMech && !resolved && (m.user_id === user.id || user.is_admin);
             return (
               <div key={m.id} className="text-center py-1" data-testid={`msg-${m.id}`}>
                 {isMech ? (
-                  <a
-                    href={mapsLink || undefined}
-                    target={mapsLink ? "_blank" : undefined}
-                    rel={mapsLink ? "noreferrer" : undefined}
-                    className={`inline-block max-w-[92%] bg-status-cant/10 border border-status-cant/30 text-status-cant text-[12px] px-4 py-2 rounded-2xl text-left ${mapsLink ? "active:scale-[0.98] hover:bg-status-cant/15" : "cursor-default"}`}
-                    data-testid={`mechanical-${m.id}`}
-                  >
-                    <div className="font-black uppercase tracking-widest text-[10px] mb-0.5 inline-flex items-center gap-1">
-                      <Wrench className="w-3 h-3" /> Mechanical alert
-                    </div>
-                    <div className="text-neutral-800 text-[12.5px] leading-snug">{m.text}</div>
-                    {mapsLink && (
-                      <div className="mt-1.5 text-[11px] font-bold underline underline-offset-2 text-status-cant" data-testid={`mechanical-map-${m.id}`}>
-                        Open in Google Maps ↗
+                  <div className="inline-block max-w-[92%] text-left" data-testid={`mechanical-${m.id}`}>
+                    <a
+                      href={mapsLink || undefined}
+                      target={mapsLink ? "_blank" : undefined}
+                      rel={mapsLink ? "noreferrer" : undefined}
+                      className={
+                        resolved
+                          ? "block bg-neutral-100 border border-neutral-300 text-neutral-500 text-[12px] px-4 py-2 rounded-2xl cursor-default"
+                          : `block bg-status-cant/10 border border-status-cant/30 text-status-cant text-[12px] px-4 py-2 rounded-2xl ${mapsLink ? "active:scale-[0.98] hover:bg-status-cant/15" : "cursor-default"}`
+                      }
+                    >
+                      <div className={`font-black uppercase tracking-widest text-[10px] mb-0.5 inline-flex items-center gap-1 ${resolved ? "text-neutral-500" : ""}`}>
+                        <Wrench className="w-3 h-3" /> {resolved ? "Mechanical · Resolved" : "Mechanical alert"}
+                      </div>
+                      <div className={`text-[12.5px] leading-snug ${resolved ? "text-neutral-500 line-through decoration-neutral-400/70" : "text-neutral-800"}`}>
+                        {m.text}
+                      </div>
+                      {mapsLink && !resolved && (
+                        <div className="mt-1.5 text-[11px] font-bold underline underline-offset-2 text-status-cant" data-testid={`mechanical-map-${m.id}`}>
+                          Open in Google Maps ↗
+                        </div>
+                      )}
+                      {resolved && m.resolution && (
+                        <div className="mt-1.5 text-[10px] uppercase font-mono-stat tracking-widest text-neutral-500" data-testid={`mechanical-resolution-${m.id}`}>
+                          {m.resolution.status === "fixed" ? "Fixed" : "Carrying on"} · by {m.resolution.by_name}
+                        </div>
+                      )}
+                    </a>
+                    {canClear && (
+                      <div className="mt-1.5 flex gap-1.5" data-testid={`mechanical-clear-${m.id}`}>
+                        <button
+                          onClick={() => resolveMechanical(m.id, "fixed")}
+                          className="flex-1 text-[11px] font-black uppercase tracking-widest bg-status-going/15 hover:bg-status-going/25 border border-status-going/40 text-status-going rounded-xl px-3 py-1.5 active:scale-[0.98]"
+                          data-testid={`mechanical-fixed-${m.id}`}
+                        >
+                          ✅ Fixed, on my way
+                        </button>
+                        <button
+                          onClick={() => resolveMechanical(m.id, "carry_on")}
+                          className="flex-1 text-[11px] font-black uppercase tracking-widest bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 text-neutral-700 rounded-xl px-3 py-1.5 active:scale-[0.98]"
+                          data-testid={`mechanical-carry-${m.id}`}
+                        >
+                          🚴 Carry on
+                        </button>
                       </div>
                     )}
-                  </a>
+                  </div>
                 ) : (
                   <div className="inline-block bg-neutral-100 text-neutral-600 text-[11px] px-3 py-1 rounded-full">
                     {m.text}

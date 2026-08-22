@@ -1,9 +1,0 @@
-**/node_modules/**
-frontend/node_modules/**
-mobile/node_modules/**
-backend/**
-**/build/**
-**/dist/**
-**/.expo/**
-**/coverage/**
-frontend/public/sw.js
