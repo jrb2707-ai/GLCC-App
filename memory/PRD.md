@@ -135,6 +135,9 @@ See `/app/memory/test_credentials.md`.
     - Mobile app.json: added `UIBackgroundModes: ["remote-notification"]` (silent-push wake), `NSLocationWhenInUseUsageDescription` (mechanical alert).
     - Web ChatTab: Announce toggle **pinned above weather header** (El Prez only), Mechanical rendered as a full-width, pulsing SOS-style red emergency button above the composer, `@mention` picker dropdown, and no "El Prez" label on announcement messages (just name · time). Mechanical alerts render as red cards with Google Maps deep link.
     - Native ChatTab: matches web parity — Announce toggle pinned above weather, Mechanical as bold red emergency button below the composer, @mention picker chip strip, and geolocation via `expo-location`. `expo-location@~17.0.1` added to `mobile/package.json`.
+  - **Phase 5.9 (Feb 2026): DONE** — Test push button:
+    - Web ProfileModal now has a "Send me a test push" button (visible to everyone viewing their own profile). Hits `POST /api/push/test` and toasts back either "sent to N devices" or "No registered devices".
+    - Native ProfileModal already had the same button (`testID="send-test-push"`). Both use the same backend endpoint. JB can verify lock-screen delivery in 2 taps after each EAS build.
     - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
     - Same fix applies to every approved rider — anyone can now update their own avatar.
     - Verified: only `is_president=True` can promote/demote admins (`make_admin`/`remove_admin` returns 403 for non-president admins — pre-existing correct behaviour).

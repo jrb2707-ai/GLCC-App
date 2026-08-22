@@ -460,6 +460,25 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
           </button>
         )}
 
+        {isMe && (
+          <div className="mt-4">
+            <button
+              onClick={async () => {
+                try {
+                  const { data } = await api.post("/push/test");
+                  toast(data.ok ? `Test push sent to ${data.sent} device${data.sent === 1 ? "" : "s"} · check lock screen` : "No registered devices — open the app on your phone first");
+                } catch (e) {
+                  toast.error(formatDetail(e));
+                }
+              }}
+              className="w-full text-xs uppercase tracking-widest font-bold py-3 rounded-xl border border-brand-accent/40 text-brand-accent hover:bg-brand-accent/10"
+              data-testid="test-push-button"
+            >
+              📱 Send me a test push
+            </button>
+          </div>
+        )}
+
         {isMe && !isPresident && (
           <div className="mt-4">
             {!deleteOpen ? (
