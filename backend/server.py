@@ -36,6 +36,11 @@ ACCESS_TOKEN_TTL_MIN = 60 * 24 * 7  # 7 days for a mobile app
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN") or None
 
+# ---------- Web Push (VAPID) ----------
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY_PEM = os.environ.get("VAPID_PRIVATE_KEY_PEM", "").replace("\\n", "\n")
+VAPID_CONTACT_EMAIL = os.environ.get("VAPID_CONTACT_EMAIL", "mailto:jason@greylynncc.com")
+
 # ---------- Resend Email ----------
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "no-reply@greylynncc.com")
@@ -650,20 +655,63 @@ async def send_expo_push(tokens: List[str], title: str, body: str, data: Optiona
                         await db.push_tokens.delete_many({"expo_push_token": token})
 
 
+async def send_web_push(subs: List[dict], title: str, body: str, data: Optional[dict] = None) -> None:
+    """Fan out a Web Push notification via VAPID. `subs` are docs pulled from
+    `web_push_subscriptions`. Stale endpoints (410/404) are removed."""
+    if not subs or not VAPID_PRIVATE_KEY_PEM:
+        return
+    from pywebpush import webpush, WebPushException  # local import — cheap
+    payload = json.dumps({"title": title, "body": body, "data": data or {}})
+    claims = {"sub": VAPID_CONTACT_EMAIL}
+    stale_ids: list = []
+    for sub in subs:
+        subscription_info = {
+            "endpoint": sub["endpoint"],
+            "keys": {"p256dh": sub.get("p256dh"), "auth": sub.get("auth")},
+        }
+        try:
+            await asyncio.to_thread(
+                webpush,
+                subscription_info,
+                payload,
+                vapid_private_key=VAPID_PRIVATE_KEY_PEM,
+                vapid_claims=dict(claims),  # pywebpush mutates the dict
+                ttl=3600,
+            )
+        except WebPushException as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status in (404, 410):
+                stale_ids.append(sub["_id"])
+            else:
+                log.warning("Web push failed status=%s err=%s", status, exc)
+        except Exception as exc:
+            log.warning("Web push send error: %s", exc)
+    if stale_ids:
+        await db.web_push_subscriptions.delete_many({"_id": {"$in": stale_ids}})
+
+
 async def push_to_users(user_ids: List[str], title: str, body: str, data: Optional[dict] = None) -> None:
     if not user_ids:
         return
-    docs = await db.push_tokens.find({"user_id": {"$in": list(map(str, user_ids))}}).to_list(None)
+    uid_list = list(map(str, user_ids))
+    docs = await db.push_tokens.find({"user_id": {"$in": uid_list}}).to_list(None)
     tokens = [d["expo_push_token"] for d in docs]
     if tokens:
         await send_expo_push(tokens, title, body, data)
+    subs = await db.web_push_subscriptions.find({"user_id": {"$in": uid_list}}).to_list(None)
+    if subs:
+        await send_web_push(subs, title, body, data)
 
 
 async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: Optional[dict] = None) -> None:
-    docs = await db.push_tokens.find({"user_id": {"$ne": str(exclude_user_id)}}).to_list(None)
+    excl = str(exclude_user_id)
+    docs = await db.push_tokens.find({"user_id": {"$ne": excl}}).to_list(None)
     tokens = [d["expo_push_token"] for d in docs]
     if tokens:
         await send_expo_push(tokens, title, body, data)
+    subs = await db.web_push_subscriptions.find({"user_id": {"$ne": excl}}).to_list(None)
+    if subs:
+        await send_web_push(subs, title, body, data)
 
 
 # ---------- Café auto-suggest ----------
@@ -2245,18 +2293,62 @@ async def push_unregister(body: PushUnregisterIn, user: dict = Depends(get_curre
 
 @api.post("/push/test")
 async def push_test(user: dict = Depends(get_current_user)):
-    """Send a test push to the current user's registered devices."""
+    """Send a test push to the current user's registered devices (native + web)."""
     docs = await db.push_tokens.find({"user_id": str(user["_id"])}).to_list(None)
     tokens = [d["expo_push_token"] for d in docs]
-    if not tokens:
+    web_subs = await db.web_push_subscriptions.find({"user_id": str(user["_id"])}).to_list(None)
+    total = len(tokens) + len(web_subs)
+    if total == 0:
         return {"ok": False, "detail": "No registered devices"}
-    await send_expo_push(
-        tokens,
-        "GLCC test ping",
-        "If you can read this, push is wired ✅",
-        {"type": "test"},
+    if tokens:
+        await send_expo_push(tokens, "GLCC test ping", "If you can read this, push is wired ✅", {"type": "test"})
+    if web_subs:
+        await send_web_push(web_subs, "GLCC test ping", "If you can read this, push is wired ✅", {"type": "test"})
+    return {"ok": True, "sent": total, "native": len(tokens), "web": len(web_subs)}
+
+
+# ---------- Web Push (VAPID) ----------
+class WebPushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class WebPushSubscribeIn(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=1000)
+    keys: WebPushKeys
+
+
+class WebPushUnsubscribeIn(BaseModel):
+    endpoint: str
+
+
+@api.get("/webpush/vapid-key")
+async def webpush_vapid_key():
+    """Public key used by the browser to subscribe. Safe to expose unauthenticated."""
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+
+@api.post("/webpush/subscribe")
+async def webpush_subscribe(body: WebPushSubscribeIn, user: dict = Depends(get_current_user)):
+    doc = {
+        "user_id": str(user["_id"]),
+        "endpoint": body.endpoint,
+        "p256dh": body.keys.p256dh,
+        "auth": body.keys.auth,
+        "created_at": now_utc(),
+    }
+    await db.web_push_subscriptions.update_one(
+        {"endpoint": body.endpoint},
+        {"$set": doc},
+        upsert=True,
     )
-    return {"ok": True, "sent": len(tokens)}
+    return {"ok": True}
+
+
+@api.delete("/webpush/unsubscribe")
+async def webpush_unsubscribe(body: WebPushUnsubscribeIn, user: dict = Depends(get_current_user)):
+    await db.web_push_subscriptions.delete_one({"endpoint": body.endpoint, "user_id": str(user["_id"])})
+    return {"ok": True}
 
 # ---------- Weather (static demo) ----------
 @api.get("/weather")
@@ -2377,6 +2469,8 @@ async def seed():
     await db.coffee_rounds.create_index("created_at", expireAfterSeconds=3600)
     await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
     await db.push_tokens.create_index("expo_push_token")
+    await db.web_push_subscriptions.create_index("endpoint", unique=True)
+    await db.web_push_subscriptions.create_index("user_id")
     # Auto-delete used/expired password reset tokens
     await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
     await db.password_resets.create_index("token_hash", unique=True)

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { api, setToken, getToken, wsUrl, formatDetail } from "./api";
+import { registerWebPush, unregisterWebPush } from "./webpush";
 import { toast } from "sonner";
 
 const AuthCtx = createContext(null);
@@ -142,22 +143,26 @@ export function AppProviders({ children }) {
     setToken(data.token);
     setUser(data.user);
     connectWs(data.token);
+    // Silently attempt web push registration — only proceeds if permission is
+    // already granted from a previous visit. New users click the "Enable
+    // browser push" button in their profile to grant.
+    registerWebPush({ silent: true });
     return data.user;
   };
 
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
-    // Only auto-login approved users. Pending users should see the
-    // dedicated "awaiting approval" screen before entering the club.
     if (data.user?.status !== "pending") {
       setToken(data.token);
       setUser(data.user);
       connectWs(data.token);
+      registerWebPush({ silent: true });
     }
     return data.user;
   };
 
   const logout = () => {
+    unregisterWebPush();
     setToken(null);
     setUser(null);
     if (wsRef.current) wsRef.current.close();

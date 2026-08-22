@@ -461,16 +461,30 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
         )}
 
         {isMe && (
-          <div className="mt-4">
+          <div className="mt-4 space-y-2">
             <button
               onClick={async () => {
                 try {
+                  // If browser supports push and permission isn't granted yet,
+                  // request it and subscribe now — one tap to enable web push.
+                  const { isWebPushSupported, webPushPermission, registerWebPush } =
+                    await import("../../lib/webpush");
+                  if (isWebPushSupported() && webPushPermission() !== "granted") {
+                    const sub = await registerWebPush({ silent: false });
+                    if (!sub && webPushPermission() === "denied") {
+                      toast.error("Browser push denied — enable it in your browser's site settings for greylynncc.com");
+                      return;
+                    }
+                  }
                   const { data } = await api.post("/push/test");
                   if (data.ok) {
-                    toast(`Test push sent to ${data.sent} device${data.sent === 1 ? "" : "s"} · check lock screen`);
+                    const parts = [];
+                    if (data.native) parts.push(`${data.native} native`);
+                    if (data.web) parts.push(`${data.web} browser`);
+                    toast(`Test push sent to ${parts.join(" + ") || data.sent} device${data.sent === 1 ? "" : "s"}`);
                   } else {
                     toast("No registered devices yet", {
-                      description: "Push tokens come from the native GLCC app on iOS/Android. Install the app from TestFlight, open it, allow notifications — then this button will work.",
+                      description: "Browser push blocked, or the native app isn't installed. Grant notifications on this device or install the app from TestFlight.",
                       duration: 8000,
                     });
                   }

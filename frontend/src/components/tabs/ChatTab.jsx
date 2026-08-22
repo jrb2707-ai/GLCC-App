@@ -89,8 +89,6 @@ export default function ChatTab() {
   const [riders, setRiders] = useState([]);
   const [mentionQuery, setMentionQuery] = useState(null); // null when picker closed, else the token after "@"
   const [mechanicalBusy, setMechanicalBusy] = useState(false);
-  const [mechanicalOpen, setMechanicalOpen] = useState(false);
-  const [mechanicalStatus, setMechanicalStatus] = useState("");
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
   const isPending = user.status === "pending";
@@ -270,35 +268,6 @@ export default function ChatTab() {
         </div>
         <div className="mt-1.5 text-[10px] text-neutral-400 font-mono-stat uppercase tracking-widest">
           Messages auto-clear after 7 days
-        </div>
-      </div>
-
-      {/* Clubhouse welcome banner — permanent, glass, sits just under weather */}
-      <div
-        className="mx-3 mt-2 px-4 py-2.5 rounded-2xl bg-white/70 backdrop-blur-md border border-neutral-200/60 shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
-        data-testid="chat-clubhouse-banner"
-      >
-        <div className="text-[12px] leading-snug text-neutral-800">
-          <span className="font-extrabold text-neutral-900">Welcome to the GLCC clubhouse.</span>{" "}
-          {(() => {
-            const rain = weather?.rain_chance ?? 0;
-            const wind = weather?.wind_kph ?? 0;
-            if (rain >= 60) {
-              return (
-                <span className="font-bold text-status-cant" data-testid="clubhouse-warn">
-                  🌧 {rain}% rain forecast — ride may be cancelled.
-                </span>
-              );
-            }
-            if (wind >= 40) {
-              return (
-                <span className="font-bold text-status-cant" data-testid="clubhouse-warn">
-                  💨 {wind} kph wind — ride may be cancelled.
-                </span>
-              );
-            }
-            return <span className="italic text-neutral-500">Weather check. Watch this space.</span>;
-          })()}
         </div>
       </div>
 

@@ -212,34 +212,6 @@ export default function ChatTab() {
         </View>
       </View>
 
-      {/* Sticky clubhouse welcome banner */}
-      <View style={s.clubhouseBanner} testID="chat-clubhouse-banner">
-        <Text style={s.clubhouseText}>
-          <Text style={s.clubhouseBold}>Welcome to the GLCC clubhouse.</Text>{" "}
-          {(() => {
-            const rain = weather?.rain_chance ?? 0;
-            const wind = weather?.wind_kph ?? 0;
-            if (rain >= 60) {
-              return (
-                <Text style={s.clubhouseWarn} testID="clubhouse-warn">
-                  🌧  {rain}% rain forecast — ride may be cancelled.
-                </Text>
-              );
-            }
-            if (wind >= 40) {
-              return (
-                <Text style={s.clubhouseWarn} testID="clubhouse-warn">
-                  💨  {wind} kph wind — ride may be cancelled.
-                </Text>
-              );
-            }
-            return (
-              <Text style={s.clubhouseMuted}>Weather check. Watch this space.</Text>
-            );
-          })()}
-        </Text>
-      </View>
-
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1, backgroundColor: "#fff" }}

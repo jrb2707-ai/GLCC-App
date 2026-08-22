@@ -1,0 +1,23 @@
+{
+  "summary": "Backend-only regression for the new Web Push (VAPID) stack, push/test aggregation, announcement gating, mechanical alerts, 1h reminder helper, and /sw.js delivery. 10/10 pytest cases passed against the public preview URL.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_webpush_and_announcements.py",
+    "/app/test_reports/pytest/webpush_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~2640 lines — consider splitting push/webpush/chat routers into separate modules for maintainability (recurring feedback).",
+    "push/test payload sends the same title/body for native and web; consider centralizing so future copy changes stay in sync (minor).",
+    "FastAPI on_event('startup'/'shutdown') is deprecated — migrate to lifespan handlers (non-blocking)."
+  ],
+  "updated_files": ["/app/backend/tests/test_webpush_and_announcements.py"],
+  "success_rate": {"backend": "100%", "frontend": "n/a"},
+  "test_credentials": "jb@glcc.club / Roenick2707 (president), leo@glcc.club / cycle123 (non-president). Read from /app/memory/test_credentials.md.",
+  "seed_data_creation": "Inserted a single fake web_push_subscription doc for JB during the subscribe→push_test→unsubscribe flow; removed by the DELETE step. Also created a handful of TEST_ prefixed chat messages (announcement + mechanical) that remain in the messages collection — harmless (system/announcement flags verified via response).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_webpush_and_announcements.py covers: GET /api/webpush/vapid-key (unauth), POST /api/webpush/subscribe (auth required) + DELETE /api/webpush/unsubscribe, POST /api/push/test aggregation (native+web+ok:false path via Leo), POST /api/chat/messages announcement gating (president True vs member stripped to False), POST /api/chat/mechanical with/without lat/lng, and the async helper send_pending_ride_1h_pushes returning {rides_notified,pushes_sent}. /sw.js is served via ingress with content-type application/javascript.",
+  "rca of the issue": "N/A — feature-level testing, no defects found. All acceptance criteria from the review request are satisfied."
+}

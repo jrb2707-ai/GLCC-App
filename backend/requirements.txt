@@ -10,3 +10,5 @@ python-multipart==0.0.19
 websockets==14.1
 httpx==0.28.1
 resend>=2.0.0
+py-vapid==1.9.4
+pywebpush==2.4.0

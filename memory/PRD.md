@@ -136,6 +136,16 @@ See `/app/memory/test_credentials.md`.
     - Web ChatTab: Announce toggle **pinned above weather header** (El Prez only), Mechanical rendered as a full-width, pulsing SOS-style red emergency button above the composer, `@mention` picker dropdown, and no "El Prez" label on announcement messages (just name · time). Mechanical alerts render as red cards with Google Maps deep link.
     - Native ChatTab: matches web parity — Announce toggle pinned above weather, Mechanical as bold red emergency button below the composer, @mention picker chip strip, and geolocation via `expo-location`. `expo-location@~17.0.1` added to `mobile/package.json`.
   - **Phase 5.9 (Feb 2026): DONE** — Test push button:
+  - **Phase 5.10 (Feb 2026): DONE** — Removed the "Welcome to the GLCC clubhouse" banner from web + native ChatTab (chat opens straight to weather header → messages).
+  - **Phase 5.11 (Feb 2026): DONE** — Web Push via VAPID + Service Worker:
+    - Backend generated VAPID keypair, stored in `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY_PEM`, `VAPID_CONTACT_EMAIL`).
+    - New collection `web_push_subscriptions` with unique index on `endpoint`.
+    - New endpoints: `GET /api/webpush/vapid-key` (unauthenticated public key), `POST /api/webpush/subscribe`, `DELETE /api/webpush/unsubscribe`.
+    - `push_to_users` and `push_to_all_except` now fan out to both native Expo tokens AND web push subscriptions (pywebpush). Stale endpoints (404/410) auto-delete.
+    - `POST /api/push/test` now returns `{ok, sent, native, web}` — counts both channels.
+    - Frontend: new service worker `/public/sw.js` (push + notificationclick handlers). New `/lib/webpush.js` helper (register, unregister, permission check). Hooked into `store.jsx` login/register/logout.
+    - "Send me a test push" button in ProfileModal now auto-requests browser permission + subscribes on first click, so tapping it once enables browser push AND fires a test in one step.
+    - Verified via testing_agent: 10/10 backend cases pass at 100% (VAPID key exposed unauthenticated, subscribe upserts, test counts native+web separately, unsub removes, announcement gated to president, mechanical persists maps_link, 1h reminder helper live, /sw.js served as application/javascript).
     - Web ProfileModal now has a "Send me a test push" button (visible to everyone viewing their own profile). Hits `POST /api/push/test` and toasts back either "sent to N devices" or "No registered devices".
     - Native ProfileModal already had the same button (`testID="send-test-push"`). Both use the same backend endpoint. JB can verify lock-screen delivery in 2 taps after each EAS build.
     - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
