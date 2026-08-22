@@ -340,6 +340,21 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
     }
   }
 
+  function confirmDeleteRider() {
+    Alert.alert(
+      "Delete rider?",
+      `Are you sure you want to delete ${rider.name}? Their profile is removed from the roster. Chat messages they sent stay in the history but appear as "Former rider". This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, delete",
+          style: "destructive",
+          onPress: () => act("delete"),
+        },
+      ],
+    );
+  }
+
   async function sendReset() {
     try {
       const { data } = await api.post("/riders/reset-password", { target_id: rider.id });
@@ -549,7 +564,7 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
                     </TouchableOpacity>
                   )}
                   {!rider.is_president && (
-                    <TouchableOpacity onPress={() => act("delete")} style={s.adminBtnDanger} testID="admin-delete">
+                    <TouchableOpacity onPress={confirmDeleteRider} style={s.adminBtnDanger} testID="admin-delete">
                       <Text style={s.adminBtnDangerTxt}>DELETE</Text>
                     </TouchableOpacity>
                   )}

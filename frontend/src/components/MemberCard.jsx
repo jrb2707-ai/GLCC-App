@@ -7,7 +7,7 @@ import { usePullToDismiss } from "../lib/usePullToDismiss";
 // Rapha-style GLCC member card. Full-screen dark modal with a floating card,
 // club watermark, and permanent member number.
 export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, canBlock, onBlockChange }) {
-  const { handlers: dragHandlers, dy, dragging } = usePullToDismiss({ onDismiss: onClose, threshold: 120 });
+  const { handlers: dragHandlers, dy, dx, dragging } = usePullToDismiss({ onDismiss: onClose, threshold: 120 });
   if (!rider) return null;
   const initials = (rider.name || "?")
     .split(/\s+/)
@@ -28,7 +28,7 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
       className="absolute inset-0 z-50 bg-[#0e1310] flex flex-col overflow-hidden"
       data-testid="member-card-modal"
       style={{
-        transform: dy ? `translateY(${dy}px)` : undefined,
+        transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
         transition: dragging ? "none" : "transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1)",
       }}
     >

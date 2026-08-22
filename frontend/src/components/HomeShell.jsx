@@ -21,6 +21,27 @@ export default function HomeShell() {
   const [tab, setTab] = useState("rides");
   const { user, logout } = useAuth();
   const [perm, setPerm] = useState(browserPushPermission());
+  const swipeRef = React.useRef({ x: 0, y: 0, active: false });
+
+  const changeTab = (dir) => {
+    const idx = TABS.findIndex((t) => t.id === tab);
+    const next = TABS[Math.min(TABS.length - 1, Math.max(0, idx + dir))];
+    if (next && next.id !== tab) setTab(next.id);
+  };
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, active: true };
+  };
+  const onTouchEnd = (e) => {
+    if (!swipeRef.current.active) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeRef.current.x;
+    const dy = t.clientY - swipeRef.current.y;
+    swipeRef.current.active = false;
+    if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      changeTab(dx < 0 ? 1 : -1);
+    }
+  };
 
   useEffect(() => {
     setPerm(browserPushPermission());
@@ -86,7 +107,12 @@ export default function HomeShell() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar" data-testid="tab-content">
+      <div
+        className="flex-1 overflow-y-auto no-scrollbar"
+        data-testid="tab-content"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <PendingBanner />
         <PushBanner />
         <AnimatePresence mode="wait">

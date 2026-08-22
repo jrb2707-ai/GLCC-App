@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only verification of the new two-step 'Delete rider' admin confirmation flow in RidersTab.jsx (ProfileModal). Signed in as El Prez (jb@glcc.club), opened non-president rider profiles via MemberCard -> Edit Profile, and validated the new confirm-delete-rider modal end-to-end. All four scenarios from the review request PASSED. Note: seed rider names sam/mika/leo/aroha were not present in this preview DB; used 'Test Rider One' (cancel target) and 'Test Rider Two' (confirm-delete target) and 'Rohan M' (admin-actions regression) instead.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "test_1_cancel_flow": "PASS - admin-delete opens confirm-delete-rider modal with correct copy ('Are you sure you want to delete this rider?' + '<Name> will be removed from the roster...'). confirm-delete-cancel closes only the confirmation; rider still present in roster (Test Rider One still visible: 2 occurrences).",
+    "test_2_confirm_flow": "PASS - Yes, delete (confirm-delete-yes) removed 'Test Rider Two' from roster (0 occurrences after). Both the confirm modal and the ProfileModal closed (admin-delete count = 0 in DOM after action).",
+    "test_3_sanity_president_no_admin_delete": "PASS - Jason Bryant's own profile shows no admin-delete button and no admin-actions section (self view). Self-service 'delete-account-block' is gated behind the 'Delete my account' toggle and is unaffected by this change.",
+    "test_4_other_admin_actions_regression": "PASS - On Rohan M profile all other admin actions still render: admin-make (Make admin) = 1, admin-reset-password (Send reset link) = 1, admin-delete = 1. admin-remove not shown because target is not an admin (expected)."
+  },
+  "notes_on_review_request_testids": [
+    "Review request referenced 'admin-make-admin', 'admin-remove-admin', 'admin-reset-link' but actual code uses 'admin-make', 'admin-remove', 'admin-reset-password'. Not a bug; just a testid naming mismatch in the review text. Adjusted assertions to real IDs."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RidersTab.jsx is 1111 lines - consider splitting ProfileModal, MemberCard, RegisterRiderModal into separate files (>700-line guideline).",
+    "Confirmation copy is clear and destructive-action colored (status-cant). Good UX.",
+    "confirm-delete overlay uses absolute inset-0 inside ProfileModal (z-40) - correctly stacks above profile content without covering global toasts."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped)", "frontend": "100% (4/4 scenarios)" },
+  "test_credentials": "jb@glcc.club / Roenick2707 (El Prez). Note: sam/mika/leo/aroha fixtures not present in preview DB.",
+  "seed_data_creation": "Deleted 'Test Rider Two' during Test 2 (expected). 'Test Rider One' remains. If further testing is needed with those names, main agent can re-seed via /api/auth/register or invite flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Two-step delete confirmation for admin 'Delete rider' is fully working. Test data note: current preview roster contains Jason Bryant (El Prez), Graeme Bean (Admin), Sherie M, Rohan M, Josh Perry, Darrin Piccard, Nick Erikson, Tom Kelway, Test Pending, Pending UI Tester, Pending UI2, Eddie, Luke Davey, Pending Tester, Test Rider One (invited). Sam/Mika/Leo/Aroha are NOT in the DB anymore. To reach admin-delete you must click a rider (MemberCard opens) -> click 'EDIT PROFILE' (opens ProfileModal) -> scroll to 'ADMIN ACTIONS' section."
+}

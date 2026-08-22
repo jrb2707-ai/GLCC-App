@@ -183,17 +183,23 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
   const [bio, setBio] = useState(rider.bio || "");
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
   const [photo, setPhoto] = useState(rider.photo || null);
+  const [memberSince, setMemberSince] = useState(() => {
+    const src = rider.member_since || rider.created_at;
+    return src ? new Date(src).toISOString().slice(0, 10) : "";
+  });
   const [uploading, setUploading] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePwd, setDeletePwd] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteRider, setConfirmDeleteRider] = useState(false);
+  const [deletingRider, setDeletingRider] = useState(false);
   const fileRef = useRef(null);
   const isMe = rider.id === user.id;
   const selfPending = isMe && user.status === "pending";
   const canEditAll = (user.is_admin || isMe) && !selfPending;
   const isPresident = user.is_president;
-  const { handlers: dragHandlers, dy, dragging } = usePullToDismiss({ onDismiss: onClose });
+  const { handlers: dragHandlers, dy, dx, dragging } = usePullToDismiss({ onDismiss: onClose });
 
   async function toggleBlock() {
     try {
@@ -246,7 +252,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
     try {
       const url = isMe ? "/riders/me" : `/riders/${rider.id}`;
       const body = isMe
-        ? { name, coffee, photo }
+        ? { name, coffee, photo, ...(memberSince ? { member_since: new Date(memberSince).toISOString() } : {}) }
         : { name, role, bio, photo };
       const { data } = await api.patch(url, body);
       if (isMe) await refreshMe();
@@ -269,6 +275,22 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
     }
   }
 
+  async function confirmDeleteRiderAction() {
+    if (deletingRider) return;
+    setDeletingRider(true);
+    try {
+      await api.post("/riders/action", { action: "delete", target_id: rider.id });
+      toast(`${rider.name} deleted`);
+      onSaved({ ...rider, _refresh: true });
+      setConfirmDeleteRider(false);
+      onClose();
+    } catch (e) {
+      toast.error(formatDetail(e));
+    } finally {
+      setDeletingRider(false);
+    }
+  }
+
   return (
     <div
       className="absolute inset-0 z-30 bg-black/60 flex items-end"
@@ -278,7 +300,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
       <div
         className="w-full max-h-[85%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down"
         style={{
-          transform: dy ? `translateY(${dy}px)` : undefined,
+          transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
           transition: dragging ? "none" : "transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1)",
         }}
       >
@@ -390,13 +412,18 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
                 </div>
               </div>
             )}
-            {isMe && rider.created_at && (
+            {isMe && (rider.member_since || rider.created_at) && (
               <div className="mt-1 flex items-center justify-between rounded-xl border border-border-subtle bg-bg-primary px-3 py-2.5" data-testid="profile-since">
-                <div>
+                <div className="flex-1">
                   <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted">Member since</div>
-                  <div className="text-sm text-text-primary">
-                    {new Date(rider.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                  </div>
+                  <input
+                    type="date"
+                    value={memberSince}
+                    onChange={(e) => setMemberSince(e.target.value)}
+                    max={new Date().toISOString().slice(0, 10)}
+                    className="mt-0.5 bg-transparent text-sm text-text-primary focus:outline-none [color-scheme:dark]"
+                    data-testid="profile-since-input"
+                  />
                 </div>
                 {rider.member_no != null && (
                   <div className="text-right">
@@ -581,7 +608,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
                 </button>
               )}
               {!rider.is_president && (
-                <button onClick={() => act("delete")} className="text-xs uppercase tracking-widest bg-status-cant/10 border border-status-cant/40 text-status-cant px-3 py-2 rounded-lg" data-testid="admin-delete">
+                <button onClick={() => setConfirmDeleteRider(true)} className="text-xs uppercase tracking-widest bg-status-cant/10 border border-status-cant/40 text-status-cant px-3 py-2 rounded-lg" data-testid="admin-delete">
                   <Trash2 className="inline w-3 h-3 mr-1" /> Delete
                 </button>
               )}
@@ -593,6 +620,44 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
         )}
       </div>
       {cardOpen && <MemberCard rider={rider} onClose={() => setCardOpen(false)} />}
+      {confirmDeleteRider && (
+        <div
+          className="absolute inset-0 z-40 bg-black/70 flex items-center justify-center p-6"
+          data-testid="confirm-delete-rider"
+          onClick={(e) => { if (e.target === e.currentTarget && !deletingRider) setConfirmDeleteRider(false); }}
+        >
+          <div className="w-full max-w-sm bg-bg-secondary border border-status-cant/40 rounded-2xl p-5 animate-slide-down">
+            <div className="flex items-center gap-2 text-status-cant">
+              <Trash2 className="w-4 h-4" />
+              <div className="text-[10px] font-mono-stat uppercase tracking-widest">Delete rider</div>
+            </div>
+            <div className="mt-3 font-heading text-xl font-black uppercase leading-tight text-text-primary">
+              Are you sure you want to delete this rider?
+            </div>
+            <div className="mt-2 text-sm text-text-secondary">
+              <span className="text-text-primary font-semibold">{rider.name}</span> will be removed from the roster. Any chat messages they sent will remain but show as "Former rider". This cannot be undone.
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setConfirmDeleteRider(false)}
+                disabled={deletingRider}
+                className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2.5 rounded-xl disabled:opacity-50"
+                data-testid="confirm-delete-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteRiderAction}
+                disabled={deletingRider}
+                className="flex-1 bg-status-cant text-white uppercase tracking-widest text-xs font-bold py-2.5 rounded-xl disabled:opacity-50"
+                data-testid="confirm-delete-yes"
+              >
+                {deletingRider ? "Deleting…" : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -607,7 +672,7 @@ function RegisterRiderModal({ onClose }) {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef(null);
-  const { handlers: dragHandlers, dy, dragging } = usePullToDismiss({ onDismiss: onClose });
+  const { handlers: dragHandlers, dy, dx, dragging } = usePullToDismiss({ onDismiss: onClose });
 
   async function pickPhoto(e) {
     const file = e.target.files?.[0];

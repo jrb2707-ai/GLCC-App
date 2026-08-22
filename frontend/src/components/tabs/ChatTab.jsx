@@ -117,7 +117,7 @@ export default function ChatTab() {
     if (isPending) return undefined;
     return subscribe((evt) => {
       if (evt.type === "chat.message") {
-        setMessages((prev) => [...prev, evt.message]);
+        setMessages((prev) => (prev.find((m) => m.id === evt.message.id) ? prev : [...prev, evt.message]));
       }
       if (evt.type === "chat.deleted") {
         setMessages((prev) => prev.filter((m) => m.id !== evt.message_id));
@@ -168,7 +168,10 @@ export default function ChatTab() {
     setMechanicalOpen(false);
     const doPost = async (coords) => {
       try {
-        await api.post("/chat/mechanical", coords);
+        const { data: msg } = await api.post("/chat/mechanical", coords);
+        // Optimistically append for the sender. WS broadcast will also
+        // arrive; dedupe by message id so we don't double-render.
+        setMessages((prev) => (prev.find((m) => m.id === msg.id) ? prev : [...prev, msg]));
         toast("Mechanical broadcast sent");
       } catch (e) {
         toast.error(formatDetail(e));

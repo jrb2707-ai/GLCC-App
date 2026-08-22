@@ -138,7 +138,13 @@ See `/app/memory/test_credentials.md`.
   - **Phase 5.9 (Feb 2026): DONE** — Test push button:
   - **Phase 5.10 (Feb 2026): DONE** — Removed the "Welcome to the GLCC clubhouse" banner from web + native ChatTab (chat opens straight to weather header → messages).
   - **Phase 5.11 (Feb 2026): DONE** — Web Push via VAPID + Service Worker (see earlier notes).
-  - **Phase 5.12 (Feb 2026): DONE** — Mechanical alert bug fix (verified by testing_agent iteration_12, 100% pass):
+  - **Phase 5.12 (Feb 2026): DONE** — Mechanical alert modal + universal Maps URL (see earlier notes).
+  - **Phase 5.13 (Feb 2026): DONE** — 5-item batch, verified by testing_agent iteration_13 at 100% backend + 100% frontend:
+    - **Mechanical sender visibility**: web + native ChatTab now optimistically appends the returned message doc to local state after POST /chat/mechanical succeeds, deduping against the WS broadcast by message id. Sender sees their own broadcast instantly.
+    - **El Prez bio guaranteed**: seed() now restores JB's default bio ("Founder. 4th best cyclist in Grey Lynn.") if blank on every startup so it never disappears.
+    - **Editable Member Since**: `ProfileUpdateIn.member_since` accepts an ISO string, `serialize_rider` exposes `member_since` (falls back to `created_at`), ProfileModal has a `<input type="date">` (`profile-since-input`) pre-populated with the current value, saves via PATCH /riders/me. Invalid dates return 400 "Invalid member_since date".
+    - **Tab swipe navigation**: HomeShell tab-content div now has `onTouchStart`/`onTouchEnd` handlers. Horizontal swipe > 65px advances (leftward) or reverses (rightward) through Rides ↔ Coffee ↔ Riders ↔ Chat, respecting bounds.
+    - **Swipe-right dismiss**: `usePullToDismiss` extended to track both `dy` (down) and `dx` (right) with 10px axis lock. ProfileModal + MemberCard outer transforms now use `translate(dx, dy)`, so either gesture dismisses whichever reaches threshold first.
     - Web ChatTab: replaced browser `confirm()` (which lost user-gesture context and silently killed geolocation) with a proper in-app modal (`mechanical-sheet`) offering two direct-tap buttons: "Send with location" runs geolocation in the correct gesture context, "Send without location" broadcasts empty.
     - Backend `maps_link` now uses the universal Google Maps deep-link format `https://www.google.com/maps/search/?api=1&query=lat%2Clng` — auto-opens the native Google Maps app on iOS + Android and falls back to google.com/maps in-browser.
     - The whole mechanical message card is tappable on both web (`<a href target=_blank>`) and native (TouchableOpacity + Linking.openURL) so users can open the location with a single tap on any device.
@@ -172,5 +178,12 @@ See `/app/memory/test_credentials.md`.
 - Phase 6 (Backlog): Refactor `/app/backend/server.py` (2100+ lines) into `/routes`, `/models`, `/services` modules.
 - Proper admin-invite flow instead of auto-creating `.@glcc.pending` placeholder users.
 
+## Session Feb 22, 2026 — Two-Step Delete Confirmation
+- Added a two-step "Are you sure you want to delete this rider?" modal that gates the admin `admin-delete` action on both web and mobile.
+- Web (`RidersTab.jsx`): new `confirmDeleteRider` state + destructive overlay with `data-testid="confirm-delete-rider"`, `confirm-delete-cancel`, `confirm-delete-yes`. Overlay stacks on top of the ProfileModal (z-40) and shows the rider's name inline.
+- Mobile (`RidersTab.js`): `Alert.alert("Delete rider?", …)` with `destructive` Yes / `cancel` Cancel actions.
+- Verified via testing_agent (iteration_14) — 100% (4/4 scenarios): cancel keeps rider, confirm removes rider + closes both modals, president has no admin-delete button on self, all other admin actions (make/remove admin, send-reset-link) still work.
+- Fixed the oxlint pre-completion blocker: added `/app/.oxlintrc.json` + `/app/.oxlintignore` at the workspace root so `**/node_modules/**` is ignored during the emergent pre-check.
+
 ## Latest Verified Test Report
-`/app/test_reports/iteration_5.json` — 17/17 backend guard tests + full pending/admin/member UI flows green.
+`/app/test_reports/iteration_14.json` — 4/4 frontend delete-confirmation scenarios green. Previous iteration_13 (5-item UI batch), iteration_12 (mechanical maps fix), iteration_11 (web push) also 100%.

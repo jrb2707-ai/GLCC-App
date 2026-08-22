@@ -106,6 +106,7 @@ def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
         "member_no": doc.get("member_no"),
         "ride_reminders": doc.get("ride_reminders", True),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
+        "member_since": (doc.get("member_since") or doc.get("created_at")).isoformat() if (doc.get("member_since") or doc.get("created_at")) else None,
     }
 
 def serialize_ride(doc: dict) -> dict:
@@ -930,6 +931,7 @@ class ProfileUpdateIn(BaseModel):
     coffee: Optional[str] = None
     photo: Optional[str] = None
     ride_reminders: Optional[bool] = None
+    member_since: Optional[str] = None  # ISO date string; server parses to datetime
 
 class AdminActionIn(BaseModel):
     action: str  # approve | deny | make_admin | remove_admin | delete
@@ -1650,9 +1652,18 @@ async def invite_rider(body: RiderInviteIn, admin: dict = Depends(require_admin)
 
 @api.patch("/riders/me")
 async def update_me(body: ProfileUpdateIn, user: dict = Depends(require_approved)):
-    # Self-editable fields: name, coffee, photo, ride reminders. Role, bio,
-    # join date and member number are managed via the admin route.
-    update = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in {"name", "coffee", "photo", "ride_reminders"}}
+    # Self-editable fields: name, coffee, photo, ride reminders, member_since.
+    # Role, bio, join_date and member number are managed via the admin route.
+    raw = body.model_dump(exclude_none=True)
+    update = {k: v for k, v in raw.items() if k in {"name", "coffee", "photo", "ride_reminders"}}
+    if "member_since" in raw:
+        try:
+            dt = datetime.fromisoformat(raw["member_since"].replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            update["member_since"] = dt
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid member_since date")
     if not update:
         return serialize_rider(user)
     await db.users.update_one({"_id": user["_id"]}, {"$set": update})
@@ -2505,6 +2516,12 @@ async def seed():
         await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True, "is_president": True, "status": "approved", "name": admin_name}})
         if not existing.get("password_hash") or not verify_password(admin_password, existing["password_hash"]):
             await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+        # Restore default bio if blank — El Prez should always have some flavour text on his card.
+        if not (existing.get("bio") or "").strip():
+            await db.users.update_one(
+                {"email": admin_email},
+                {"$set": {"bio": "Founder. 4th best cyclist in Grey Lynn."}},
+            )
 
     # Any previous president that isn't the master admin gets demoted to plain admin (only one El Prez).
     await db.users.update_many(

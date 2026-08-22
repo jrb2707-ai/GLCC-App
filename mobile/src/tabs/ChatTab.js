@@ -116,7 +116,8 @@ export default function ChatTab() {
               }
             } catch (_) { /* fall through with empty coords */ }
             try {
-              await api.post("/chat/mechanical", coords);
+              const { data: msg } = await api.post("/chat/mechanical", coords);
+              setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
             } catch (e) {
               Alert.alert("Send failed", formatDetail(e));
             } finally {
