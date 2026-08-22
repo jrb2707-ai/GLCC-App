@@ -221,6 +221,23 @@ export default function ChatTab() {
 
   return (
     <div className="h-full flex flex-col bg-white text-neutral-900 rounded-t-3xl overflow-hidden" data-testid="chat-tab">
+      {/* Announce toggle — pinned above everything, El Prez only */}
+      {user.is_president && (
+        <div className="px-3 pt-3 pb-1 bg-white">
+          <button
+            type="button"
+            onClick={() => setAnnouncement((v) => !v)}
+            disabled={isPending}
+            aria-pressed={announcement}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black uppercase tracking-[0.2em] text-xs active:scale-[0.98] ${announcement ? "bg-brand-accent text-black shadow-[0_4px_14px_rgba(212,255,0,0.4)]" : "bg-white text-neutral-900 border border-neutral-300"}`}
+            data-testid="chat-announce-btn"
+          >
+            <Megaphone className="w-3.5 h-3.5" />
+            {announcement ? "Announcement ON — next message pushes to all" : "Announce to all"}
+          </button>
+        </div>
+      )}
+
       {/* Weather header */}
       <div className="px-5 pt-3 pb-3 border-b border-neutral-200 bg-neutral-50">
         <div className="flex items-center gap-2">
@@ -333,7 +350,7 @@ export default function ChatTab() {
                   <div className="flex items-center gap-1.5 mb-1">
                     <Megaphone className="w-3.5 h-3.5 text-neutral-900" />
                     <span className="font-black text-[10px] uppercase tracking-widest text-neutral-900">
-                      El Prez · {m.name} · {fmtTime(m.created_at)}
+                      {m.name} · {fmtTime(m.created_at)}
                     </span>
                   </div>
                   <div className="text-sm text-neutral-900 font-semibold leading-snug whitespace-pre-wrap break-words">
@@ -410,28 +427,17 @@ export default function ChatTab() {
             ))}
           </div>
         )}
-        <div className="px-3 pt-2 flex items-center gap-2 flex-wrap">
+        <div className="px-3 pt-1.5 pb-1">
           <button
             type="button"
             onClick={sendMechanical}
             disabled={isPending || mechanicalBusy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-bold border border-status-cant text-status-cant hover:bg-status-cant/10 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black uppercase tracking-[0.22em] text-sm text-white bg-status-cant shadow-[0_4px_18px_rgba(239,68,68,0.45)] ring-2 ring-status-cant/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${mechanicalBusy ? "" : "animate-emergency-pulse"}`}
             data-testid="chat-mechanical-btn"
           >
-            <Wrench className="w-3.5 h-3.5" /> {mechanicalBusy ? "Sending…" : "I've a mechanical"}
+            <Wrench className="w-4 h-4" />
+            {mechanicalBusy ? "Broadcasting…" : "I've a mechanical"}
           </button>
-          {user.is_president && (
-            <button
-              type="button"
-              onClick={() => setAnnouncement((v) => !v)}
-              disabled={isPending}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-bold border active:scale-95 ${announcement ? "bg-brand-accent text-black border-brand-accent" : "border-neutral-300 text-neutral-700 hover:bg-neutral-100"}`}
-              data-testid="chat-announce-btn"
-              aria-pressed={announcement}
-            >
-              <Megaphone className="w-3.5 h-3.5" /> {announcement ? "Announcement ON" : "Announce"}
-            </button>
-          )}
         </div>
         <div className="px-3 py-3 flex items-center gap-2">
           <input

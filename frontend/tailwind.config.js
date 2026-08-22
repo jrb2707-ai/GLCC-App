@@ -42,6 +42,15 @@ module.exports = {
         pink: "0 0 24px rgba(236, 72, 153, 0.35)",
         strava: "0 0 24px rgba(252, 76, 2, 0.35)",
       },
+      keyframes: {
+        "emergency-pulse": {
+          "0%, 100%": { boxShadow: "0 4px 18px rgba(239,68,68,0.45), 0 0 0 0 rgba(239,68,68,0.55)" },
+          "50%":       { boxShadow: "0 4px 18px rgba(239,68,68,0.55), 0 0 0 10px rgba(239,68,68,0)" },
+        },
+      },
+      animation: {
+        "emergency-pulse": "emergency-pulse 1.8s ease-in-out infinite",
+      },
     },
   },
   plugins: [require("tailwindcss-animate")],

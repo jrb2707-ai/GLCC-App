@@ -133,7 +133,8 @@ See `/app/memory/test_credentials.md`.
     - Backend: Expo push payload now includes `priority: high`, `channelId: default`, `_contentAvailable: True`, `interruptionLevel: active` — required for iOS 15+ lock-screen banners and Android heads-up on lock screen.
     - Mobile push.js: notification handler upgraded to Expo SDK 52+ API (`shouldShowBanner`, `shouldShowList`); Android channel bumped to `MAX` importance + `PUBLIC` lockscreen visibility.
     - Mobile app.json: added `UIBackgroundModes: ["remote-notification"]` (silent-push wake), `NSLocationWhenInUseUsageDescription` (mechanical alert).
-    - Web ChatTab: @mention picker (dropdown of matching approved riders), El Prez Announcement toggle (megaphone icon, yellow banner rendering), Mechanical button (geolocation → red mechanical card with "Open in Google Maps" link).
+    - Web ChatTab: Announce toggle **pinned above weather header** (El Prez only), Mechanical rendered as a full-width, pulsing SOS-style red emergency button above the composer, `@mention` picker dropdown, and no "El Prez" label on announcement messages (just name · time). Mechanical alerts render as red cards with Google Maps deep link.
+    - Native ChatTab: matches web parity — Announce toggle pinned above weather, Mechanical as bold red emergency button below the composer, @mention picker chip strip, and geolocation via `expo-location`. `expo-location@~17.0.1` added to `mobile/package.json`.
     - JB (El Presidente) can now change his own profile photo. Backend `PATCH /riders/me` now accepts `photo` (was silently dropped). Frontend camera badge no longer hidden for `isMe`.
     - Same fix applies to every approved rider — anyone can now update their own avatar.
     - Verified: only `is_president=True` can promote/demote admins (`make_admin`/`remove_admin` returns 403 for non-president admins — pre-existing correct behaviour).

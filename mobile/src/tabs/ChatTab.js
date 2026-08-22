@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert, Linking,
 } from "react-native";
+import * as Location from "expo-location";
 import { api, formatDetail } from "../lib/api";
 import { colors, radius } from "../constants/theme";
 import { useAuth, useEvents } from "../lib/store";
@@ -36,6 +37,8 @@ export default function ChatTab() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [reportMessage, setReportMessage] = useState(null);
+  const [announcement, setAnnouncement] = useState(false);
+  const [mechanicalBusy, setMechanicalBusy] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const isPending = user?.status === "pending";
@@ -82,12 +85,47 @@ export default function ChatTab() {
     setSending(true);
     setText("");
     setMentionQuery(null);
+    const wasAnnouncement = announcement;
+    setAnnouncement(false);
     try {
       // Server broadcasts the new message via WS, so we don't need to reload.
-      await api.post("/chat/messages", { text: t });
+      await api.post("/chat/messages", { text: t, announcement: wasAnnouncement });
       scrollRef.current?.scrollToEnd({ animated: true });
     } catch (e) { /* ignore */ }
     finally { setSending(false); }
+  }
+
+  async function sendMechanical() {
+    if (mechanicalBusy || isPending) return;
+    Alert.alert(
+      "Broadcast mechanical?",
+      "Everyone gets a push. Your current location will be shared if you allow it.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send",
+          style: "destructive",
+          onPress: async () => {
+            setMechanicalBusy(true);
+            let coords = {};
+            try {
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              if (status === "granted") {
+                const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              }
+            } catch (_) { /* fall through with empty coords */ }
+            try {
+              await api.post("/chat/mechanical", coords);
+            } catch (e) {
+              Alert.alert("Send failed", formatDetail(e));
+            } finally {
+              setMechanicalBusy(false);
+            }
+          },
+        },
+      ],
+    );
   }
 
   // Detect an @token being typed just before the caret so we can offer
@@ -144,6 +182,20 @@ export default function ChatTab() {
       style={{ flex: 1, backgroundColor: "#fff" }}
       keyboardVerticalOffset={80}
     >
+      {/* Announce toggle — pinned above everything, El Prez only */}
+      {user?.is_president && (
+        <TouchableOpacity
+          onPress={() => setAnnouncement((v) => !v)}
+          disabled={isPending}
+          style={[s.announceTop, announcement && s.announceTopOn, isPending && { opacity: 0.4 }]}
+          testID="chat-announce-btn"
+        >
+          <Text style={[s.announceTopTxt, announcement && s.announceTopOnTxt]}>
+            📣 {announcement ? "ANNOUNCEMENT ON — NEXT MESSAGE PUSHES TO ALL" : "ANNOUNCE TO ALL"}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Weather header */}
       <View style={s.weather}>
         <View style={s.weatherIcon}>
@@ -202,9 +254,34 @@ export default function ChatTab() {
         ) : (
           messages.map((m) => {
             if (m.system) {
+              const mech = m.mechanical;
+              if (mech) {
+                return (
+                  <View key={m.id} style={s.mechanicalCard} testID={`mechanical-${m.id}`}>
+                    <Text style={s.mechanicalEyebrow}>🔧 MECHANICAL ALERT</Text>
+                    <Text style={s.mechanicalText}>{m.text}</Text>
+                    {mech.maps_link && (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(mech.maps_link)}
+                        testID={`mechanical-map-${m.id}`}
+                      >
+                        <Text style={s.mechanicalLink}>Open in Google Maps ↗</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              }
               return (
                 <View key={m.id} style={{ alignItems: "center", paddingVertical: 4 }}>
                   <Text style={s.systemLine}>{m.text}</Text>
+                </View>
+              );
+            }
+            if (m.announcement) {
+              return (
+                <View key={m.id} style={s.announcementCard} testID={`announcement-${m.id}`}>
+                  <Text style={s.announcementEyebrow}>📣 {m.name} · {fmtTime(m.created_at)}</Text>
+                  <Text style={s.announcementText}>{m.text}</Text>
                 </View>
               );
             }
@@ -263,6 +340,21 @@ export default function ChatTab() {
         </ScrollView>
       )}
 
+      <View style={s.actionRow}>
+        <TouchableOpacity
+          onPress={sendMechanical}
+          disabled={isPending || mechanicalBusy}
+          style={[s.mechBtn, (isPending || mechanicalBusy) && { opacity: 0.4 }]}
+          testID="chat-mechanical-btn"
+        >
+          {mechanicalBusy ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={s.mechBtnTxt}>🔧 I'VE A MECHANICAL</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
       <View style={s.inputRow}>
         <TouchableOpacity
           onPress={triggerMentionPicker}
@@ -318,6 +410,20 @@ const s = StyleSheet.create({
   bubbleTheirs: { backgroundColor: "#E9E9EB", borderBottomLeftRadius: 4 },
   mineTime: { fontSize: 9, color: "#aaa", marginTop: 2, marginRight: 8 },
   systemLine: { color: "#666", fontSize: 11, textAlign: "center", backgroundColor: "#f0f0f0", paddingHorizontal: 12, paddingVertical: 3, borderRadius: 12, overflow: "hidden" },
+  announceTop: { marginHorizontal: 10, marginTop: 10, marginBottom: 2, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: "#d1d5db", alignItems: "center", backgroundColor: "#fff" },
+  announceTopOn: { backgroundColor: "#D4FF00", borderColor: "#D4FF00", shadowColor: "#D4FF00", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  announceTopTxt: { color: "#111", fontWeight: "900", fontSize: 11, letterSpacing: 2 },
+  announceTopOnTxt: { color: "#000" },
+  actionRow: { paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },
+  mechBtn: { alignItems: "center", justifyContent: "center", backgroundColor: "#ef4444", borderRadius: 16, paddingVertical: 14, flexDirection: "row", gap: 8, shadowColor: "#ef4444", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, borderWidth: 2, borderColor: "rgba(239,68,68,0.4)" },
+  mechBtnTxt: { color: "#fff", fontWeight: "900", fontSize: 14, letterSpacing: 3 },
+  announcementCard: { marginHorizontal: 6, marginVertical: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, backgroundColor: "rgba(212,255,0,0.15)", borderWidth: 1, borderColor: "rgba(212,255,0,0.4)" },
+  announcementEyebrow: { color: "#111", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
+  announcementText: { color: "#111", fontSize: 14, fontWeight: "600", lineHeight: 19 },
+  mechanicalCard: { marginHorizontal: 6, marginVertical: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" },
+  mechanicalEyebrow: { color: "#dc2626", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
+  mechanicalText: { color: "#111", fontSize: 13, lineHeight: 18 },
+  mechanicalLink: { color: "#dc2626", fontSize: 12, fontWeight: "900", textDecorationLine: "underline", marginTop: 6 },
 
   locked: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, minHeight: 300 },
   lockedEyebrow: { color: "#999", letterSpacing: 3, fontSize: 10, fontWeight: "700" },
