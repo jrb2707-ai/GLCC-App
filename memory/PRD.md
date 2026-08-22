@@ -137,7 +137,12 @@ See `/app/memory/test_credentials.md`.
     - Native ChatTab: matches web parity — Announce toggle pinned above weather, Mechanical as bold red emergency button below the composer, @mention picker chip strip, and geolocation via `expo-location`. `expo-location@~17.0.1` added to `mobile/package.json`.
   - **Phase 5.9 (Feb 2026): DONE** — Test push button:
   - **Phase 5.10 (Feb 2026): DONE** — Removed the "Welcome to the GLCC clubhouse" banner from web + native ChatTab (chat opens straight to weather header → messages).
-  - **Phase 5.11 (Feb 2026): DONE** — Web Push via VAPID + Service Worker:
+  - **Phase 5.11 (Feb 2026): DONE** — Web Push via VAPID + Service Worker (see earlier notes).
+  - **Phase 5.12 (Feb 2026): DONE** — Mechanical alert bug fix (verified by testing_agent iteration_12, 100% pass):
+    - Web ChatTab: replaced browser `confirm()` (which lost user-gesture context and silently killed geolocation) with a proper in-app modal (`mechanical-sheet`) offering two direct-tap buttons: "Send with location" runs geolocation in the correct gesture context, "Send without location" broadcasts empty.
+    - Backend `maps_link` now uses the universal Google Maps deep-link format `https://www.google.com/maps/search/?api=1&query=lat%2Clng` — auto-opens the native Google Maps app on iOS + Android and falls back to google.com/maps in-browser.
+    - The whole mechanical message card is tappable on both web (`<a href target=_blank>`) and native (TouchableOpacity + Linking.openURL) so users can open the location with a single tap on any device.
+    - Testing agent verified end-to-end via Playwright: modal opens, sends without location works, resulting card renders as an anchor to the Maps URL, and all iteration_11 backend regressions still pass.
     - Backend generated VAPID keypair, stored in `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY_PEM`, `VAPID_CONTACT_EMAIL`).
     - New collection `web_push_subscriptions` with unique index on `endpoint`.
     - New endpoints: `GET /api/webpush/vapid-key` (unauthenticated public key), `POST /api/webpush/subscribe`, `DELETE /api/webpush/unsubscribe`.

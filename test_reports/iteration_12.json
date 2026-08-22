@@ -1,0 +1,23 @@
+{
+  "summary": "Verified the mechanical-alert bug fix end-to-end plus regression of iteration_11 backend suite. 10/10 pytest cases pass (VAPID key, /sw.js, webpush subscribe/unsubscribe, push/test aggregation, announcement gating, mechanical with/without location, 1h reminder helper) — the mechanical test was tightened to assert the new universal Google Maps deep-link `https://www.google.com/maps/search/?api=1&query=<lat>%2C<lng>`. Web frontend flow verified via Playwright on mobile viewport: emergency 'I've a mechanical' button opens the in-app modal (data-testid mechanical-sheet) with mechanical-with-location, mechanical-without-location, mechanical-cancel buttons; Send-without-location successfully posts and closes the modal; the resulting message card renders as an <a> tag with data-testid mechanical-{id}; existing with-location cards render as <a target=_blank rel=noreferrer href='https://www.google.com/maps/search/?api=1&query=…%2C…'>. No regressions.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_webpush_and_announcements.py",
+    "/app/test_reports/pytest/webpush_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~2640 lines — recurring feedback to split into routers (chat, webpush, push, admin). Non-blocking.",
+    "FastAPI on_event('startup'/'shutdown') still triggering DeprecationWarning during tests — migrate to lifespan handlers.",
+    "ChatTab.jsx: the mechanical card is rendered as an <a> even when maps_link is null. It has no href/target in that case (so clicks are inert), but React will still complain about anchor without href on some linters. Consider rendering a <div> when mapsLink is falsy for semantic correctness."
+  ],
+  "updated_files": ["/app/backend/tests/test_webpush_and_announcements.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "jb@glcc.club / Roenick2707 (president), leo@glcc.club / cycle123 (member). Loaded from /app/memory/test_credentials.md.",
+  "seed_data_creation": "Posted 3 TEST_ prefixed mechanical alerts (2 backend via /api/chat/mechanical, 1 frontend via UI). Also 1 announcement + 1 leo-attempt-announcement + 1 webpush subscription that was cleaned up in the same test. All harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bug fix for mechanical maps_link is fully verified. test_webpush_and_announcements.py::TestMechanical::test_with_location_universal_maps_url now enforces the exact prefix `https://www.google.com/maps/search/?api=1&query=` and %2C encoding. Frontend chat currently accumulates several TEST_ mechanical cards in the messages collection; they auto-clear after 7 days per app copy but consider a manual purge before demos.",
+  "rca of the issue": "N/A — bug fix verified working. Modal-based user gesture flow correctly triggers browser geolocation prompt; the universal maps URL format (`google.com/maps/search/?api=1&query=<lat>%2C<lng>`) OS-routes to native Google Maps on iOS/Android and falls back to web on desktop as designed."
+}

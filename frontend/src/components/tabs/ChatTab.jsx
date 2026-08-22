@@ -89,6 +89,7 @@ export default function ChatTab() {
   const [riders, setRiders] = useState([]);
   const [mentionQuery, setMentionQuery] = useState(null); // null when picker closed, else the token after "@"
   const [mechanicalBusy, setMechanicalBusy] = useState(false);
+  const [mechanicalOpen, setMechanicalOpen] = useState(false);
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
   const isPending = user.status === "pending";
@@ -158,9 +159,14 @@ export default function ChatTab() {
 
   async function sendMechanical() {
     if (mechanicalBusy || isPending) return;
-    if (!window.confirm("Broadcast a mechanical alert to the whole club? Your current location will be shared if you grant permission.")) return;
+    setMechanicalOpen(true);
+  }
+
+  async function submitMechanical(withLocation) {
+    if (mechanicalBusy) return;
     setMechanicalBusy(true);
-    const post = async (coords) => {
+    setMechanicalOpen(false);
+    const doPost = async (coords) => {
       try {
         await api.post("/chat/mechanical", coords);
         toast("Mechanical broadcast sent");
@@ -170,15 +176,25 @@ export default function ChatTab() {
         setMechanicalBusy(false);
       }
     };
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => post({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => post({}), // user denied → still broadcast, just without location
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
-      );
-    } else {
-      await post({});
+    if (!withLocation || !navigator.geolocation) {
+      await doPost({});
+      return;
     }
+    // Geolocation MUST run in direct response to the user tap so the
+    // browser keeps the user-gesture context. Wrap in a Promise so we can
+    // await and toast a proper error if it fails.
+    navigator.geolocation.getCurrentPosition(
+      (pos) => doPost({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => {
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? "Location blocked — enable it in your browser's site settings for greylynncc.com, or tap 'Send without location'"
+            : "Couldn't get location — broadcasting without it",
+        );
+        doPost({});
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+    );
   }
 
   // Update mention query as the user types "@..."
@@ -289,23 +305,23 @@ export default function ChatTab() {
             return (
               <div key={m.id} className="text-center py-1" data-testid={`msg-${m.id}`}>
                 {isMech ? (
-                  <div className="inline-block max-w-[92%] bg-status-cant/10 border border-status-cant/30 text-status-cant text-[12px] px-4 py-2 rounded-2xl text-left" data-testid={`mechanical-${m.id}`}>
+                  <a
+                    href={mapsLink || undefined}
+                    target={mapsLink ? "_blank" : undefined}
+                    rel={mapsLink ? "noreferrer" : undefined}
+                    className={`inline-block max-w-[92%] bg-status-cant/10 border border-status-cant/30 text-status-cant text-[12px] px-4 py-2 rounded-2xl text-left ${mapsLink ? "active:scale-[0.98] hover:bg-status-cant/15" : "cursor-default"}`}
+                    data-testid={`mechanical-${m.id}`}
+                  >
                     <div className="font-black uppercase tracking-widest text-[10px] mb-0.5 inline-flex items-center gap-1">
                       <Wrench className="w-3 h-3" /> Mechanical alert
                     </div>
                     <div className="text-neutral-800 text-[12.5px] leading-snug">{m.text}</div>
                     {mapsLink && (
-                      <a
-                        href={mapsLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1.5 inline-block text-[11px] font-bold underline underline-offset-2 text-status-cant"
-                        data-testid={`mechanical-map-${m.id}`}
-                      >
+                      <div className="mt-1.5 text-[11px] font-bold underline underline-offset-2 text-status-cant" data-testid={`mechanical-map-${m.id}`}>
                         Open in Google Maps ↗
-                      </a>
+                      </div>
                     )}
-                  </div>
+                  </a>
                 ) : (
                   <div className="inline-block bg-neutral-100 text-neutral-600 text-[11px] px-3 py-1 rounded-full">
                     {m.text}
@@ -373,6 +389,55 @@ export default function ChatTab() {
       </div>
 
       {reportMessage && <ReportSheet message={reportMessage} onClose={() => setReportMessage(null)} />}
+
+      {mechanicalOpen && (
+        <div
+          className="absolute inset-0 z-50 bg-black/60 flex items-end"
+          data-testid="mechanical-sheet"
+          onClick={() => setMechanicalOpen(false)}
+        >
+          <div
+            className="w-full bg-white rounded-t-3xl p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto w-10 h-1 rounded-full bg-neutral-300 mb-3" />
+            <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-status-cant inline-flex items-center gap-1.5">
+              <Wrench className="w-3 h-3" /> Mechanical alert
+            </div>
+            <div className="text-xl font-black text-neutral-900 mt-0.5">Broadcast to the peloton?</div>
+            <p className="text-[12px] text-neutral-600 mt-2 leading-relaxed">
+              We'll push every rider on this ride with a Google Maps link to your location.
+              Location is only shared this once — nothing is stored after the alert clears.
+            </p>
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => submitMechanical(true)}
+                className="w-full py-3.5 rounded-xl bg-status-cant text-white font-black uppercase tracking-[0.2em] text-sm active:scale-[0.98] flex items-center justify-center gap-2"
+                data-testid="mechanical-with-location"
+              >
+                📍 Send with location
+              </button>
+              <button
+                type="button"
+                onClick={() => submitMechanical(false)}
+                className="w-full py-3.5 rounded-xl border-2 border-status-cant text-status-cant font-black uppercase tracking-[0.2em] text-sm active:scale-[0.98]"
+                data-testid="mechanical-without-location"
+              >
+                Send without location
+              </button>
+              <button
+                type="button"
+                onClick={() => setMechanicalOpen(false)}
+                className="w-full py-3 text-xs uppercase tracking-widest text-neutral-500"
+                data-testid="mechanical-cancel"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="border-t border-neutral-200 bg-neutral-50">

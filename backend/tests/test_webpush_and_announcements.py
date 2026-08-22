@@ -144,15 +144,23 @@ class TestAnnouncementGating:
 
 # ---------------- Mechanical endpoint ----------------
 class TestMechanical:
-    def test_with_location(self, leo_token):
-        payload = {"lat": -36.8600, "lng": 174.7500, "text": "TEST_mech loc"}
+    def test_with_location_universal_maps_url(self, leo_token):
+        # Per bug fix: maps_link must be a universal Google Maps deep-link that
+        # OS-routes to native Maps on iOS/Android and falls back to web.
+        payload = {"lat": -36.86234, "lng": 174.75, "text": "TEST_mech loc"}
         r = requests.post(f"{API}/chat/mechanical", json=payload, headers=_auth(leo_token), timeout=10)
         assert r.status_code == 200, r.text
         msg = r.json()
         mech = msg.get("mechanical")
         assert mech is not None, msg
-        assert mech.get("maps_link"), mech
-        assert "maps.google.com" in mech["maps_link"]
+        link = mech.get("maps_link")
+        assert link, mech
+        assert link.startswith("https://www.google.com/maps/search/?api=1&query="), link
+        # lat/lng must be URL-encoded with comma as %2C
+        assert "%2C" in link, link
+        # Both coordinates should appear (allow 6-decimal formatting)
+        assert "-36.86234" in link or "-36.862340" in link, link
+        assert "174.75" in link, link
         assert msg.get("system") is True
 
     def test_without_location(self, leo_token):
@@ -162,6 +170,9 @@ class TestMechanical:
         mech = msg.get("mechanical")
         assert mech is not None, msg
         assert mech.get("maps_link") is None, mech
+        # Text should mention no location shared
+        text = (msg.get("text") or "").lower()
+        assert ("no location" in text) or ("didn't share" in text) or ("did not share" in text) or ("location not" in text), msg
 
 
 # ---------------- 1h ride reminder helper ----------------

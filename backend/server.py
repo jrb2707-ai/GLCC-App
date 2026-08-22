@@ -2026,8 +2026,10 @@ async def report_mechanical(body: MechanicalIn, user: dict = Depends(require_app
     lng = body.lng
     maps_link: Optional[str] = None
     if lat is not None and lng is not None:
-        # Google Maps universal link — opens the pin in the reporter's location
-        maps_link = f"https://maps.google.com/?q={lat:.6f},{lng:.6f}"
+        # Universal Google Maps URL — iOS Safari and Android Chrome will
+        # deep-link into the native Google Maps / Apple Maps apps if
+        # installed. Falls back to google.com/maps in the browser.
+        maps_link = f"https://www.google.com/maps/search/?api=1&query={lat:.6f}%2C{lng:.6f}"
     extra = (body.text or "").strip()[:200]
     text_parts = [f"🔧 {user.get('name')} has a mechanical."]
     if extra:

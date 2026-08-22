@@ -228,19 +228,22 @@ export default function ChatTab() {
             if (m.system) {
               const mech = m.mechanical;
               if (mech) {
+                const openMap = mech.maps_link ? () => Linking.openURL(mech.maps_link) : null;
                 return (
-                  <View key={m.id} style={s.mechanicalCard} testID={`mechanical-${m.id}`}>
+                  <TouchableOpacity
+                    key={m.id}
+                    activeOpacity={openMap ? 0.7 : 1}
+                    onPress={openMap || undefined}
+                    style={s.mechanicalCard}
+                    testID={`mechanical-${m.id}`}
+                    accessibilityRole={openMap ? "button" : undefined}
+                  >
                     <Text style={s.mechanicalEyebrow}>🔧 MECHANICAL ALERT</Text>
                     <Text style={s.mechanicalText}>{m.text}</Text>
                     {mech.maps_link && (
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(mech.maps_link)}
-                        testID={`mechanical-map-${m.id}`}
-                      >
-                        <Text style={s.mechanicalLink}>Open in Google Maps ↗</Text>
-                      </TouchableOpacity>
+                      <Text style={s.mechanicalLink} testID={`mechanical-map-${m.id}`}>Open in Google Maps ↗</Text>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               }
               return (
