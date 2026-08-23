@@ -207,3 +207,8 @@ See `/app/memory/test_credentials.md`.
   - `apple-review@glcc.club` / `GreyLynn2026!` — approved regular member for the day-to-day rider demo + Apple 1.2 report/block flows.
   - `apple-review-admin@glcc.club` / `GreyLynn2026!` — approved admin (Ride Captain) for announce/moderate/delete flows.
 - Update `App Store Connect → App Review → Sign-In Information` to hand Apple the member account (and optionally attach the admin one under "Notes").
+
+## Session Feb 22, 2026 — Push Adoption Banner
+- New `PushAdoptionBanner` at the top of Chat: shows only when `Notification.permission === "default"` and the rider hasn't tapped X. Enable button runs the existing `registerWebPush({silent: false})` flow. Dismiss persists via `localStorage["glcc.pushBanner.dismissed"]`.
+- Retired the old `PushBanner.jsx` (globally rendered in HomeShell) — it duplicated the new one and had less contextual copy. HomeShell import removed, file deleted.
+- Verified via testing_agent (iteration_17) — **100% (13/13 acceptance checks)** across default/denied/granted permission states, dismiss persistence, both Apple reviewer accounts, and coexistence with Leaflet mini-map.

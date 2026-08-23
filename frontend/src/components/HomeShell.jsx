@@ -7,7 +7,6 @@ import RidesTab from "./tabs/RidesTab";
 import CoffeeTab from "./tabs/CoffeeTab";
 import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
-import PushBanner from "./PushBanner";
 import PendingBanner from "./PendingBanner";
 
 const TABS = [
@@ -114,7 +113,6 @@ export default function HomeShell() {
         onTouchEnd={onTouchEnd}
       >
         <PendingBanner />
-        <PushBanner />
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}

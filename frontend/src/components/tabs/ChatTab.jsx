@@ -4,6 +4,7 @@ import { useAuth, useEvents } from "../../lib/store";
 import { Cloud, Send, Flag, Megaphone, Wrench, AtSign } from "lucide-react";
 import { toast } from "sonner";
 import MechanicalMiniMap from "../MechanicalMiniMap";
+import PushAdoptionBanner from "../PushAdoptionBanner";
 
 const REPORT_REASONS = [
   "Spam or scam",
@@ -309,6 +310,7 @@ export default function ChatTab() {
       </div>
 
       {/* Live mini-map of any unresolved mechanicals with a shared location. */}
+      {!isPending && <PushAdoptionBanner />}
       {!isPending && <MechanicalMiniMap messages={messages} />}
 
       {/* Messages */}

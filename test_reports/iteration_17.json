@@ -1,0 +1,44 @@
+{
+  "summary": "Tested PushAdoptionBanner in ChatTab across default/denied/granted Notification.permission states, dismiss persistence, enable click transition, tab visibility, and both Apple review accounts. All acceptance criteria met. Banner renders above the Leaflet mini-map, correct copy present, dismiss persists via localStorage['glcc.pushBanner.dismissed'], clearing the flag restores the banner, and banner is hidden on other tabs and login screen.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Chat", "issues": ["Two adoption banners can stack at the top of Chat simultaneously: the older pink 'Don't miss the round / Turn on pings' banner AND the new 'Turn on push' banner. Both target the same push-permission concept. Consider consolidating so riders don't see two competing nudges (dismissing one leaves the other, doubling vertical space above the mini-map)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Consider deduping the two push-adoption banners (existing pink 'Turn on pings' + new 'Turn on push') so only one shows at a time; today they both render when Notification.permission === 'default' and neither is dismissed.",
+    "Optional: registerWebPush() in webpush.js re-requests Notification.requestPermission only when silent=false, but when perm is already 'default' and the browser silently returns 'default' (Playwright headless behaviour), the enable button shows no toast at all — user has no feedback. Consider adding an explicit else branch when requestPermission resolves to 'default' (i.e. user dismissed prompt) that emits a neutral toast."
+  ],
+  "critical_code_review_comments": [
+    "PushAdoptionBanner.jsx L67-69: The visible copy 'Turn on push' is rendered inside an element with Tailwind class 'uppercase'. Playwright's inner_text() and screen readers will see 'TURN ON PUSH'. Not a bug, but tests that assert exact-case must use case-insensitive comparison.",
+    "PushAdoptionBanner.jsx: reads Notification.permission only once on mount. If the user leaves Chat, grants permission via browser settings, and returns, banner will still be visible until next reload. Acceptable for MVP but could be improved with a visibilitychange listener.",
+    "webpush.js registerWebPush: when Notification.requestPermission resolves to 'default' (user dismissed prompt) OR when subscription silently returns null (Chrome incognito Push API), the caller receives null and PushAdoptionBanner falls through to a generic error toast. Fine, but no toast surfaced in headless Playwright (see enable flow note)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (all acceptance checks pass)"},
+  "test_credentials": "apple-review@glcc.club / GreyLynn2026! and apple-review-admin@glcc.club / GreyLynn2026! (both work).",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PushAdoptionBanner testids: push-adoption-banner, push-adoption-enable, push-adoption-dismiss. localStorage key: 'glcc.pushBanner.dismissed' = '1'. To override Notification.permission in Playwright BEFORE navigation: page.context.add_init_script(\"Object.defineProperty(Notification, 'permission', { configurable: true, get: () => 'default' });\"). Login testids are input-email, input-password, submit-auth (NOT auth-email/auth-password). Tabs: tab-rides, tab-coffee, tab-riders, tab-chat (no tab-me). Note: an older pink 'Turn on pings' banner also exists in the Chat and coexists with the new push-adoption-banner — this may be a UX issue worth flagging.",
+  "test_results_detail": {
+    "sanity_login_screen_no_banner": "PASS",
+    "default_permission_regular_reviewer": "PASS (banner rendered with correct copy, both buttons present, positioned above Leaflet mini-map)",
+    "default_permission_admin_reviewer": "PASS (banner rendered)",
+    "banner_hidden_on_tab-rides": "PASS",
+    "banner_hidden_on_tab-coffee": "PASS",
+    "banner_hidden_on_tab-riders": "PASS",
+    "dismiss_hides_immediately": "PASS",
+    "dismiss_persists_in_localStorage": "PASS (glcc.pushBanner.dismissed=1)",
+    "dismiss_persists_across_reload": "PASS",
+    "clearing_flag_reload_restores_banner": "PASS",
+    "enable_button_click_no_crash": "PASS (button clicked; in Playwright headless the PushManager subscribe silently fails as expected — no toast surfaced but no crash and banner remained)",
+    "permission_denied_hides_banner": "PASS",
+    "permission_granted_hides_banner": "PASS",
+    "leaflet_mini_map_coexists_below_banner": "PASS (banner top < mini-map top)"
+  }
+}
