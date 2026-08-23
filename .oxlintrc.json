@@ -1,9 +1,47 @@
 {
   "ignorePatterns": [
     "**/node_modules/**",
+    "**/node_modules",
+    "node_modules/**",
+    "frontend/node_modules/**",
+    "mobile/node_modules/**",
     "**/build/**",
     "**/dist/**",
     "**/.expo/**",
-    "**/coverage/**"
-  ]
+    "**/coverage/**",
+    "**/*.min.js"
+  ],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2022": true,
+    "worker": true,
+    "serviceworker": true,
+    "mocha": true,
+    "jest": true
+  },
+  "globals": {
+    "self": "readonly",
+    "chrome": "readonly",
+    "define": "readonly",
+    "task": "readonly",
+    "desc": "readonly",
+    "jake": "readonly",
+    "publishTask": "readonly",
+    "namespace": "readonly",
+    "directory": "readonly",
+    "file": "readonly",
+    "rule": "readonly",
+    "complete": "readonly",
+    "fail": "readonly",
+    "out": "readonly",
+    "it": "readonly",
+    "describe": "readonly",
+    "before": "readonly",
+    "after": "readonly",
+    "beforeEach": "readonly",
+    "afterEach": "readonly",
+    "context": "readonly",
+    "specify": "readonly"
+  }
 }

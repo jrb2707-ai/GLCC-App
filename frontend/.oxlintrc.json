@@ -1,8 +1,33 @@
 {
   "ignorePatterns": [
     "**/node_modules/**",
+    "**/node_modules",
+    "node_modules/**",
     "build/**",
     "dist/**",
     "public/sw.js"
-  ]
+  ],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2022": true,
+    "worker": true,
+    "serviceworker": true,
+    "mocha": true,
+    "jest": true
+  },
+  "globals": {
+    "self": "readonly",
+    "chrome": "readonly",
+    "define": "readonly",
+    "task": "readonly",
+    "desc": "readonly",
+    "jake": "readonly",
+    "publishTask": "readonly",
+    "out": "readonly",
+    "it": "readonly",
+    "describe": "readonly",
+    "beforeEach": "readonly",
+    "afterEach": "readonly"
+  }
 }

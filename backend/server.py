@@ -2617,22 +2617,44 @@ async def seed():
         {"email": "sam@glcc.club", "password": "cycle123", "name": "Sam Whittaker", "role": "Sweep", "coffee": "Oat Flat White", "is_admin": False},
         {"email": "mika@glcc.club", "password": "cycle123", "name": "Mika Tanaka", "role": "Member", "coffee": "Small Cappuccino", "is_admin": False},
         {"email": "leo@glcc.club", "password": "cycle123", "name": "Leo Fifita", "role": "Member", "coffee": "Long Black", "is_admin": False},
+        # App Store reviewer accounts — Apple requires a working demo login.
+        # Both are always re-seeded so they survive DB wipes / rotations.
+        {"email": "apple-review@glcc.club", "password": "GreyLynn2026!", "name": "Apple Review",       "role": "Member", "coffee": "Medium Flat White", "is_admin": False, "bio": "App Store demo account — regular member. Chat, RSVP rides, view riders, order coffee. Use the report button on any chat message to demo Apple 1.2 moderation."},
+        {"email": "apple-review-admin@glcc.club", "password": "GreyLynn2026!", "name": "Apple Review (Admin)", "role": "Ride Captain", "coffee": "Medium Flat White", "is_admin": True,  "bio": "App Store demo account — admin. Announce, moderate, delete riders. Same password as the member account."},
     ]
     for m in demo_members:
-        if not await db.users.find_one({"email": m["email"]}):
+        existing = await db.users.find_one({"email": m["email"]})
+        base_doc = {
+            "email": m["email"],
+            "password_hash": hash_password(m["password"]),
+            "name": m["name"],
+            "role": m["role"],
+            "coffee": m["coffee"],
+            "is_admin": m["is_admin"],
+            "status": "approved",
+        }
+        if not existing:
             await db.users.insert_one({
-                "email": m["email"],
-                "password_hash": hash_password(m["password"]),
-                "name": m["name"],
-                "role": m["role"],
-                "coffee": m["coffee"],
-                "bio": "",
+                **base_doc,
+                "bio": m.get("bio", ""),
                 "photo": None,
-                "is_admin": m["is_admin"],
                 "is_president": False,
-                "status": "approved",
                 "created_at": now_utc(),
             })
+        elif m["email"].startswith("apple-review"):
+            # Keep the App Store review accounts pinned to the exact credentials
+            # + role Apple has on file, even if someone touches them in the UI.
+            await db.users.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {
+                    "password_hash": base_doc["password_hash"],
+                    "name": base_doc["name"],
+                    "role": base_doc["role"],
+                    "is_admin": base_doc["is_admin"],
+                    "status": "approved",
+                    "bio": m.get("bio", existing.get("bio") or ""),
+                }},
+            )
 
     # Rides come from Strava sync (via /api/strava/connect). No demo seed rides.
 

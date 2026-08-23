@@ -201,3 +201,9 @@ See `/app/memory/test_credentials.md`.
 - Native mobile fallback: a horizontal `mechanical-live-banner` pill strip renders above the messages ScrollView. Each pill (`mechanical-live-open-<id>`) taps into `Linking.openURL(mechanical.maps_link)`.
 - Backend: `POST /api/chat/mechanical/{id}/resolve` now also fires `push_to_all_except` with title `🔧 Mechanical resolved` and body `<reporter>: ✅ Fixed — on their way` / `🚴 Carrying on without them` (data.type = `chat.mechanical.resolved`).
 - New regression tests: `/app/backend/tests/test_mechanical_resolve_push.py` asserts the push signature via monkeypatch.
+
+## Session Feb 22, 2026 — App Store Reviewer Accounts
+- Added two idempotent seed accounts (auto-recreate on every backend startup, and re-pinned to spec if edited in the UI):
+  - `apple-review@glcc.club` / `GreyLynn2026!` — approved regular member for the day-to-day rider demo + Apple 1.2 report/block flows.
+  - `apple-review-admin@glcc.club` / `GreyLynn2026!` — approved admin (Ride Captain) for announce/moderate/delete flows.
+- Update `App Store Connect → App Review → Sign-In Information` to hand Apple the member account (and optionally attach the admin one under "Notes").
