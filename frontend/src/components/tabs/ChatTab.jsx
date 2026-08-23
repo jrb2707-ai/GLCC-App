@@ -3,6 +3,7 @@ import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
 import { Cloud, Send, Flag, Megaphone, Wrench, AtSign } from "lucide-react";
 import { toast } from "sonner";
+import MechanicalMiniMap from "../MechanicalMiniMap";
 
 const REPORT_REASONS = [
   "Spam or scam",
@@ -306,6 +307,9 @@ export default function ChatTab() {
           Messages auto-clear after 7 days
         </div>
       </div>
+
+      {/* Live mini-map of any unresolved mechanicals with a shared location. */}
+      {!isPending && <MechanicalMiniMap messages={messages} />}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-1.5 bg-white" data-testid="chat-messages">

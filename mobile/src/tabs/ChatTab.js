@@ -227,6 +227,33 @@ export default function ChatTab() {
         </View>
       </View>
 
+      {(() => {
+        const openMechs = messages.filter(
+          (m) => m.system && m.mechanical && !m.resolved && m.mechanical.lat != null && m.mechanical.lng != null,
+        ).slice(-3);
+        if (!openMechs.length) return null;
+        return (
+          <View style={s.mechBanner} testID="mechanical-live-banner">
+            <Text style={s.mechBannerTitle}>
+              🔧 {openMechs.length} OPEN MECHANICAL{openMechs.length === 1 ? "" : "S"} · TAP TO OPEN LOCATION
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+              {openMechs.map((m) => (
+                <TouchableOpacity
+                  key={m.id}
+                  onPress={() => m.mechanical.maps_link && Linking.openURL(m.mechanical.maps_link)}
+                  style={s.mechBannerPill}
+                  testID={`mechanical-live-open-${m.id}`}
+                >
+                  <Text style={s.mechBannerPillName}>{m.name}</Text>
+                  <Text style={s.mechBannerPillGo}>Open ↗</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        );
+      })()}
+
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1, backgroundColor: "#fff" }}
@@ -438,6 +465,11 @@ const s = StyleSheet.create({
   announcementEyebrow: { color: "#111", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
   announcementText: { color: "#111", fontSize: 14, fontWeight: "600", lineHeight: 19 },
   mechanicalCard: { marginHorizontal: 6, marginVertical: 4, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" },
+  mechBanner: { backgroundColor: "rgba(239,68,68,0.08)", borderTopWidth: 1, borderBottomWidth: 1, borderColor: "rgba(239,68,68,0.35)", paddingHorizontal: 12, paddingVertical: 8 },
+  mechBannerTitle: { color: "#dc2626", fontSize: 10, letterSpacing: 2, fontWeight: "900" },
+  mechBannerPill: { backgroundColor: "#fff", borderWidth: 1, borderColor: "rgba(239,68,68,0.5)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginRight: 6, flexDirection: "row", alignItems: "center", gap: 6 },
+  mechBannerPillName: { color: "#111", fontSize: 12, fontWeight: "700" },
+  mechBannerPillGo: { color: "#dc2626", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   mechanicalCardResolved: { backgroundColor: "#f4f4f5", borderColor: "#d4d4d8" },
   mechanicalEyebrow: { color: "#dc2626", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
   mechanicalEyebrowResolved: { color: "#71717a" },

@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 16 — Mechanical resolve push + Live mini-map. Backend: 7/7 pytest passing (4 existing resolve regression + 3 new in-process push assertions patching server.push_to_all_except via httpx ASGI). Confirmed correct signature: on resolve title='🔧 Mechanical resolved', body '<reporter>: ✅ Fixed — on their way' or '🚴 Carrying on without them', data.type='chat.mechanical.resolved' with status+original_id. Create endpoint push regression also verified with title '🔧 Mechanical', data.type='chat.mechanical' and data.maps_link included when lat/lng supplied. Frontend: mini-map renders at chat top with OSM tile layer + red divIcon pin, count pill reads 'N open mechanical(s)', clicking pin opens popup with Open-in-Google-Maps link (testid mechanical-mini-map-open-<id>) pointing at the correct maps_link URL. After resolving all open mechanicals via API the mini-map disappears (count = 0). Chat still auto-scrolls; follow-up bubble 'Fixed — on my way' appears from reporter. Mobile RN fallback banner code path verified in /app/mobile/src/tabs/ChatTab.js (testID='mechanical-live-banner', pill testIDs 'mechanical-live-open-<id>' calling Linking.openURL(m.mechanical.maps_link)).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_mechanical_resolve.py",
+    "/app/backend/tests/test_mechanical_resolve_push.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results_iter16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py uses deprecated @app.on_event('startup'/'shutdown'); consider migrating to FastAPI lifespan handlers (non-blocking).",
+    "MechanicalMiniMap slices to last 6 active mechanicals but count pill shows active.length (also capped at 6) — if more than 6 exist the pill under-reports. Consider showing total unresolved count separately."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mechanical_resolve_push.py (new)",
+    "/app/backend/tests/conftest.py (new session event_loop fixture)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "jb@glcc.club / Roenick2707 (admin/El Prez), mika@glcc.club / cycle123, sam@glcc.club / cycle123",
+  "seed_data_creation": "In-process tests create + resolve a mechanical per test; existing DB already had an unresolved mechanical (Rohan M, -36.862730, 174.728306) which the frontend flow resolved during test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend push assertions run in-process using httpx.ASGITransport + monkeypatch on server.push_to_all_except. Requires pytest-asyncio (installed) and REACT_APP_BACKEND_URL env for the sibling HTTP-based test file. Run: `REACT_APP_BACKEND_URL=<url> pytest tests/test_mechanical_resolve.py tests/test_mechanical_resolve_push.py -v --asyncio-mode=auto`. All 7 pass."
+}

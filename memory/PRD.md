@@ -194,4 +194,10 @@ See `/app/memory/test_credentials.md`.
 - Verified via testing_agent (iteration_15) — backend 4/4 pytest + frontend 5/5 scenarios PASS.
 
 ## Latest Verified Test Report
-`/app/test_reports/iteration_15.json` — mechanical resolve, member-since propagation, card contrast and swipe-back-to-rides all green.
+`/app/test_reports/iteration_16.json` — mechanical resolve push + Live mini-map: **backend 7/7 pytest + frontend 100% PASS**.
+
+## Session Feb 22, 2026 — Live Mechanical Map + Follow-up Push
+- Added a Leaflet + OpenStreetMap mini-map at the top of Chat (web) that shows every unresolved mechanical as a red pin with an "Open in Google Maps" popup. Auto-fits bounds; hides once every mechanical is resolved.
+- Native mobile fallback: a horizontal `mechanical-live-banner` pill strip renders above the messages ScrollView. Each pill (`mechanical-live-open-<id>`) taps into `Linking.openURL(mechanical.maps_link)`.
+- Backend: `POST /api/chat/mechanical/{id}/resolve` now also fires `push_to_all_except` with title `🔧 Mechanical resolved` and body `<reporter>: ✅ Fixed — on their way` / `🚴 Carrying on without them` (data.type = `chat.mechanical.resolved`).
+- New regression tests: `/app/backend/tests/test_mechanical_resolve_push.py` asserts the push signature via monkeypatch.

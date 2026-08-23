@@ -2148,6 +2148,19 @@ async def resolve_mechanical(message_id: str, body: MechanicalResolveIn, user: d
     follow_doc["_id"] = r.inserted_id
     follow_payload = serialize_message(follow_doc)
     await manager.broadcast({"type": "chat.message", "message": follow_payload})
+    # Fire a push so the club knows the mechanical is cleared.
+    status_line = "✅ Fixed — on their way" if body.status == "fixed" else "🚴 Carrying on without them"
+    asyncio.create_task(push_to_all_except(
+        str(user["_id"]),
+        "🔧 Mechanical resolved",
+        f"{reporter_name}: {status_line}",
+        {
+            "type": "chat.mechanical.resolved",
+            "message_id": follow_payload["id"],
+            "original_id": str(oid),
+            "status": body.status,
+        },
+    ))
     return {"resolved": updated_payload, "followup": follow_payload}
 
 
