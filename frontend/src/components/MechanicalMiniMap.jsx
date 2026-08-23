@@ -4,8 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Wrench, X } from "lucide-react";
 
-// Fix Leaflet's default icon paths that break in bundlers.
-delete L.Icon.Default.prototype._getIconUrl;
+// Point Leaflet's default icon paths at the CDN so they work under bundlers.
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -57,10 +56,11 @@ export default function MechanicalMiniMap({ messages, onDismiss }) {
   const containerRef = useRef(null);
   // Force leaflet to invalidate size on mount (parent may size after paint).
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) return undefined;
     const timer = setTimeout(() => {
-      const mapEl = containerRef.current.querySelector(".leaflet-container");
-      if (mapEl && mapEl._leaflet_map) mapEl._leaflet_map.invalidateSize();
+      const mapEl = containerRef.current && containerRef.current.querySelector(".leaflet-container");
+      const mapInstance = mapEl && mapEl["_leaflet_map"];
+      if (mapInstance && mapInstance.invalidateSize) mapInstance.invalidateSize();
     }, 60);
     return () => clearTimeout(timer);
   }, [active.length]);
