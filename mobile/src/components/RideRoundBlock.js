@@ -30,6 +30,7 @@ export default function RideRoundBlock({ ride }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
+  const [notMyTurn, setNotMyTurn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,17 +119,22 @@ export default function RideRoundBlock({ ride }) {
   const isBuyer = round?.buyer_user_id === user?.id;
   const usual = user?.coffee;
 
-  // No round → start CTA
+  // No round → two-button CTA at the bottom
   if (!round || (closed && !round?.closed_manually_at)) {
+    if (notMyTurn) return null;
     const cafeName = ride.cafe;
     return (
-      <View style={s.wrap} testID="ride-round-block">
-        <Text style={s.eyebrow}>☕ CAFÉ STOP</Text>
-        <Text style={s.cafeName}>{cafeName || "Café TBC"}</Text>
-        <TouchableOpacity onPress={startRound} disabled={busy} style={s.primaryBtn} testID="round-start">
-          <Text style={s.primaryBtnTxt}>{busy ? "…" : "☕ I'M BUYING — START ROUND"}</Text>
-        </TouchableOpacity>
-        <Text style={s.hint}>Everyone gets 5 min to order</Text>
+      <View style={s.ctaWrap} testID="ride-round-block">
+        <Text style={s.ctaEyebrow}>☕ COFFEE AT {(cafeName || "THE CAFÉ").toUpperCase()}</Text>
+        <View style={s.ctaRow}>
+          <TouchableOpacity onPress={startRound} disabled={busy} style={[s.ctaBuy, busy && { opacity: 0.5 }]} testID="round-start">
+            <Text style={s.ctaBuyTxt}>☕ I'M BUYING</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setNotMyTurn(true)} style={s.ctaSkip} testID="round-not-my-turn">
+            <Text style={s.ctaSkipTxt}>NOT MY TURN</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={s.hint}>SHOUT DROPS A 5-MIN PUSH TO THE PELOTON</Text>
       </View>
     );
   }
@@ -253,6 +259,13 @@ export default function RideRoundBlock({ ride }) {
 
 const s = StyleSheet.create({
   wrap: { marginTop: 20, padding: 14, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(201,152,106,0.30)", backgroundColor: "rgba(44,30,24,0.6)" },
+  ctaWrap: { marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.borderSubtle },
+  ctaEyebrow: { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900", marginBottom: 10 },
+  ctaRow: { flexDirection: "row", gap: 8 },
+  ctaBuy: { flex: 1, backgroundColor: colors.accentPink, borderRadius: radius.md, paddingVertical: 14, alignItems: "center" },
+  ctaBuyTxt: { color: "#fff", fontSize: 12, fontWeight: "900", letterSpacing: 2 },
+  ctaSkip: { flex: 1, backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, paddingVertical: 14, alignItems: "center" },
+  ctaSkipTxt: { color: colors.textSecondary, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
   eyebrow: { color: colors.accentCoffee, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   cafeName: { color: colors.textPrimary, fontSize: 18, fontWeight: "700", marginTop: 2 },
   cafeAddr: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
@@ -266,8 +279,8 @@ const s = StyleSheet.create({
   myOrderEye: { color: "#16a34a", fontSize: 10, letterSpacing: 2, fontWeight: "700", marginBottom: 2 },
   myOrderText: { color: colors.textPrimary, fontSize: 14, flex: 1 },
   retractTxt: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, paddingHorizontal: 4 },
-  usualBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(252,82,0,0.4)", borderWidth: 1, backgroundColor: "rgba(252,82,0,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
-  usualLbl: { color: colors.accentStrava, fontSize: 10, letterSpacing: 2, fontWeight: "900" },
+  usualBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
+  usualLbl: { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" },
   usualTxt: { color: colors.textPrimary, fontSize: 13, flex: 1 },
   input: { flex: 1, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 },
   sendBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },

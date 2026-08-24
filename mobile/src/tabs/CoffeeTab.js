@@ -116,8 +116,8 @@ export default function CoffeeTab() {
           />
           <TouchableOpacity
             onPress={saveUsual}
-            disabled={savingUsual || usual.trim() === (user?.coffee || "").trim()}
-            style={[s.saveBtn, (savingUsual || usual.trim() === (user?.coffee || "").trim()) && { opacity: 0.4 }]}
+            disabled={savingUsual || !usual.trim()}
+            style={[s.saveBtn, (savingUsual || !usual.trim()) && { opacity: 0.4 }]}
             testID="usual-save"
           >
             <Text style={s.saveBtnTxt}>SAVE</Text>
@@ -190,10 +190,10 @@ export default function CoffeeTab() {
 const s = StyleSheet.create({
   h1: { color: colors.textPrimary, fontSize: 30, fontWeight: "900", letterSpacing: 2 },
   meta: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700" },
-  eyebrow: { color: colors.accentStrava, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
+  eyebrow: { color: colors.accentPink, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   usualCard: { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.lg, padding: 14 },
   input: { flex: 1, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 },
-  saveBtn: { backgroundColor: colors.accentStrava, borderRadius: radius.md, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  saveBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   saveBtnTxt: { color: "#fff", fontSize: 11, fontWeight: "900", letterSpacing: 2 },
   hint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", marginTop: 8 },
   sectionHead: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "900" },

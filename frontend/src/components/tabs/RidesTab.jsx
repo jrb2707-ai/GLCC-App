@@ -230,8 +230,6 @@ export default function RidesTab({ onNavigate }) {
           </div>
         </div>
 
-        <RideRoundBlock ride={open} initialCafe={open.cafe} />
-
         <div className="mt-5">
           <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">
             Going · {going.length}
@@ -249,6 +247,8 @@ export default function RidesTab({ onNavigate }) {
             ))}
           </div>
         </div>
+
+        <RideRoundBlock ride={open} initialCafe={open.cafe} />
       </div>
     );
   }

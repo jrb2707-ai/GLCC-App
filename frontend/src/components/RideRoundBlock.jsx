@@ -59,6 +59,14 @@ export default function RideRoundBlock({ ride, initialCafe }) {
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
   const [showCloseView, setShowCloseView] = useState(false);
+  const notMyTurnKey = `glcc.notMyTurn.${ride.id}`;
+  const [notMyTurn, setNotMyTurn] = useState(() => {
+    try { return typeof localStorage !== "undefined" && localStorage.getItem(notMyTurnKey) === "1"; } catch { return false; }
+  });
+  function dismissMyTurn() {
+    try { localStorage.setItem(notMyTurnKey, "1"); } catch (_) {}
+    setNotMyTurn(true);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -148,33 +156,43 @@ export default function RideRoundBlock({ ride, initialCafe }) {
     );
   }
 
-  // No active round → offer to start one
+  // No active round → show the two-button CTA pair
   if (!round || (closed && !showCloseView && !round?.closed_manually_at)) {
     const showStart = !round || countdown.expired;
     if (!showStart) return null;
+    if (notMyTurn) return null;
     const cafeName = ride.cafe || initialCafe;
     return (
       <div
-        className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/30 rounded-2xl p-4"
+        className="mt-6 pt-4 border-t border-border-subtle"
         data-testid="ride-round-block"
       >
-        <div className="flex items-center gap-2 text-accent-coffee">
-          <Coffee className="w-4 h-4" />
-          <span className="text-[10px] uppercase tracking-widest font-mono-stat">Café stop</span>
+        <div className="flex items-center gap-2 text-accent-pink mb-2">
+          <Coffee className="w-3.5 h-3.5" />
+          <span className="text-[10px] uppercase tracking-widest font-mono-stat font-bold">
+            Coffee at {cafeName || "the café"}
+          </span>
         </div>
-        <div className="font-heading text-xl font-bold mt-1 text-text-primary">
-          {cafeName || "Café TBC"}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={startRound}
+            disabled={busy}
+            className="bg-accent-pink text-white font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50"
+            data-testid="round-start"
+          >
+            <Coffee className="w-3.5 h-3.5" /> I'm Buying
+          </button>
+          <button
+            onClick={dismissMyTurn}
+            disabled={busy}
+            className="bg-bg-secondary border border-border-subtle text-text-secondary font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl active:scale-95 hover:border-text-muted"
+            data-testid="round-not-my-turn"
+          >
+            Not My Turn
+          </button>
         </div>
-        <button
-          onClick={startRound}
-          disabled={busy}
-          className="mt-3 w-full bg-accent-pink text-white font-black uppercase tracking-[0.22em] text-xs py-3 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50"
-          data-testid="round-start"
-        >
-          <Coffee className="w-4 h-4" /> I'm Buying — Start Round
-        </button>
         <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
-          Everyone gets 5 min to order
+          Shout drops a 5-min push to the peloton
         </div>
       </div>
     );
@@ -272,12 +290,12 @@ export default function RideRoundBlock({ ride, initialCafe }) {
                 <button
                   onClick={() => submitOrder(usual)}
                   disabled={busy}
-                  className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-strava/40 bg-accent-strava/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
+                  className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-pink/40 bg-accent-pink/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
                   data-testid="round-usual"
                 >
-                  <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-strava shrink-0">Usual →</span>
+                  <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Usual →</span>
                   <span className="text-sm truncate flex-1">{usual}</span>
-                  <Send className="w-3.5 h-3.5 text-accent-strava shrink-0" />
+                  <Send className="w-3.5 h-3.5 text-accent-pink shrink-0" />
                 </button>
               )}
               <div className="flex items-center gap-2">
@@ -286,7 +304,7 @@ export default function RideRoundBlock({ ride, initialCafe }) {
                   onChange={(e) => setOrderText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && submitOrder()}
                   placeholder="Flat white, no sugar…"
-                  className="flex-1 bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-strava outline-none"
+                  className="flex-1 bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-pink outline-none"
                   data-testid="round-order-input"
                   maxLength={140}
                 />

@@ -240,3 +240,9 @@ Full rework of the coffee flow. Café stop is now a sub-object of a ride, not a 
 **Mobile** — parity via `/app/mobile/src/components/RideRoundBlock.js` + rewritten `/app/mobile/src/tabs/CoffeeTab.js`. Same testIDs.
 
 **Verified** via testing_agent (iteration_18) — backend 16/16 pytest + full web e2e PASS. Medium UX bug on Dismiss patched post-report.
+
+## Session Feb 22, 2026 — Coffee CTA Polish
+- **Colour coord**: Coffee flow is now pink end-to-end (Usual card eyebrow, save button, Usual → chip on both web + native).
+- **Bottom-of-ride CTA pair**: Ride detail moves the Coffee CTA to the very bottom (below Going list) and splits it into two clear buttons — **"I'm Buying"** (pink) and **"Not My Turn"** (outlined). "Not My Turn" locally hides the pair via `localStorage["glcc.notMyTurn.<rideId>"]` — reappears if someone actually starts a round.
+- Fixed React hooks-order bug (moved `useState` for `notMyTurn` above the loading return).
+- Save-Usual is no longer disabled when the value matches — always tappable.

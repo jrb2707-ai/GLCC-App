@@ -118,7 +118,7 @@ export default function CoffeeTab({ onNavigate }) {
 
       {/* Usual order */}
       <div className="bg-bg-secondary border border-border-subtle rounded-2xl p-4" data-testid="usual-card">
-        <div className="flex items-center gap-2 text-accent-strava">
+        <div className="flex items-center gap-2 text-accent-pink">
           <Coffee className="w-4 h-4" />
           <span className="text-[10px] uppercase tracking-widest font-mono-stat font-bold">Your usual</span>
         </div>
@@ -127,14 +127,14 @@ export default function CoffeeTab({ onNavigate }) {
             value={usual}
             onChange={(e) => setUsual(e.target.value)}
             placeholder="Flat white, no sugar…"
-            className="flex-1 bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-strava outline-none"
+            className="flex-1 bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-pink outline-none"
             data-testid="usual-input"
             maxLength={140}
           />
           <button
             onClick={saveUsual}
-            disabled={savingUsual || usual.trim() === (user?.coffee || "").trim()}
-            className="bg-accent-strava text-white rounded-xl px-3 py-2.5 disabled:opacity-40 active:scale-95"
+            disabled={savingUsual || !usual.trim()}
+            className="bg-accent-pink text-white rounded-xl px-3 py-2.5 disabled:opacity-40 active:scale-95 shadow-pink"
             data-testid="usual-save"
             aria-label="Save usual order"
           >
