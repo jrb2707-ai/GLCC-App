@@ -212,3 +212,8 @@ See `/app/memory/test_credentials.md`.
 - New `PushAdoptionBanner` at the top of Chat: shows only when `Notification.permission === "default"` and the rider hasn't tapped X. Enable button runs the existing `registerWebPush({silent: false})` flow. Dismiss persists via `localStorage["glcc.pushBanner.dismissed"]`.
 - Retired the old `PushBanner.jsx` (globally rendered in HomeShell) — it duplicated the new one and had less contextual copy. HomeShell import removed, file deleted.
 - Verified via testing_agent (iteration_17) — **100% (13/13 acceptance checks)** across default/denied/granted permission states, dismiss persistence, both Apple reviewer accounts, and coexistence with Leaflet mini-map.
+
+## Session Feb 22, 2026 — App Store Screenshots
+- New auto-capture script `/app/mobile/store-assets/screenshots/capture.py` (Playwright + Chromium) that logs in as `bryantj@xtra.co.nz` and captures 7 hero shots across 5 device sizes (iPhone 6.7"/6.5"/5.5", iPad 12.9", iPad 13"). Auto-clears any old open mechanicals + posts a fresh one on Great North Rd so the mini-map always has a live pin.
+- Also seeded `bryantj@xtra.co.nz` (password `Roenick2707`, El Presidente, approved) on preview — one-off, not in the seed loop.
+- Outputs to `/app/mobile/store-assets/screenshots/final/<device>/` with a README explaining upload order. Ready for App Store Connect → Media Manager.
