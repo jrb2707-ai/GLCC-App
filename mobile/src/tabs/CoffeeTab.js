@@ -7,6 +7,7 @@ import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
+import RideRoundBlock from "../components/RideRoundBlock";
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -42,6 +43,7 @@ export default function CoffeeTab() {
   const { subscribe } = useEvents();
   const [active, setActive] = useState([]);
   const [history, setHistory] = useState([]);
+  const [nextRide, setNextRide] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [usual, setUsual] = useState(user?.coffee || "Medium Flat White");
@@ -50,12 +52,18 @@ export default function CoffeeTab() {
 
   const load = useCallback(async () => {
     try {
-      const [a, h] = await Promise.all([
+      const [a, h, r] = await Promise.all([
         api.get("/coffee/rounds/active"),
         api.get("/coffee/rounds/history"),
+        api.get("/rides"),
       ]);
       setActive(a.data.rounds || []);
       setHistory(h.data.rounds || []);
+      const now = Date.now();
+      const upcoming = (r.data.rides || [])
+        .filter((rd) => rd.starts_at && new Date(rd.starts_at).getTime() > now)
+        .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+      setNextRide(upcoming[0] || (r.data.rides || [])[0] || null);
     } catch (_) {}
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -101,6 +109,12 @@ export default function CoffeeTab() {
         <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
       </View>
 
+      {nextRide ? (
+        <View testID="coffee-quick-shout">
+          <RideRoundBlock ride={nextRide} />
+        </View>
+      ) : null}
+
       {/* Usual order */}
       <View style={s.usualCard} testID="usual-card">
         <Text style={s.eyebrow}>☕ YOUR USUAL</Text>
@@ -120,7 +134,7 @@ export default function CoffeeTab() {
             style={[s.saveBtn, (savingUsual || !usual.trim()) && { opacity: 0.4 }]}
             testID="usual-save"
           >
-            <Text style={s.saveBtnTxt}>SAVE</Text>
+            <Text style={s.saveBtnTxt}>☕</Text>
           </TouchableOpacity>
         </View>
         <Text style={s.hint}>Pre-fills when someone starts a round. One tap and you're in.</Text>
@@ -194,7 +208,7 @@ const s = StyleSheet.create({
   usualCard: { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.lg, padding: 14 },
   input: { flex: 1, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 },
   saveBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
-  saveBtnTxt: { color: "#fff", fontSize: 11, fontWeight: "900", letterSpacing: 2 },
+  saveBtnTxt: { color: "#fff", fontSize: 18, fontWeight: "900" },
   hint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", marginTop: 8 },
   sectionHead: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "900" },
   hr: { flex: 1, height: 1, backgroundColor: colors.borderSubtle },

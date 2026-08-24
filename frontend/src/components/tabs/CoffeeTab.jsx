@@ -3,7 +3,8 @@ import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
 import { toast } from "sonner";
 import Avatar from "../Avatar";
-import { Coffee, Save, ChevronRight } from "lucide-react";
+import { Coffee, ChevronRight } from "lucide-react";
+import RideRoundBlock from "../RideRoundBlock";
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -48,6 +49,7 @@ export default function CoffeeTab({ onNavigate }) {
   const { subscribe } = useEvents();
   const [active, setActive] = useState([]);
   const [history, setHistory] = useState([]);
+  const [nextRide, setNextRide] = useState(null);
   const [loading, setLoading] = useState(true);
   const [usual, setUsual] = useState(user?.coffee || "Medium Flat White");
   const [savingUsual, setSavingUsual] = useState(false);
@@ -55,12 +57,19 @@ export default function CoffeeTab({ onNavigate }) {
 
   const load = async () => {
     try {
-      const [a, h] = await Promise.all([
+      const [a, h, r] = await Promise.all([
         api.get("/coffee/rounds/active"),
         api.get("/coffee/rounds/history"),
+        api.get("/rides"),
       ]);
       setActive(a.data.rounds || []);
       setHistory(h.data.rounds || []);
+      // Pick the closest upcoming ride so the top-of-tab CTA has a target.
+      const now = Date.now();
+      const upcoming = (r.data.rides || [])
+        .filter((rd) => rd.starts_at && new Date(rd.starts_at).getTime() > now)
+        .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+      setNextRide(upcoming[0] || (r.data.rides || [])[0] || null);
     } catch (_) { /* silent */ }
     finally { setLoading(false); }
   };
@@ -116,6 +125,14 @@ export default function CoffeeTab({ onNavigate }) {
         </span>
       </div>
 
+      {/* Quick-shout CTA: same block used on ride detail, bound to the next
+          upcoming ride so any rider can start a round without navigating. */}
+      {nextRide && (
+        <div data-testid="coffee-quick-shout">
+          <RideRoundBlock ride={nextRide} initialCafe={nextRide.cafe} />
+        </div>
+      )}
+
       {/* Usual order */}
       <div className="bg-bg-secondary border border-border-subtle rounded-2xl p-4" data-testid="usual-card">
         <div className="flex items-center gap-2 text-accent-pink">
@@ -138,7 +155,7 @@ export default function CoffeeTab({ onNavigate }) {
             data-testid="usual-save"
             aria-label="Save usual order"
           >
-            <Save className="w-4 h-4" />
+            <Coffee className="w-4 h-4" />
           </button>
         </div>
         <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest">
