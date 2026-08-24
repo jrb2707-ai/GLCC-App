@@ -108,11 +108,8 @@ export default function CoffeeTab({ onNavigate }) {
   }
 
   function openRound(round) {
-    // Jump into the ride detail if we know which ride it hangs off.
-    if (round.ride_id && onNavigate) {
-      onNavigate("rides", { rideId: round.ride_id });
-      return;
-    }
+    // Always show the modal with the live orders + inline order input so the
+    // rider can slot in their order without switching tabs.
     setDetail(round);
   }
 
@@ -199,33 +196,164 @@ export default function CoffeeTab({ onNavigate }) {
         )}
       </div>
 
-      {/* Round preview modal (when we can't deep-link into the ride) */}
+      {/* Round preview modal — full orders list + inline order input so the
+          rider can slot into any live round without leaving the Coffee tab. */}
       {detail && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setDetail(null)}>
-          <div className="w-full max-w-sm bg-bg-primary border border-border-subtle rounded-2xl p-4">
-            <div className="flex items-center gap-2">
-              <Avatar name={detail.buyer_name} photo={detail.buyer_photo} size="md" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee">{detail.closed ? "Locked" : "Live"}</div>
-                <div className="font-heading text-lg font-bold text-text-primary truncate">{detail.buyer_name}&apos;s shout</div>
-                <div className="text-[12px] text-text-secondary truncate">{detail.cafe_name} · {detail.ride_name}</div>
-              </div>
-              <button onClick={() => setDetail(null)} className="text-text-muted p-1" aria-label="Close">✕</button>
+        <RoundDetailModal
+          round={detail}
+          onClose={() => setDetail(null)}
+          onChange={(next) => setDetail(next)}
+          usual={user?.coffee}
+        />
+      )}
+    </div>
+  );
+}
+
+function RoundDetailModal({ round, onClose, onChange, usual }) {
+  const { subscribe } = useEvents();
+  const [orderText, setOrderText] = useState("");
+  const [busy, setBusy] = useState(false);
+  // Live-update whenever anyone submits or the round closes.
+  useEffect(() => subscribe((evt) => {
+    if (!evt.round || evt.round.id !== round.id) return;
+    if (["coffee.round.updated", "coffee.round.closed"].includes(evt.type)) {
+      onChange(evt.round);
+    }
+  }), [subscribe, round.id, onChange]);
+  const { user } = useAuth();
+  const myOrder = round.orders?.find((o) => o.user_id === user?.id);
+  useEffect(() => { if (myOrder?.text) setOrderText(myOrder.text); }, [myOrder?.text]);
+
+  async function submitOrder(textOverride) {
+    const text = (textOverride ?? orderText).trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/rides/${round.ride_id}/round/order`, { text });
+      onChange(data);
+      setOrderText(text);
+      toast("In the round ✓");
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+  async function retract() {
+    setBusy(true);
+    try {
+      const { data } = await api.delete(`/rides/${round.ride_id}/round/order`);
+      onChange(data);
+      setOrderText("");
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+  function copyList() {
+    const text = round.orders.map((o) => `${o.name}: ${o.text}`).join("\n");
+    navigator.clipboard?.writeText(text);
+    toast("Copied for the barista 📋");
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      data-testid="coffee-round-modal"
+    >
+      <div className="w-full max-w-sm bg-bg-primary border border-border-subtle rounded-2xl p-4">
+        <div className="flex items-center gap-2">
+          <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink">
+              {round.closed ? "Locked" : "Live"}
             </div>
-            <div className="mt-3 space-y-1.5 max-h-64 overflow-auto">
-              {detail.orders.map((o) => (
-                <div key={o.user_id} className="bg-bg-secondary border border-border-subtle rounded-lg px-2.5 py-1.5">
+            <div className="font-heading text-lg font-bold text-text-primary truncate">
+              {round.buyer_name}&apos;s shout
+            </div>
+            <div className="text-[12px] text-text-secondary truncate">
+              {round.cafe_name} · {round.ride_name}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-text-muted p-1" aria-label="Close">✕</button>
+        </div>
+
+        {!round.closed && (
+          <div className="mt-4">
+            {myOrder ? (
+              <div className="bg-status-going/10 border border-status-going/30 rounded-xl p-3 flex items-center gap-2" data-testid="modal-my-order">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-mono-stat uppercase tracking-widest text-status-going">Your order</div>
+                  <div className="text-sm text-text-primary truncate">{myOrder.text}</div>
+                </div>
+                <button onClick={retract} disabled={busy} className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-status-cant px-2" data-testid="modal-retract">
+                  Undo
+                </button>
+              </div>
+            ) : (
+              <div>
+                {usual && (
+                  <button
+                    onClick={() => submitOrder(usual)}
+                    disabled={busy}
+                    className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-pink/40 bg-accent-pink/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
+                    data-testid="modal-usual"
+                  >
+                    <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Usual →</span>
+                    <span className="text-sm truncate flex-1">{usual}</span>
+                  </button>
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    value={orderText}
+                    onChange={(e) => setOrderText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submitOrder()}
+                    placeholder="Flat white, no sugar…"
+                    className="flex-1 bg-bg-secondary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-pink outline-none"
+                    data-testid="modal-order-input"
+                    maxLength={140}
+                  />
+                  <button
+                    onClick={() => submitOrder()}
+                    disabled={busy || !orderText.trim()}
+                    className="bg-accent-pink text-white rounded-xl px-3 py-2.5 disabled:opacity-40 active:scale-95 text-[11px] font-black uppercase tracking-widest"
+                    data-testid="modal-submit"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4">
+          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-1.5">
+            {round.orders.length} order{round.orders.length === 1 ? "" : "s"}{round.closed ? " · locked" : ""}
+          </div>
+          <div className="space-y-1.5 max-h-64 overflow-auto" data-testid="modal-order-list">
+            {round.orders.map((o) => (
+              <div key={o.user_id} className="bg-bg-secondary border border-border-subtle rounded-lg px-2.5 py-1.5 flex items-center gap-2">
+                <Avatar name={o.name} photo={o.photo} size="xs" />
+                <div className="flex-1 min-w-0">
                   <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">{o.name}</div>
                   <div className="text-sm text-text-primary">{o.text}</div>
                 </div>
-              ))}
-              {detail.orders.length === 0 && (
-                <div className="text-[12px] text-text-muted italic">No orders in.</div>
-              )}
-            </div>
+              </div>
+            ))}
+            {round.orders.length === 0 && (
+              <div className="text-[12px] text-text-muted italic">No orders in yet.</div>
+            )}
           </div>
         </div>
-      )}
+
+        {round.closed && round.orders.length > 0 && (
+          <button
+            onClick={copyList}
+            className="mt-3 w-full text-[10px] font-black uppercase tracking-widest bg-accent-coffee/20 border border-accent-coffee/40 text-accent-coffee py-2 rounded-lg active:scale-95"
+            data-testid="modal-copy"
+          >
+            Copy list for barista
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -168,31 +168,18 @@ export default function CoffeeTab() {
         )}
       </View>
 
-      {/* Detail modal */}
+      {/* Detail modal — inline order input + live orders list */}
       <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
         <View style={s.modalBg}>
           <View style={s.modalCard}>
             {detail && (
-              <>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <Avatar name={detail.buyer_name} photo={detail.buyer_photo} size="md" />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.eyebrow}>{detail.closed ? "LOCKED" : "LIVE"}</Text>
-                    <Text style={s.modalTitle} numberOfLines={1}>{detail.buyer_name}'s shout</Text>
-                    <Text style={s.rowSub} numberOfLines={1}>{detail.cafe_name} · {detail.ride_name}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setDetail(null)}><Text style={{ color: colors.textMuted, fontSize: 20, padding: 4 }}>✕</Text></TouchableOpacity>
-                </View>
-                <ScrollView style={{ maxHeight: 320, marginTop: 12 }}>
-                  {detail.orders.map((o) => (
-                    <View key={o.user_id} style={s.orderRow}>
-                      <Text style={s.orderName}>{(o.name || "").toUpperCase()}</Text>
-                      <Text style={s.orderText}>{o.text}</Text>
-                    </View>
-                  ))}
-                  {detail.orders.length === 0 && <Text style={s.hint}>No orders in.</Text>}
-                </ScrollView>
-              </>
+              <RoundDetailBody
+                round={detail}
+                onChange={setDetail}
+                onClose={() => setDetail(null)}
+                usual={user?.coffee}
+                subscribe={subscribe}
+              />
             )}
           </View>
         </View>
@@ -225,4 +212,149 @@ const s = StyleSheet.create({
   orderRow: { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6 },
   orderName: { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
   orderText: { color: colors.textPrimary, fontSize: 13, marginTop: 2 },
+  usualPill: { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
+  usualPillLbl: { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" },
+  usualPillTxt: { color: colors.textPrimary, fontSize: 13, flex: 1 },
+  sendBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  sendBtnTxt: { color: "#fff", fontSize: 11, fontWeight: "900", letterSpacing: 2 },
+  myOrderBox: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10, flexDirection: "row", alignItems: "center" },
+  copyBarBtn: { marginTop: 12, backgroundColor: "rgba(201,152,106,0.15)", borderColor: "rgba(201,152,106,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, alignItems: "center" },
+  copyBarBtnTxt: { color: colors.accentCoffee, fontSize: 11, fontWeight: "900", letterSpacing: 2 },
 });
+
+function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
+  const { user } = useAuth();
+  const [orderText, setOrderText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => subscribe((evt) => {
+    if (!evt.round || evt.round.id !== round.id) return;
+    if (["coffee.round.updated", "coffee.round.closed"].includes(evt.type)) onChange(evt.round);
+  }), [subscribe, round.id, onChange]);
+
+  const myOrder = round.orders?.find((o) => o.user_id === user?.id);
+  useEffect(() => { if (myOrder?.text) setOrderText(myOrder.text); }, [myOrder?.text]);
+
+  async function submit(textOverride) {
+    const text = (textOverride ?? orderText).trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/rides/${round.ride_id}/round/order`, { text });
+      onChange(data);
+      setOrderText(text);
+    } catch (e) { Alert.alert("Order", formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+  async function retract() {
+    setBusy(true);
+    try {
+      const { data } = await api.delete(`/rides/${round.ride_id}/round/order`);
+      onChange(data);
+      setOrderText("");
+    } catch (e) { Alert.alert("Order", formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+  function copyList() {
+    if (!round.orders?.length) return;
+    const { Clipboard } = require("react-native");
+    const text = round.orders.map((o) => `${o.name}: ${o.text}`).join("\n");
+    Clipboard.setString(text);
+    Alert.alert("Copied", "Order list copied.");
+  }
+
+  return (
+    <>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styleseye]}>{round.closed ? "LOCKED" : "LIVE"}</Text>
+          <Text style={styleModalTitle} numberOfLines={1}>{round.buyer_name}'s shout</Text>
+          <Text style={styleRowSub} numberOfLines={1}>{round.cafe_name} · {round.ride_name}</Text>
+        </View>
+        <TouchableOpacity onPress={onClose}><Text style={{ color: colors.textMuted, fontSize: 20, padding: 4 }}>✕</Text></TouchableOpacity>
+      </View>
+
+      {!round.closed && (
+        <View style={{ marginTop: 14 }}>
+          {myOrder ? (
+            <View style={styleMyOrderBox} testID="modal-my-order">
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styleOrderName, { color: "#16a34a" }]}>YOUR ORDER</Text>
+                <Text style={styleOrderText} numberOfLines={2}>{myOrder.text}</Text>
+              </View>
+              <TouchableOpacity onPress={retract} disabled={busy} testID="modal-retract">
+                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, paddingHorizontal: 6 }}>UNDO</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View>
+              {usual ? (
+                <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-usual">
+                  <Text style={styleUsualPillLbl}>USUAL →</Text>
+                  <Text style={styleUsualPillTxt} numberOfLines={1}>{usual}</Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TextInput
+                  value={orderText}
+                  onChangeText={setOrderText}
+                  placeholder="Flat white, no sugar…"
+                  placeholderTextColor={colors.textMuted}
+                  style={styleInput}
+                  maxLength={140}
+                  testID="modal-order-input"
+                  onSubmitEditing={() => submit()}
+                />
+                <TouchableOpacity onPress={() => submit()} disabled={busy || !orderText.trim()} style={[styleSendBtn, (busy || !orderText.trim()) && { opacity: 0.4 }]} testID="modal-submit">
+                  <Text style={styleSendBtnTxt}>SEND</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      <Text style={[styleHint, { marginTop: 14 }]}>
+        {round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"}{round.closed ? " · LOCKED" : ""}
+      </Text>
+      <ScrollView style={{ maxHeight: 260, marginTop: 6 }} testID="modal-order-list">
+        {round.orders.map((o) => (
+          <View key={o.user_id} style={styleOrderRow}>
+            <Avatar name={o.name} photo={o.photo} size="xs" />
+            <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>
+              <Text style={styleOrderName}>{(o.name || "").toUpperCase()}</Text>
+              <Text style={styleOrderText}>{o.text}</Text>
+            </View>
+          </View>
+        ))}
+        {round.orders.length === 0 && <Text style={styleHint}>No orders in yet.</Text>}
+      </ScrollView>
+
+      {round.closed && round.orders.length > 0 && (
+        <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
+          <Text style={styleCopyBarTxt}>COPY LIST FOR BARISTA</Text>
+        </TouchableOpacity>
+      )}
+    </>
+  );
+}
+
+// Aliases so the inner component can reuse the outer stylesheet without a
+// forward-ref dance. Keeps the file flat and readable.
+const styleseye = { color: colors.accentPink, fontSize: 10, letterSpacing: 3, fontWeight: "700" };
+const styleModalTitle = { color: colors.textPrimary, fontSize: 18, fontWeight: "700" };
+const styleRowSub = { color: colors.textSecondary, fontSize: 12 };
+const styleMyOrderBox = { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10, flexDirection: "row", alignItems: "center" };
+const styleOrderName = { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" };
+const styleOrderText = { color: colors.textPrimary, fontSize: 13, marginTop: 2 };
+const styleOrderRow = { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6, flexDirection: "row", alignItems: "center" };
+const styleUsualPill = { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 };
+const styleUsualPillLbl = { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" };
+const styleUsualPillTxt = { color: colors.textPrimary, fontSize: 13, flex: 1 };
+const styleInput = { flex: 1, backgroundColor: colors.bgSecondary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 };
+const styleSendBtn = { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" };
+const styleSendBtnTxt = { color: "#fff", fontSize: 11, fontWeight: "900", letterSpacing: 2 };
+const styleHint = { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700" };
+const styleCopyBar = { marginTop: 12, backgroundColor: "rgba(201,152,106,0.15)", borderColor: "rgba(201,152,106,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, alignItems: "center" };
+const styleCopyBarTxt = { color: colors.accentCoffee, fontSize: 11, fontWeight: "900", letterSpacing: 2 };
