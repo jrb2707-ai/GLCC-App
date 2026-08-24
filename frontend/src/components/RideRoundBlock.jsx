@@ -1,0 +1,324 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Coffee, Clock, Send, X, Check, Undo2 } from "lucide-react";
+import { toast } from "sonner";
+import { api, formatDetail } from "../lib/api";
+import { useAuth, useEvents } from "../lib/store";
+import Avatar from "./Avatar";
+
+function useCountdown(iso) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!iso) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [iso]);
+  if (!iso) return { text: "", seconds: 0, expired: true };
+  const target = new Date(iso).getTime();
+  const secs = Math.max(0, Math.floor((target - now) / 1000));
+  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+  const ss = String(secs % 60).padStart(2, "0");
+  return { text: `${mm}:${ss}`, seconds: secs, expired: secs <= 0 };
+}
+
+function OrderList({ round, compact = false }) {
+  if (!round.orders?.length) {
+    return (
+      <div className="mt-2 text-[12px] text-text-muted italic" data-testid="round-orders-empty">
+        No orders in yet…
+      </div>
+    );
+  }
+  return (
+    <ul className="mt-2 space-y-1.5" data-testid="round-orders">
+      {round.orders.map((o) => (
+        <li
+          key={o.user_id}
+          className="flex items-center gap-2 bg-bg-primary/60 border border-border-subtle rounded-lg px-2.5 py-1.5"
+          data-testid={`round-order-${o.user_id}`}
+        >
+          <Avatar name={o.name} photo={o.photo} size="xs" />
+          <div className="flex-1 min-w-0">
+            <div className={compact ? "text-[11px] text-text-muted uppercase tracking-widest font-mono-stat" : "text-[10px] text-text-muted uppercase tracking-widest font-mono-stat"}>
+              {o.name}
+            </div>
+            <div className={compact ? "text-sm text-text-primary" : "text-[13px] text-text-primary leading-snug"}>
+              {o.text}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export default function RideRoundBlock({ ride, initialCafe }) {
+  const { user } = useAuth();
+  const { subscribe } = useEvents();
+  const [round, setRound] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [orderText, setOrderText] = useState("");
+  const [showCloseView, setShowCloseView] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get(`/rides/${ride.id}/round`);
+        if (!cancelled) setRound(data.round);
+      } catch (_) { /* ignore */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [ride.id]);
+
+  useEffect(() => {
+    return subscribe((evt) => {
+      if (!evt.round || evt.round.ride_id !== ride.id) return;
+      if (["coffee.round.started", "coffee.round.updated", "coffee.round.closed"].includes(evt.type)) {
+        setRound(evt.round);
+      }
+    });
+  }, [subscribe, ride.id]);
+
+  const myOrder = useMemo(
+    () => round?.orders?.find((o) => o.user_id === user?.id),
+    [round, user],
+  );
+  const countdown = useCountdown(round?.close_at);
+  const closed = !!round?.closed || countdown.expired;
+
+  // Prefill text: existing order first, then user's saved usual (`coffee`).
+  useEffect(() => {
+    if (!round || closed) return;
+    if (myOrder?.text) setOrderText(myOrder.text);
+    else if (!orderText && user?.coffee) setOrderText(""); // wait for tap
+  }, [round?.id, closed, myOrder?.text]);  // eslint-disable-line
+
+  async function startRound() {
+    setBusy(true);
+    try {
+      const cafeName = ride.cafe || initialCafe || "Café";
+      const { data } = await api.post(`/rides/${ride.id}/round`, {
+        cafe_name: cafeName,
+        close_in_seconds: 300,
+      });
+      setRound(data);
+      toast("Round on ☕", { description: `${cafeName} — 5 min to order.` });
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function submitOrder(textOverride) {
+    const text = (textOverride ?? orderText).trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/rides/${ride.id}/round/order`, { text });
+      setRound(data);
+      setOrderText(text);
+      toast("In the round ✓");
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function retractOrder() {
+    setBusy(true);
+    try {
+      const { data } = await api.delete(`/rides/${ride.id}/round/order`);
+      setRound(data);
+      setOrderText("");
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function closeRound() {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/rides/${ride.id}/round/close`);
+      setRound(data);
+      setShowCloseView(true);
+    } catch (e) { toast.error(formatDetail(e)); }
+    finally { setBusy(false); }
+  }
+
+  if (loading) {
+    return (
+      <div className="mt-5 h-24 rounded-2xl border border-border-subtle animate-pulse bg-bg-secondary/40" />
+    );
+  }
+
+  // No active round → offer to start one
+  if (!round || (closed && !showCloseView && !round?.closed_manually_at)) {
+    const showStart = !round || countdown.expired;
+    if (!showStart) return null;
+    const cafeName = ride.cafe || initialCafe;
+    return (
+      <div
+        className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/30 rounded-2xl p-4"
+        data-testid="ride-round-block"
+      >
+        <div className="flex items-center gap-2 text-accent-coffee">
+          <Coffee className="w-4 h-4" />
+          <span className="text-[10px] uppercase tracking-widest font-mono-stat">Café stop</span>
+        </div>
+        <div className="font-heading text-xl font-bold mt-1 text-text-primary">
+          {cafeName || "Café TBC"}
+        </div>
+        <button
+          onClick={startRound}
+          disabled={busy}
+          className="mt-3 w-full bg-accent-pink text-white font-black uppercase tracking-[0.22em] text-xs py-3 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50"
+          data-testid="round-start"
+        >
+          <Coffee className="w-4 h-4" /> I'm Buying — Start Round
+        </button>
+        <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
+          Everyone gets 5 min to order
+        </div>
+      </div>
+    );
+  }
+
+  // Active round
+  const isBuyer = round.buyer_user_id === user?.id;
+  const usual = user?.coffee;
+  const pctLeft = Math.max(0, Math.min(100, (countdown.seconds / 300) * 100));
+
+  return (
+    <div
+      className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/40 rounded-2xl p-4"
+      data-testid="ride-round-block"
+    >
+      <div className="flex items-start gap-3">
+        <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee">
+            {isBuyer ? "You're shouting" : `${round.buyer_name}'s shout`}
+          </div>
+          <div className="font-heading text-lg font-bold text-text-primary leading-tight truncate" data-testid="round-cafe-name">
+            {round.cafe_name}
+          </div>
+          {round.cafe_address && (
+            <div className="text-[11px] text-text-muted truncate">{round.cafe_address}</div>
+          )}
+        </div>
+      </div>
+
+      {!closed && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
+            <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Orders close in</span>
+            <span className="text-accent-pink font-bold tabular-nums" data-testid="round-countdown">{countdown.text}</span>
+          </div>
+          <div className="h-1.5 mt-1 rounded-full bg-border-subtle overflow-hidden">
+            <div
+              className="h-full bg-accent-pink transition-all"
+              style={{ width: `${pctLeft}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {closed ? (
+        <div className="mt-4 bg-black/40 border border-accent-coffee/30 rounded-xl p-3" data-testid="round-locked">
+          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-2 flex items-center gap-1">
+            <Check className="w-3 h-3" /> Locked — {round.orders.length} order{round.orders.length === 1 ? "" : "s"}
+          </div>
+          <OrderList round={round} compact />
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                const text = round.orders.map((o) => `${o.name}: ${o.text}`).join("\n");
+                navigator.clipboard?.writeText(text);
+                toast("Copied for the barista 📋");
+              }}
+              className="text-[10px] font-black uppercase tracking-widest bg-accent-coffee/20 border border-accent-coffee/40 text-accent-coffee py-2 rounded-lg active:scale-95"
+              data-testid="round-copy"
+            >
+              Copy list
+            </button>
+            <button
+              onClick={() => { setShowCloseView(false); setRound(null); }}
+              className="text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-border-subtle text-text-secondary py-2 rounded-lg active:scale-95"
+              data-testid="round-dismiss"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4">
+          {myOrder ? (
+            <div className="bg-status-going/10 border border-status-going/30 rounded-xl p-3 flex items-center gap-2" data-testid="round-my-order">
+              <Check className="w-4 h-4 text-status-going shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-status-going">Your order</div>
+                <div className="text-sm text-text-primary truncate">{myOrder.text}</div>
+              </div>
+              <button
+                onClick={retractOrder}
+                disabled={busy}
+                className="p-1.5 text-text-muted hover:text-status-cant"
+                data-testid="round-retract"
+                aria-label="Retract order"
+              >
+                <Undo2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div>
+              {usual && (
+                <button
+                  onClick={() => submitOrder(usual)}
+                  disabled={busy}
+                  className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-strava/40 bg-accent-strava/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
+                  data-testid="round-usual"
+                >
+                  <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-strava shrink-0">Usual →</span>
+                  <span className="text-sm truncate flex-1">{usual}</span>
+                  <Send className="w-3.5 h-3.5 text-accent-strava shrink-0" />
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  value={orderText}
+                  onChange={(e) => setOrderText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitOrder()}
+                  placeholder="Flat white, no sugar…"
+                  className="flex-1 bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-strava outline-none"
+                  data-testid="round-order-input"
+                  maxLength={140}
+                />
+                <button
+                  onClick={() => submitOrder()}
+                  disabled={busy || !orderText.trim()}
+                  className="bg-accent-pink text-white rounded-xl px-3 py-2.5 disabled:opacity-40 active:scale-95"
+                  data-testid="round-submit"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="mt-3">
+            <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-1">
+              {round.orders.length} order{round.orders.length === 1 ? "" : "s"} so far
+            </div>
+            <OrderList round={round} />
+          </div>
+          {isBuyer && (
+            <button
+              onClick={closeRound}
+              disabled={busy}
+              className="mt-3 w-full text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-status-cant/40 text-status-cant py-2 rounded-xl active:scale-95"
+              data-testid="round-close-early"
+            >
+              Close early
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

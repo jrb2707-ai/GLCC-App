@@ -217,3 +217,26 @@ See `/app/memory/test_credentials.md`.
 - New auto-capture script `/app/mobile/store-assets/screenshots/capture.py` (Playwright + Chromium) that logs in as `bryantj@xtra.co.nz` and captures 7 hero shots across 5 device sizes (iPhone 6.7"/6.5"/5.5", iPad 12.9", iPad 13"). Auto-clears any old open mechanicals + posts a fresh one on Great North Rd so the mini-map always has a live pin.
 - Also seeded `bryantj@xtra.co.nz` (password `Roenick2707`, El Presidente, approved) on preview — one-off, not in the seed loop.
 - Outputs to `/app/mobile/store-assets/screenshots/final/<device>/` with a README explaining upload order. Ready for App Store Connect → Media Manager.
+
+## Session Feb 22, 2026 — Coffee → Coordinated Ride Rounds
+Full rework of the coffee flow. Café stop is now a sub-object of a ride, not a standalone menu.
+
+**Backend** (`server.py`)
+- New models: `RideRoundStartIn`, `RideRoundOrderIn`. `serialize_round` computes `closed` from `close_at` (naive-datetime safe).
+- Endpoints (all under approved-user auth):
+  - `POST /api/rides/{ride_id}/round` — start a round. 5-min hard cutoff by default. Pushes to everyone via `push_to_all_except`.
+  - `GET /api/rides/{ride_id}/round` — active round OR most recent closed one (within 30 min).
+  - `POST /api/rides/{ride_id}/round/order` — upsert my order (free-text ≤140 chars).
+  - `DELETE /api/rides/{ride_id}/round/order` — retract mine.
+  - `POST /api/rides/{ride_id}/round/close` — buyer or admin closes early.
+  - `GET /api/coffee/rounds/active` and `GET /api/coffee/rounds/history` — Coffee tab feeds.
+- `coffee_rounds` TTL bumped from 1h → 7d + secondary indexes on `ride_id`, `close_at`.
+- Regression: `/app/backend/tests/test_ride_rounds.py` — **16/16 PASS** (auto-close via Mongo backdate, permissions, upsert semantics).
+
+**Web** (`RideRoundBlock.jsx` + rewritten `CoffeeTab.jsx`)
+- Ride detail cafe block replaced with `RideRoundBlock`: countdown, prefill "Usual" button (reads `user.coffee`), free-text `round-order-input` + `round-submit`, order list `round-orders`, buyer-only `round-close-early`, `round-locked` state with `round-copy` (clipboard) and `round-dismiss` (also nulls local state so a new round can be started immediately).
+- Coffee tab repurposed: `usual-card` with `usual-input` + `usual-save` (patches `/riders/me`), `active-rounds-section`, `history-section`, `coffee-round-row-<id>` rows, preview modal.
+
+**Mobile** — parity via `/app/mobile/src/components/RideRoundBlock.js` + rewritten `/app/mobile/src/tabs/CoffeeTab.js`. Same testIDs.
+
+**Verified** via testing_agent (iteration_18) — backend 16/16 pytest + full web e2e PASS. Medium UX bug on Dismiss patched post-report.

@@ -5,6 +5,7 @@ import Avatar from "../Avatar";
 import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route } from "lucide-react";
 import { toast } from "sonner";
 import StravaPanel from "../StravaPanel";
+import RideRoundBlock from "../RideRoundBlock";
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: "bg-status-going/20 text-status-going border-status-going/40" },
@@ -108,16 +109,6 @@ export default function RidesTab({ onNavigate }) {
     try {
       const { data } = await api.post(`/rides/${rideId}/rsvp`, { status });
       setRides((prev) => prev.map((r) => (r.id === rideId ? data : r)));
-    } catch (e) {
-      toast.error(formatDetail(e));
-    }
-  }
-
-  async function sendRound(ride) {
-    try {
-      const { data } = await api.post("/coffee/rounds", { ride_id: ride.id });
-      toast(`Round sent — ${data.coffee}`, { description: `for ${ride.cafe || "the group"}` });
-      if (onNavigate) onNavigate("coffee");
     } catch (e) {
       toast.error(formatDetail(e));
     }
@@ -239,21 +230,7 @@ export default function RidesTab({ onNavigate }) {
           </div>
         </div>
 
-        <div className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/30 rounded-2xl p-4" data-testid="cafe-block">
-          <div className="flex items-center gap-2 text-accent-coffee">
-            <Coffee className="w-4 h-4" />
-            <span className="text-[10px] uppercase tracking-widest font-mono-stat">Café stop</span>
-          </div>
-          <div className="font-heading text-xl font-bold mt-1">{open.cafe || "Café TBC"}</div>
-          <button
-            onClick={() => sendRound(open)}
-            disabled={isPending}
-            className="mt-3 w-full bg-accent-pink text-white font-bold uppercase tracking-widest text-xs py-2.5 rounded-lg active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-            data-testid="cafe-send-round-button"
-          >
-            <Coffee className="w-4 h-4" /> I&apos;m At The Café
-          </button>
-        </div>
+        <RideRoundBlock ride={open} initialCafe={open.cafe} />
 
         <div className="mt-5">
           <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-2">

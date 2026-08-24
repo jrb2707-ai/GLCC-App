@@ -1,0 +1,35 @@
+{
+  "summary": "Full backend + web frontend regression for the reworked coordinated ride-round coffee flow. Backend: 16 pytest cases across the 6 new endpoints + auto-close via close_at backdating + PATCH /riders/me coffee persistence — 16/16 PASS. Frontend: end-to-end web flow verified — RideRoundBlock renders on ride detail, round-start creates round, countdown counts down (04:58 observed), Usual prefill button submits the saved user.coffee, round-my-order + round-retract visible, round-close-early flips to round-locked, round-copy writes 'Name: order' lines to navigator.clipboard, and the rewritten CoffeeTab shows usual-card / active-rounds-section / history-section / coffee-round-row-<id> plus active-empty state. Old cafe-block / cafe-send-round-button testids are removed. Mobile parity: read /app/mobile/src/components/RideRoundBlock.js and /app/mobile/src/tabs/CoffeeTab.js — every required testID is present. One minor UI bug found (dismiss stuck in recently-closed view — see rca).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RideRoundBlock.jsx", "issue": "When a ride has a round that was closed manually within the last 30 min, GET /rides/:id/round returns that closed round. The block then renders the LOCKED view with a 'Dismiss' button, but tapping Dismiss only calls setShowCloseView(false) — which was never true — so the locked view never goes away and 'I'm buying — start round' cannot be shown for another 30 min. This affects any subsequent visit to the ride detail during that window. Fix: on Dismiss, also clear local round state (e.g. setRound(null)) or add a local 'dismissed' flag that hides the block when round.closed_manually_at && !showCloseView.", "selector": "[data-testid=\"round-dismiss\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ride_rounds.py",
+    "/app/test_reports/pytest/ride_rounds.xml"
+  ],
+  "action_items": [
+    "Fix RideRoundBlock 'Dismiss' behaviour when GET returns a manually-closed round in the 30-min recent-closed window: currently Dismiss does nothing observable; user is stuck in the LOCKED view and cannot start a new round on that ride."
+  ],
+  "critical_code_review_comments": [
+    "RideRoundBlock.jsx L152: `if (!round || (closed && !showCloseView && !round?.closed_manually_at))` is confusing and hides the start CTA whenever the server returned a manually-closed round. Consider splitting into (a) no-round → start CTA, (b) auto-expired round → start CTA + orders readout, (c) manually-closed round → locked view with a real dismiss that unmounts the block.",
+    "server.py serialize_round L153: `is_closed` becomes true when close_at <= now OR closed_manually_at is set — good. But the collection is queried in _active_round_for_ride using close_at > now AND closed_manually_at not exists — good. Consistency between GET /rides/{id}/round (which surfaces recently-closed rounds within 30 min) and _active_round_for_ride is fine; just make sure the UI handles both.",
+    "server.py L1002: RideRoundStartIn enforces close_in_seconds between 60 and 3600, so the 'wait for close_at' regression path can start at 60 s minimum. Test suite backdates close_at directly via Mongo to keep runs fast.",
+    "CoffeeTab.jsx / CoffeeTab.js: coffee-round-row-<id> is rendered for both active and past sections — good testable pattern. History empty state shows when zero closed rounds exist; verified toggling works.",
+    "Mobile RideRoundBlock.js is missing round-orders and round-orders-empty testIDs that the web has, but these were not in the required mobile list per the spec — noting for parity if needed later."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ride_rounds.py (new)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% of specified flows; 1 medium-priority UX bug found on the recently-closed 'Dismiss' path"},
+  "test_credentials": "jb@glcc.club/Roenick2707 (admin/buyer), sam@glcc.club/cycle123, mika@glcc.club/cycle123, leo@glcc.club/cycle123. All seeded/approved.",
+  "seed_data_creation": "None. Test cleared coffee_rounds collection once mid-run to escape the 30-min recently-closed lockout (see rca). Also PATCH'd jb's user.coffee to 'Piccolo two sugars' as part of the usual-save assertion.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file: /app/backend/tests/test_ride_rounds.py (16 tests, all pass). Notable: (a) auto-close is verified by backdating Mongo's close_at via pymongo — not by sleeping; (b) POST /rides/{id}/round returns 400 for a non-ObjectId string (via InvalidId), 404 for a valid ObjectId that doesn't exist, 409 if a round is already open. UI: to test the ride-detail RideRoundBlock cleanly, delete coffee_rounds first (db.coffee_rounds.delete_many({ride_id:{$exists:true}})) otherwise the recently-closed round from a previous run will render the locked view and block round-start (see UI bug in frontend_issues).",
+  "rca of the issue": "RideRoundBlock 'Dismiss' does nothing when the server returns a manually-closed round. Reproduction: (1) as JB start a round on any ride, (2) tap 'Close early' → LOCKED view appears with Copy list + Dismiss, (3) leave the ride and return to the same ride detail within 30 min: GET /rides/{id}/round returns the closed round; block renders LOCKED again; tapping Dismiss calls setShowCloseView(false) but showCloseView is already false → no state change → view remains. Mitigation: change the Dismiss handler to also null-out local round state and add a local 'hideRecentlyClosed' ref-in-memory flag so the block collapses to the 'start round' CTA. Alternatively, don't surface manually-closed rounds through the get endpoint (only auto-expired ones), since the user has already seen the locked view once."
+}

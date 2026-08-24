@@ -1,150 +1,185 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Alert, RefreshControl, ImageBackground, Modal,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
+  Alert, RefreshControl, Modal,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
-import { colors, radius, spacing, COFFEES } from "../constants/theme";
+import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
-import { timeAgo } from "../lib/util";
-import { readCache, writeCache } from "../lib/cache";
 
-const HERO = "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=1200&q=80";
+function timeAgo(iso) {
+  if (!iso) return "";
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function RoundRow({ round, onPress }) {
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(round)}
+      style={s.row}
+      testID={`coffee-round-row-${round.id}`}
+    >
+      <Avatar name={round.buyer_name} photo={round.buyer_photo} size="sm" />
+      <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={s.rowTitle} numberOfLines={1}>{round.buyer_name}'s shout</Text>
+          {!round.closed && <View style={s.livePill}><Text style={s.livePillTxt}>LIVE</Text></View>}
+        </View>
+        <Text style={s.rowSub} numberOfLines={1}>{round.cafe_name} · {round.ride_name || "Ride"}</Text>
+        <Text style={s.rowMeta}>{round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"} · {timeAgo(round.started_at).toUpperCase()}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function CoffeeTab() {
-  const { user } = useAuth();
+  const { user, refreshMe } = useAuth();
   const { subscribe } = useEvents();
-  const [rounds, setRounds] = useState([]);
+  const [active, setActive] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [modal, setModal] = useState(false);
-  const [coffee, setCoffee] = useState(user?.coffee || "Medium Flat White");
-  const isPending = user?.status === "pending";
+  const [usual, setUsual] = useState(user?.coffee || "Medium Flat White");
+  const [savingUsual, setSavingUsual] = useState(false);
+  const [detail, setDetail] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/coffee/rounds");
-      setRounds(data.rounds || []);
-      writeCache("coffee", data.rounds || []);
-    } catch (e) { /* ignore */ }
+      const [a, h] = await Promise.all([
+        api.get("/coffee/rounds/active"),
+        api.get("/coffee/rounds/history"),
+      ]);
+      setActive(a.data.rounds || []);
+      setHistory(h.data.rounds || []);
+    } catch (_) {}
     finally { setLoading(false); setRefreshing(false); }
   }, []);
-  useEffect(() => {
-    (async () => {
-      const cached = await readCache("coffee");
-      if (cached) { setRounds(cached); setLoading(false); }
-    })();
-    load();
-  }, [load]);
 
-  // Live coffee-round events via WS
-  useEffect(() => {
-    return subscribe((evt) => {
-      if (evt.type === "coffee.round" && evt.round) {
-        setRounds((prev) => (prev.some((r) => r.id === evt.round.id) ? prev : [evt.round, ...prev].slice(0, 60)));
-      }
-    });
-  }, [subscribe]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setUsual(user?.coffee || "Medium Flat White"); }, [user?.coffee]);
 
-  async function send(override) {
-    if (sending) return;
-    const c = override || user?.coffee || coffee;
-    setSending(true);
+  useEffect(() => subscribe((evt) => {
+    if (!evt.round) return;
+    if (evt.type === "coffee.round.started") {
+      setActive((prev) => [evt.round, ...prev.filter((r) => r.id !== evt.round.id)]);
+    }
+    if (evt.type === "coffee.round.updated") {
+      setActive((prev) => prev.map((r) => (r.id === evt.round.id ? evt.round : r)));
+    }
+    if (evt.type === "coffee.round.closed") {
+      setActive((prev) => prev.filter((r) => r.id !== evt.round.id));
+      setHistory((prev) => [evt.round, ...prev.filter((r) => r.id !== evt.round.id)].slice(0, 20));
+    }
+  }), [subscribe]);
+
+  async function saveUsual() {
+    const trimmed = usual.trim();
+    if (!trimmed) { Alert.alert("Coffee", "Give me your usual first."); return; }
+    setSavingUsual(true);
     try {
-      const { data } = await api.post("/coffee/rounds", { coffee: c });
-      Alert.alert("Round sent", `${data.coffee} · The peloton hears you`);
-      setModal(false);
-      await load();
-    } catch (e) {
-      Alert.alert("Coffee round", formatDetail(e));
-    } finally { setSending(false); }
+      await api.patch("/riders/me", { coffee: trimmed });
+      await refreshMe?.();
+      Alert.alert("Saved", "Usual locked in — one tap next round.");
+    } catch (e) { Alert.alert("Coffee", formatDetail(e)); }
+    finally { setSavingUsual(false); }
   }
-
-  if (loading) return <View style={s.center}><ActivityIndicator color={colors.accentPink} /></View>;
-
-  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-  const today = rounds.filter((r) => r.created_at && new Date(r.created_at) >= startOfToday);
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bgPrimary }}
-      contentContainerStyle={{ paddingBottom: 48 }}
+      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 64 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accentPink} />}
+      testID="coffee-tab"
     >
-      <ImageBackground source={{ uri: HERO }} style={s.hero} imageStyle={{ opacity: 0.85 }}>
-        <View style={s.heroScrim} />
-        <View style={s.heroContent}>
-          <Text style={s.heroEyebrow}>✦ KM'S DESERVE CAFFEINE</Text>
-          <Text style={s.heroTitle}>Coffee Order</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <Text style={s.h1}>COFFEE</Text>
+        <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
+      </View>
+
+      {/* Usual order */}
+      <View style={s.usualCard} testID="usual-card">
+        <Text style={s.eyebrow}>☕ YOUR USUAL</Text>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+          <TextInput
+            value={usual}
+            onChangeText={setUsual}
+            placeholder="Flat white, no sugar…"
+            placeholderTextColor={colors.textMuted}
+            style={s.input}
+            maxLength={140}
+            testID="usual-input"
+          />
+          <TouchableOpacity
+            onPress={saveUsual}
+            disabled={savingUsual || usual.trim() === (user?.coffee || "").trim()}
+            style={[s.saveBtn, (savingUsual || usual.trim() === (user?.coffee || "").trim()) && { opacity: 0.4 }]}
+            testID="usual-save"
+          >
+            <Text style={s.saveBtnTxt}>SAVE</Text>
+          </TouchableOpacity>
         </View>
-      </ImageBackground>
-
-      <View style={{ paddingHorizontal: spacing.lg, marginTop: -16 }}>
-        <TouchableOpacity
-          onPress={() => send()}
-          disabled={sending || isPending}
-          style={[s.orderBtn, (sending || isPending) && { opacity: 0.5 }]}
-          testID="coffee-send-round-button"
-        >
-          {sending && <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />}
-          <Text style={s.orderTxt}>☕ ORDER MY COFFEE</Text>
-        </TouchableOpacity>
-        <Text style={s.orderMeta}>
-          {isPending ? "AWAITING ADMIN APPROVAL" : `SENDS ${(user?.coffee || "").toUpperCase()}`}
-        </Text>
+        <Text style={s.hint}>Pre-fills when someone starts a round. One tap and you're in.</Text>
       </View>
 
-      <View style={{ paddingHorizontal: spacing.lg, marginTop: 24 }}>
-        <Text style={s.sectionLabel}>TODAY'S COFFEE ORDERS</Text>
-        {today.length === 0 && (
-          <Text style={{ color: colors.textMuted, textAlign: "center", fontSize: 12, paddingVertical: 24 }}>
-            Silent morning. Someone stand up.
-          </Text>
+      {/* Active */}
+      <View style={{ marginTop: 24 }} testID="active-rounds-section">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Text style={[s.sectionHead, { color: colors.accentPink }]}>LIVE NOW</Text>
+          <View style={s.hr} />
+        </View>
+        {loading ? (
+          <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary }} />
+        ) : active.length === 0 ? (
+          <Text style={s.emptyTxt} testID="active-empty">No active rounds. Open a ride and shout the peloton a coffee ☕</Text>
+        ) : (
+          active.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)
         )}
-        {today.map((r) => (
-          <View key={r.id} style={s.row} testID={`coffee-round-${r.id}`}>
-            <Avatar name={r.rider_name || r.name} photo={r.rider_photo || null} size="sm" tint="pink" />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={s.rowName}>{r.rider_name || r.name}</Text>
-              <Text style={s.rowCoffee}>{r.coffee}</Text>
-            </View>
-            <Text style={s.rowTime}>{timeAgo(r.created_at)}</Text>
-          </View>
-        ))}
       </View>
 
-      <Modal visible={modal} transparent animationType="slide" onRequestClose={() => setModal(false)}>
-        <View style={s.modalOverlay}>
-          <View style={s.sheet}>
-            <View style={s.handle} />
-            <Text style={s.sheetEyebrow}>SEND A COFFEE ROUND</Text>
-            <Text style={s.sheetTitle}>Your coffee</Text>
-            <ScrollView style={{ maxHeight: 320, marginTop: 12 }}>
-              <View style={s.coffeeGrid}>
-                {COFFEES.map((c) => {
-                  const active = coffee === c;
-                  return (
-                    <TouchableOpacity
-                      key={c}
-                      onPress={() => setCoffee(c)}
-                      style={[s.coffeeChip, active && s.coffeeChipActive]}
-                    >
-                      <Text style={[s.coffeeChipTxt, active && { color: colors.accentPink }]}>{c}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <TouchableOpacity onPress={() => setModal(false)} style={s.ghostBtn}>
-                <Text style={s.ghostTxt}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => send(coffee)} style={s.sendBtn}>
-                <Text style={s.sendTxt}>SEND TO GROUP</Text>
-              </TouchableOpacity>
-            </View>
+      {/* History */}
+      <View style={{ marginTop: 24 }} testID="history-section">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Text style={s.sectionHead}>PAST ROUNDS</Text>
+          <View style={s.hr} />
+        </View>
+        {history.length === 0 ? (
+          <Text style={s.emptyTxt} testID="history-empty">Nothing here yet — history keeps the last 7 days.</Text>
+        ) : (
+          history.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)
+        )}
+      </View>
+
+      {/* Detail modal */}
+      <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+        <View style={s.modalBg}>
+          <View style={s.modalCard}>
+            {detail && (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Avatar name={detail.buyer_name} photo={detail.buyer_photo} size="md" />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.eyebrow}>{detail.closed ? "LOCKED" : "LIVE"}</Text>
+                    <Text style={s.modalTitle} numberOfLines={1}>{detail.buyer_name}'s shout</Text>
+                    <Text style={s.rowSub} numberOfLines={1}>{detail.cafe_name} · {detail.ride_name}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setDetail(null)}><Text style={{ color: colors.textMuted, fontSize: 20, padding: 4 }}>✕</Text></TouchableOpacity>
+                </View>
+                <ScrollView style={{ maxHeight: 320, marginTop: 12 }}>
+                  {detail.orders.map((o) => (
+                    <View key={o.user_id} style={s.orderRow}>
+                      <Text style={s.orderName}>{(o.name || "").toUpperCase()}</Text>
+                      <Text style={s.orderText}>{o.text}</Text>
+                    </View>
+                  ))}
+                  {detail.orders.length === 0 && <Text style={s.hint}>No orders in.</Text>}
+                </ScrollView>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -153,34 +188,27 @@ export default function CoffeeTab() {
 }
 
 const s = StyleSheet.create({
-  center: { flex: 1, backgroundColor: colors.bgPrimary, alignItems: "center", justifyContent: "center" },
-  hero: { height: 220, justifyContent: "flex-end" },
-  heroScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
-  heroContent: { padding: spacing.lg, paddingBottom: 32 },
-  heroEyebrow: { color: colors.accentCoffee, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
-  heroTitle: { color: colors.textPrimary, fontSize: 36, fontWeight: "900", letterSpacing: -1, marginTop: 4, textTransform: "uppercase" },
-
-  orderBtn: { flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: colors.accentPink, borderRadius: radius.lg, paddingVertical: 14, shadowColor: colors.accentPink, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 6 } },
-  orderTxt: { color: "#fff", fontWeight: "900", letterSpacing: 2, fontSize: 13 },
-  orderMeta: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "700", textAlign: "center", marginTop: 8 },
-
-  sectionLabel: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "700", marginBottom: 8 },
-  row: { flexDirection: "row", alignItems: "center", padding: 12, borderRadius: radius.md, backgroundColor: colors.bgSecondary, borderWidth: 1, borderColor: colors.borderSubtle, marginBottom: 8 },
-  rowName: { color: colors.textPrimary, fontWeight: "700", fontSize: 14 },
-  rowCoffee: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
-  rowTime: { color: colors.textMuted, fontSize: 10, letterSpacing: 1, fontWeight: "700" },
-
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: colors.bgSecondary, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingBottom: 34, maxHeight: "80%" },
-  handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderSubtle, marginBottom: 12 },
-  sheetEyebrow: { color: colors.accentPink, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
-  sheetTitle: { color: colors.textPrimary, fontSize: 24, fontWeight: "900", letterSpacing: -0.5, marginTop: 4 },
-  coffeeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  coffeeChip: { width: "48%", paddingVertical: 10, paddingHorizontal: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.bgPrimary },
-  coffeeChipActive: { borderColor: colors.accentPink, backgroundColor: "rgba(255,45,149,0.10)" },
-  coffeeChipTxt: { color: colors.textSecondary, fontSize: 12 },
-  ghostBtn: { flex: 1, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingVertical: 12, alignItems: "center" },
-  ghostTxt: { color: colors.textSecondary, letterSpacing: 2, fontWeight: "700", fontSize: 12 },
-  sendBtn: { flex: 1, backgroundColor: colors.accentPink, borderRadius: radius.md, paddingVertical: 12, alignItems: "center" },
-  sendTxt: { color: "#fff", letterSpacing: 2, fontWeight: "900", fontSize: 12 },
+  h1: { color: colors.textPrimary, fontSize: 30, fontWeight: "900", letterSpacing: 2 },
+  meta: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700" },
+  eyebrow: { color: colors.accentStrava, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
+  usualCard: { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.lg, padding: 14 },
+  input: { flex: 1, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 },
+  saveBtn: { backgroundColor: colors.accentStrava, borderRadius: radius.md, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  saveBtnTxt: { color: "#fff", fontSize: 11, fontWeight: "900", letterSpacing: 2 },
+  hint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", marginTop: 8 },
+  sectionHead: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "900" },
+  hr: { flex: 1, height: 1, backgroundColor: colors.borderSubtle },
+  row: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.lg, padding: 12, marginBottom: 8 },
+  rowTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: "700" },
+  rowSub: { color: colors.textSecondary, fontSize: 12 },
+  rowMeta: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", marginTop: 2 },
+  livePill: { backgroundColor: "rgba(236,72,153,0.15)", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  livePillTxt: { color: colors.accentPink, fontSize: 9, letterSpacing: 1.5, fontWeight: "900" },
+  emptyTxt: { color: colors.textMuted, fontSize: 12, fontStyle: "italic" },
+  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  modalCard: { backgroundColor: colors.bgPrimary, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, borderTopWidth: 1, borderColor: colors.borderSubtle },
+  modalTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: "700" },
+  orderRow: { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6 },
+  orderName: { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
+  orderText: { color: colors.textPrimary, fontSize: 13, marginTop: 2 },
 });

@@ -123,7 +123,7 @@ export default function HomeShell() {
             className={tab === "chat" ? "h-full" : "min-h-full"}
           >
             {tab === "rides" && <RidesTab onNavigate={setTab} />}
-            {tab === "coffee" && <CoffeeTab />}
+            {tab === "coffee" && <CoffeeTab onNavigate={setTab} />}
             {tab === "riders" && <RidersTab />}
             {tab === "chat" && <ChatTab />}
           </motion.div>

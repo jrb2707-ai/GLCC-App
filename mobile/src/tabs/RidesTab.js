@@ -9,6 +9,7 @@ import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import StravaPanel from "../components/StravaPanel";
 import RouteMap from "../components/RouteMap";
+import RideRoundBlock from "../components/RideRoundBlock";
 import { readCache, writeCache } from "../lib/cache";
 
 const RSVP_OPTIONS = [
@@ -110,14 +111,6 @@ export default function RidesTab() {
     }
   }
 
-  async function sendRound(ride) {
-    try {
-      const { data } = await api.post("/coffee/rounds", { ride_id: ride.id });
-      Alert.alert("Round sent", `${data.coffee} · ${ride.cafe || "the group"}`);    } catch (e) {
-      Alert.alert("Coffee", formatDetail(e));
-    }
-  }
-
   if (loading) return <View style={s.center}><ActivityIndicator color={colors.accentVolt} /></View>;
 
   const open = rides.find((r) => r.id === openId);
@@ -204,18 +197,7 @@ export default function RidesTab() {
           })}
         </View>
 
-        <View style={s.cafe} testID="cafe-block">
-          <Text style={s.cafeEyebrow}>☕ CAFÉ STOP</Text>
-          <Text style={s.cafeName}>{open.cafe || "Café TBC"}</Text>
-          <TouchableOpacity
-            onPress={() => sendRound(open)}
-            disabled={isPending}
-            style={[s.cafeBtn, isPending && { opacity: 0.5 }]}
-            testID="cafe-send-round-button"
-          >
-            <Text style={s.cafeBtnTxt}>I'M AT THE CAFÉ</Text>
-          </TouchableOpacity>
-        </View>
+        <RideRoundBlock ride={open} />
 
         <Text style={s.sectionLabel}>GOING · {going.length}</Text>
         {going.length === 0 && <Text style={{ color: colors.textMuted, fontSize: 12 }}>Nobody yet — be the first.</Text>}

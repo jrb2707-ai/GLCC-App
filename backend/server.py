@@ -135,14 +135,54 @@ def serialize_ride(doc: dict) -> dict:
     }
 
 def serialize_round(doc: dict) -> dict:
+    """Serialize a coffee round. The `coffee_rounds` collection now holds
+    coordinated ride-tied rounds: one buyer, an ordered list of `orders`,
+    and a hard `close_at` cutoff. Old-shape docs (rider_id + coffee only)
+    are still readable for back-compat."""
+    if not doc:
+        return None
+    close_at = doc.get("close_at")
+    started_at = doc.get("started_at") or doc.get("created_at")
+    # Mongo may return naive datetimes; treat them as UTC before comparing.
+    def _aware(dt):
+        if isinstance(dt, datetime) and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+    close_at_aware = _aware(close_at)
+    now = now_utc()
+    is_closed = bool(doc.get("closed_manually_at")) or (
+        isinstance(close_at_aware, datetime) and close_at_aware <= now
+    )
+    orders = []
+    for o in doc.get("orders") or []:
+        updated = o.get("updated_at")
+        orders.append({
+            "user_id": o.get("user_id"),
+            "name": o.get("name"),
+            "photo": o.get("photo"),
+            "text": o.get("text"),
+            "updated_at": updated.isoformat() if isinstance(updated, datetime) else updated,
+        })
     return {
         "id": str(doc["_id"]),
-        "rider_id": doc.get("rider_id"),
-        "rider_name": doc.get("rider_name"),
-        "rider_photo": doc.get("rider_photo"),
-        "coffee": doc.get("coffee"),
+        "ride_id": doc.get("ride_id"),
         "ride_name": doc.get("ride_name"),
-        "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
+        "buyer_user_id": doc.get("buyer_user_id") or doc.get("rider_id"),
+        "buyer_name": doc.get("buyer_name") or doc.get("rider_name"),
+        "buyer_photo": doc.get("buyer_photo") or doc.get("rider_photo"),
+        "cafe_name": doc.get("cafe_name"),
+        "cafe_address": doc.get("cafe_address"),
+        "started_at": started_at.isoformat() if isinstance(started_at, datetime) else started_at,
+        "close_at": close_at.isoformat() if isinstance(close_at, datetime) else close_at,
+        "closed_manually_at": (doc.get("closed_manually_at").isoformat() if isinstance(doc.get("closed_manually_at"), datetime) else doc.get("closed_manually_at")),
+        "closed": is_closed,
+        "orders": orders,
+        # Legacy fields kept so any old client that reads /coffee/rounds
+        # doesn't blow up during the transition.
+        "rider_id": doc.get("rider_id") or doc.get("buyer_user_id"),
+        "rider_name": doc.get("rider_name") or doc.get("buyer_name"),
+        "coffee": doc.get("coffee"),
+        "created_at": (doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else doc.get("created_at")),
     }
 
 def serialize_message(doc: dict) -> dict:
@@ -954,6 +994,16 @@ class RiderInviteIn(BaseModel):
 class CoffeeRoundIn(BaseModel):
     coffee: Optional[str] = None
     ride_id: Optional[str] = None
+
+
+class RideRoundStartIn(BaseModel):
+    cafe_name: str = Field(min_length=1, max_length=140)
+    cafe_address: Optional[str] = Field(default=None, max_length=240)
+    close_in_seconds: int = Field(default=300, ge=60, le=3600)
+
+
+class RideRoundOrderIn(BaseModel):
+    text: str = Field(min_length=1, max_length=140)
 
 class ChatMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=800)
@@ -1952,6 +2002,187 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(require_approved)
     ))
     return payload_round
 
+
+# ---------- Coordinated Ride Rounds ----------
+# A single active round hangs off a ride. Any approved rider can start one;
+# everyone else on the ride submits a short free-text order before the hard
+# 5-min cutoff, at which point the list locks and reads out to the barista.
+
+async def _get_ride_or_404(ride_id: str) -> dict:
+    try:
+        ride = await db.rides.find_one({"_id": ObjectId(ride_id)})
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid ride id")
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+    return ride
+
+
+async def _active_round_for_ride(ride_id: str) -> Optional[dict]:
+    """Newest not-yet-closed round for a ride."""
+    now = now_utc()
+    doc = await db.coffee_rounds.find_one(
+        {
+            "ride_id": ride_id,
+            "closed_manually_at": {"$exists": False},
+            "close_at": {"$gt": now},
+        },
+        sort=[("started_at", -1)],
+    )
+    return doc
+
+
+@api.post("/rides/{ride_id}/round")
+async def start_ride_round(
+    ride_id: str,
+    body: RideRoundStartIn,
+    user: dict = Depends(require_approved),
+):
+    ride = await _get_ride_or_404(ride_id)
+    existing = await _active_round_for_ride(ride_id)
+    if existing:
+        raise HTTPException(status_code=409, detail="A round is already open on this ride")
+    now = now_utc()
+    close_at = now + timedelta(seconds=body.close_in_seconds)
+    doc = {
+        "ride_id": ride_id,
+        "ride_name": ride.get("name"),
+        "buyer_user_id": str(user["_id"]),
+        "buyer_name": user.get("name"),
+        "buyer_photo": user.get("photo"),
+        "cafe_name": body.cafe_name.strip(),
+        "cafe_address": (body.cafe_address or "").strip() or None,
+        "started_at": now,
+        "close_at": close_at,
+        "orders": [],
+        "created_at": now,
+    }
+    r = await db.coffee_rounds.insert_one(doc)
+    doc["_id"] = r.inserted_id
+    payload = serialize_round(doc)
+    await manager.broadcast({"type": "coffee.round.started", "round": payload})
+    # Push everyone except the buyer.
+    asyncio.create_task(push_to_all_except(
+        str(user["_id"]),
+        "☕ Round on!",
+        f"{user.get('name')}'s shout at {body.cafe_name} — order in the next {body.close_in_seconds // 60} min.",
+        {
+            "type": "coffee.round.started",
+            "round_id": payload["id"],
+            "ride_id": ride_id,
+        },
+    ))
+    return payload
+
+
+@api.get("/rides/{ride_id}/round")
+async def get_ride_round(ride_id: str, user: dict = Depends(require_approved)):
+    """Return the active round for this ride, or the most recent closed one
+    (if it closed within the last 30 min so the buyer can still show the
+    barista). null if there's nothing to show."""
+    active = await _active_round_for_ride(ride_id)
+    if active:
+        return {"round": serialize_round(active)}
+    thirty_min_ago = now_utc() - timedelta(minutes=30)
+    recent = await db.coffee_rounds.find_one(
+        {"ride_id": ride_id, "started_at": {"$gt": thirty_min_ago}},
+        sort=[("started_at", -1)],
+    )
+    return {"round": serialize_round(recent) if recent else None}
+
+
+@api.post("/rides/{ride_id}/round/order")
+async def submit_ride_round_order(
+    ride_id: str,
+    body: RideRoundOrderIn,
+    user: dict = Depends(require_approved),
+):
+    active = await _active_round_for_ride(ride_id)
+    if not active:
+        raise HTTPException(status_code=404, detail="No open round on this ride")
+    uid = str(user["_id"])
+    order = {
+        "user_id": uid,
+        "name": user.get("name"),
+        "photo": user.get("photo"),
+        "text": body.text.strip(),
+        "updated_at": now_utc(),
+    }
+    # Upsert this user's order in the array.
+    result = await db.coffee_rounds.update_one(
+        {"_id": active["_id"], "orders.user_id": uid},
+        {"$set": {"orders.$": order}},
+    )
+    if result.matched_count == 0:
+        await db.coffee_rounds.update_one(
+            {"_id": active["_id"]},
+            {"$push": {"orders": order}},
+        )
+    updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
+    payload = serialize_round(updated)
+    await manager.broadcast({"type": "coffee.round.updated", "round": payload})
+    return payload
+
+
+@api.delete("/rides/{ride_id}/round/order")
+async def retract_ride_round_order(ride_id: str, user: dict = Depends(require_approved)):
+    active = await _active_round_for_ride(ride_id)
+    if not active:
+        raise HTTPException(status_code=404, detail="No open round on this ride")
+    await db.coffee_rounds.update_one(
+        {"_id": active["_id"]},
+        {"$pull": {"orders": {"user_id": str(user["_id"])}}},
+    )
+    updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
+    payload = serialize_round(updated)
+    await manager.broadcast({"type": "coffee.round.updated", "round": payload})
+    return payload
+
+
+@api.post("/rides/{ride_id}/round/close")
+async def close_ride_round(ride_id: str, user: dict = Depends(require_approved)):
+    active = await _active_round_for_ride(ride_id)
+    if not active:
+        raise HTTPException(status_code=404, detail="No open round on this ride")
+    is_buyer = str(active.get("buyer_user_id")) == str(user["_id"])
+    if not is_buyer and not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only the buyer or an admin can close")
+    now = now_utc()
+    await db.coffee_rounds.update_one(
+        {"_id": active["_id"]},
+        {"$set": {"closed_manually_at": now, "close_at": now}},
+    )
+    updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
+    payload = serialize_round(updated)
+    await manager.broadcast({"type": "coffee.round.closed", "round": payload})
+    return payload
+
+
+@api.get("/coffee/rounds/active")
+async def coffee_active_rounds(user: dict = Depends(require_approved)):
+    """All rounds currently accepting orders — used by the Coffee tab."""
+    now = now_utc()
+    docs = await db.coffee_rounds.find({
+        "close_at": {"$gt": now},
+        "closed_manually_at": {"$exists": False},
+        "buyer_user_id": {"$exists": True},
+    }).sort("started_at", -1).to_list(None)
+    return {"rounds": [serialize_round(d) for d in docs]}
+
+
+@api.get("/coffee/rounds/history")
+async def coffee_rounds_history(user: dict = Depends(require_approved), limit: int = 10):
+    """Recently-closed coordinated rounds — used by the Coffee tab's history."""
+    now = now_utc()
+    docs = await db.coffee_rounds.find({
+        "buyer_user_id": {"$exists": True},
+        "$or": [
+            {"close_at": {"$lte": now}},
+            {"closed_manually_at": {"$exists": True}},
+        ],
+    }).sort("started_at", -1).limit(max(1, min(50, limit))).to_list(None)
+    return {"rounds": [serialize_round(d) for d in docs]}
+
 @api.post("/admin/send-ride-reminders")
 async def admin_send_ride_reminders(admin: dict = Depends(require_admin)):
     """Manual trigger for the evening-before ride reminder emails."""
@@ -2557,11 +2788,15 @@ async def seed():
             if name == "_id_":
                 continue
             keys = info.get("key", [])
-            if keys and keys[0][0] == "created_at" and info.get("expireAfterSeconds") != 3600:
+            if keys and keys[0][0] == "created_at" and info.get("expireAfterSeconds") != 604800:
                 await db.coffee_rounds.drop_index(name)
     except Exception:
         pass
-    await db.coffee_rounds.create_index("created_at", expireAfterSeconds=3600)
+    # 7 days — matches chat TTL so a round appearing in ride history stays
+    # around long enough for the buyer to look up who paid what.
+    await db.coffee_rounds.create_index("created_at", expireAfterSeconds=604800)
+    await db.coffee_rounds.create_index("ride_id")
+    await db.coffee_rounds.create_index("close_at")
     await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
     await db.push_tokens.create_index("expo_push_token")
     await db.web_push_subscriptions.create_index("endpoint", unique=True)
