@@ -17,7 +17,7 @@ const TABS = [
 ];
 
 export default function HomeShell() {
-  const [tab, setTab] = useState("rides");
+  const [tab, setTab] = useState("coffee");
   const { user, logout } = useAuth();
   const [perm, setPerm] = useState(browserPushPermission());
   const swipeRef = React.useRef({ x: 0, y: 0, active: false });

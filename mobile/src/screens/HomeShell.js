@@ -51,6 +51,7 @@ export default function HomeShell() {
       <Header />
       <NavigationContainer theme={NavTheme} independent>
         <Tab.Navigator
+          initialRouteName="Coffee"
           screenOptions={{
             headerShown: false,
             tabBarStyle: { backgroundColor: colors.bgSecondary, borderTopColor: colors.borderSubtle, height: 72, paddingBottom: 12, paddingTop: 8 },
