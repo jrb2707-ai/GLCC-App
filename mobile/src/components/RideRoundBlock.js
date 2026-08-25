@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet,
-  Alert, ScrollView, Clipboard,
+  Alert, ScrollView, Clipboard, AppState,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
@@ -34,14 +34,18 @@ export default function RideRoundBlock({ ride }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const fetchRound = async () => {
       try {
         const { data } = await api.get(`/rides/${ride.id}/round`);
         if (!cancelled) setRound(data.round);
       } catch (_) { /* ignore */ }
       finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
+    };
+    fetchRound();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") fetchRound();
+    });
+    return () => { cancelled = true; sub?.remove?.(); };
   }, [ride.id]);
 
   useEffect(() => subscribe((evt) => {
@@ -131,7 +135,7 @@ export default function RideRoundBlock({ ride }) {
             <Text style={s.ctaBuyTxt}>☕ I'M BUYING</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setNotMyTurn(true)} style={s.ctaSkip} testID="round-not-my-turn">
-            <Text style={s.ctaSkipTxt}>NOT MY TURN</Text>
+            <Text style={s.ctaSkipTxt}>SPLIT THE BILL</Text>
           </TouchableOpacity>
         </View>
         <Text style={s.hint}>SHOUT DROPS A 5-MIN PUSH TO THE PELOTON</Text>
@@ -286,8 +290,8 @@ const s = StyleSheet.create({
   sendBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   sendBtnTxt: { color: "#fff", fontSize: 12, fontWeight: "900", letterSpacing: 2 },
   orderRow: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.20)", borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 8, marginTop: 6 },
-  orderName: { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
-  orderText: { color: colors.textPrimary, fontSize: 13, marginTop: 1 },
+  orderName: { color: "rgba(255,255,255,0.75)", fontSize: 9, letterSpacing: 2, fontWeight: "700" },
+  orderText: { color: "#fff", fontSize: 13, marginTop: 1 },
   closeEarly: { marginTop: 14, borderColor: "rgba(239,68,68,0.4)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, alignItems: "center" },
   closeEarlyTxt: { color: "#dc2626", fontSize: 10, letterSpacing: 3, fontWeight: "900" },
   lockedBox: { marginTop: 12, backgroundColor: "rgba(0,0,0,0.35)", borderColor: "rgba(201,152,106,0.30)", borderWidth: 1, borderRadius: radius.md, padding: 10 },

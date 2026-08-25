@@ -5,6 +5,50 @@ import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
 import Avatar from "./Avatar";
 
+function normalizeOrder(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[.,!;\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function BaristaTally({ orders }) {
+  // Group by normalized order text; preserve the first-seen "display" version.
+  const groups = new Map();
+  for (const o of orders) {
+    const key = normalizeOrder(o.text);
+    if (!key) continue;
+    const g = groups.get(key) || { display: o.text.trim(), riders: [] };
+    g.riders.push(o.name);
+    groups.set(key, g);
+  }
+  const rows = Array.from(groups.values()).sort((a, b) => b.riders.length - a.riders.length);
+  if (!rows.length) return null;
+  return (
+    <div className="mt-3 border-t border-accent-coffee/25 pt-3" data-testid="round-tally">
+      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-1.5">
+        Barista tally
+      </div>
+      <ul className="space-y-1.5">
+        {rows.map((g) => (
+          <li key={g.display} className="flex items-baseline gap-2" data-testid={`tally-row-${g.display.slice(0,20)}`}>
+            <span className="font-heading text-lg font-black tabular-nums text-accent-pink shrink-0">
+              {g.riders.length}×
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-text-primary leading-tight">{g.display}</div>
+              <div className="text-[10px] text-white/70 font-mono-stat uppercase tracking-widest truncate">
+                {g.riders.join(" · ")}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function useCountdown(iso) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -38,10 +82,10 @@ function OrderList({ round, compact = false }) {
         >
           <Avatar name={o.name} photo={o.photo} size="xs" />
           <div className="flex-1 min-w-0">
-            <div className={compact ? "text-[11px] text-text-muted uppercase tracking-widest font-mono-stat" : "text-[10px] text-text-muted uppercase tracking-widest font-mono-stat"}>
+            <div className={compact ? "text-[11px] text-white/75 uppercase tracking-widest font-mono-stat" : "text-[10px] text-white/70 uppercase tracking-widest font-mono-stat"}>
               {o.name}
             </div>
-            <div className={compact ? "text-sm text-text-primary" : "text-[13px] text-text-primary leading-snug"}>
+            <div className={compact ? "text-sm text-white" : "text-[13px] text-white leading-snug"}>
               {o.text}
             </div>
           </div>
@@ -70,14 +114,19 @@ export default function RideRoundBlock({ ride, initialCafe }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const fetchRound = async () => {
       try {
         const { data } = await api.get(`/rides/${ride.id}/round`);
         if (!cancelled) setRound(data.round);
       } catch (_) { /* ignore */ }
       finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
+    };
+    fetchRound();
+    // Re-fetch when the user comes back to the tab, so state stays fresh even
+    // if a WS message got dropped or the client was backgrounded.
+    const onVis = () => { if (document.visibilityState === "visible") fetchRound(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", onVis); };
   }, [ride.id]);
 
   useEffect(() => {
@@ -188,7 +237,7 @@ export default function RideRoundBlock({ ride, initialCafe }) {
             className="bg-bg-secondary border border-border-subtle text-text-secondary font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl active:scale-95 hover:border-text-muted"
             data-testid="round-not-my-turn"
           >
-            Not My Turn
+            Split the Bill
           </button>
         </div>
         <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
@@ -243,11 +292,31 @@ export default function RideRoundBlock({ ride, initialCafe }) {
           <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-2 flex items-center gap-1">
             <Check className="w-3 h-3" /> Locked — {round.orders.length} order{round.orders.length === 1 ? "" : "s"}
           </div>
-          <OrderList round={round} compact />
+          <BaristaTally orders={round.orders} />
+          <details className="mt-3 group">
+            <summary className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted cursor-pointer hover:text-text-primary select-none">
+              By rider · tap to expand
+            </summary>
+            <OrderList round={round} compact />
+          </details>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               onClick={() => {
-                const text = round.orders.map((o) => `${o.name}: ${o.text}`).join("\n");
+                // Tally-first format so the barista sees "2× flat white" not names.
+                const groups = new Map();
+                for (const o of round.orders) {
+                  const key = normalizeOrder(o.text);
+                  if (!key) continue;
+                  const g = groups.get(key) || { display: o.text.trim(), n: 0 };
+                  g.n += 1;
+                  groups.set(key, g);
+                }
+                const tally = Array.from(groups.values())
+                  .sort((a, b) => b.n - a.n)
+                  .map((g) => `${g.n}× ${g.display}`)
+                  .join("\n");
+                const detail = round.orders.map((o) => `- ${o.name}: ${o.text}`).join("\n");
+                const text = `☕ ${round.cafe_name}\n${tally}\n\n(by rider:\n${detail})`;
                 navigator.clipboard?.writeText(text);
                 toast("Copied for the barista 📋");
               }}

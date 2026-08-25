@@ -6,6 +6,26 @@ import Avatar from "../Avatar";
 import { Coffee, ChevronRight } from "lucide-react";
 import RideRoundBlock from "../RideRoundBlock";
 
+function normalizeOrder(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[.,!;\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tallyOrders(orders) {
+  const groups = new Map();
+  for (const o of orders) {
+    const key = normalizeOrder(o.text);
+    if (!key) continue;
+    const g = groups.get(key) || { display: o.text.trim(), riders: [] };
+    g.riders.push(o.name);
+    groups.set(key, g);
+  }
+  return Array.from(groups.values()).sort((a, b) => b.riders.length - a.riders.length);
+}
+
 function timeAgo(iso) {
   if (!iso) return "";
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -76,6 +96,19 @@ export default function CoffeeTab({ onNavigate }) {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { setUsual(user?.coffee || "Medium Flat White"); }, [user?.coffee]);
+
+  // Refresh on tab/page visibility change (returning to the app from a lock
+  // screen or a different browser tab). Also poll every 30s while visible so
+  // state can't drift silently if a WS event was missed.
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVis);
+    const id = setInterval(() => { if (document.visibilityState === "visible") load(); }, 30000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      clearInterval(id);
+    };
+  }, []);  // eslint-disable-line
 
   // Live update when any round starts / gets an order / closes.
   useEffect(() => {
@@ -247,7 +280,11 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
     finally { setBusy(false); }
   }
   function copyList() {
-    const text = round.orders.map((o) => `${o.name}: ${o.text}`).join("\n");
+    const tally = tallyOrders(round.orders)
+      .map((g) => `${g.riders.length}× ${g.display}`)
+      .join("\n");
+    const detail = round.orders.map((o) => `- ${o.name}: ${o.text}`).join("\n");
+    const text = `☕ ${round.cafe_name}\n${tally}\n\n(by rider:\n${detail})`;
     navigator.clipboard?.writeText(text);
     toast("Copied for the barista 📋");
   }
@@ -328,20 +365,43 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
           <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-1.5">
             {round.orders.length} order{round.orders.length === 1 ? "" : "s"}{round.closed ? " · locked" : ""}
           </div>
-          <div className="space-y-1.5 max-h-64 overflow-auto" data-testid="modal-order-list">
-            {round.orders.map((o) => (
-              <div key={o.user_id} className="bg-bg-secondary border border-border-subtle rounded-lg px-2.5 py-1.5 flex items-center gap-2">
-                <Avatar name={o.name} photo={o.photo} size="xs" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">{o.name}</div>
-                  <div className="text-sm text-text-primary">{o.text}</div>
-                </div>
+          {round.orders.length > 0 && (
+            <div className="mb-3 border border-accent-coffee/30 rounded-xl p-3 bg-black/30" data-testid="modal-tally">
+              <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-1.5">
+                Barista tally
               </div>
-            ))}
-            {round.orders.length === 0 && (
-              <div className="text-[12px] text-text-muted italic">No orders in yet.</div>
-            )}
-          </div>
+              <ul className="space-y-1.5">
+                {tallyOrders(round.orders).map((g) => (
+                  <li key={g.display} className="flex items-baseline gap-2">
+                    <span className="font-heading text-lg font-black tabular-nums text-accent-pink shrink-0">{g.riders.length}×</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-white leading-tight">{g.display}</div>
+                      <div className="text-[10px] text-white/70 font-mono-stat uppercase tracking-widest truncate">{g.riders.join(" · ")}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <details className="group">
+            <summary className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted cursor-pointer hover:text-text-primary select-none mb-1.5">
+              By rider · tap to expand
+            </summary>
+            <div className="space-y-1.5 max-h-64 overflow-auto" data-testid="modal-order-list">
+              {round.orders.map((o) => (
+                <div key={o.user_id} className="bg-bg-secondary border border-border-subtle rounded-lg px-2.5 py-1.5 flex items-center gap-2">
+                  <Avatar name={o.name} photo={o.photo} size="xs" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-mono-stat uppercase tracking-widest text-white/70">{o.name}</div>
+                    <div className="text-sm text-white">{o.text}</div>
+                  </div>
+                </div>
+              ))}
+              {round.orders.length === 0 && (
+                <div className="text-[12px] text-text-muted italic">No orders in yet.</div>
+              )}
+            </div>
+          </details>
         </div>
 
         {round.closed && round.orders.length > 0 && (

@@ -9,6 +9,21 @@ import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import RideRoundBlock from "../components/RideRoundBlock";
 
+function normalizeOrder(text) {
+  return String(text || "").toLowerCase().replace(/[.,!;\s]+$/g, "").replace(/\s+/g, " ").trim();
+}
+function tallyOrders(orders) {
+  const groups = new Map();
+  for (const o of orders) {
+    const key = normalizeOrder(o.text);
+    if (!key) continue;
+    const g = groups.get(key) || { display: o.text.trim(), riders: [] };
+    g.riders.push(o.name);
+    groups.set(key, g);
+  }
+  return Array.from(groups.values()).sort((a, b) => b.riders.length - a.riders.length);
+}
+
 function timeAgo(iso) {
   if (!iso) return "";
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -258,7 +273,9 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
   function copyList() {
     if (!round.orders?.length) return;
     const { Clipboard } = require("react-native");
-    const text = round.orders.map((o) => `${o.name}: ${o.text}`).join("\n");
+    const tally = tallyOrders(round.orders).map((g) => `${g.riders.length}× ${g.display}`).join("\n");
+    const detail = round.orders.map((o) => `- ${o.name}: ${o.text}`).join("\n");
+    const text = `☕ ${round.cafe_name}\n${tally}\n\n(by rider:\n${detail})`;
     Clipboard.setString(text);
     Alert.alert("Copied", "Order list copied.");
   }
@@ -318,7 +335,20 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
       <Text style={[styleHint, { marginTop: 14 }]}>
         {round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"}{round.closed ? " · LOCKED" : ""}
       </Text>
-      <ScrollView style={{ maxHeight: 260, marginTop: 6 }} testID="modal-order-list">
+      {round.orders.length > 0 && (
+        <View style={{ marginTop: 8, padding: 10, borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(201,152,106,0.30)", backgroundColor: "rgba(0,0,0,0.30)" }} testID="modal-tally">
+          <Text style={[styleseye, { marginBottom: 6 }]}>BARISTA TALLY</Text>
+          {tallyOrders(round.orders).map((g) => (
+            <View key={g.display} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 4 }}>
+              <Text style={{ color: colors.accentPink, fontSize: 18, fontWeight: "900", width: 42 }}>{g.riders.length}×</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{g.display}</Text>
+                <Text style={{ color: "rgba(255,255,255,0.70)", fontSize: 10, letterSpacing: 1.5, fontWeight: "700" }} numberOfLines={1}>{g.riders.join(" · ").toUpperCase()}</Text>              </View>
+            </View>
+          ))}
+        </View>
+      )}
+      <ScrollView style={{ maxHeight: 220, marginTop: 8 }} testID="modal-order-list">
         {round.orders.map((o) => (
           <View key={o.user_id} style={styleOrderRow}>
             <Avatar name={o.name} photo={o.photo} size="xs" />
@@ -346,8 +376,8 @@ const styleseye = { color: colors.accentPink, fontSize: 10, letterSpacing: 3, fo
 const styleModalTitle = { color: colors.textPrimary, fontSize: 18, fontWeight: "700" };
 const styleRowSub = { color: colors.textSecondary, fontSize: 12 };
 const styleMyOrderBox = { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10, flexDirection: "row", alignItems: "center" };
-const styleOrderName = { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" };
-const styleOrderText = { color: colors.textPrimary, fontSize: 13, marginTop: 2 };
+const styleOrderName = { color: "rgba(255,255,255,0.70)", fontSize: 9, letterSpacing: 2, fontWeight: "700" };
+const styleOrderText = { color: "#fff", fontSize: 13, marginTop: 2 };
 const styleOrderRow = { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6, flexDirection: "row", alignItems: "center" };
 const styleUsualPill = { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 };
 const styleUsualPillLbl = { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" };
