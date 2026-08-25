@@ -49,7 +49,7 @@ function RoundRow({ round, onOpen }) {
             {round.buyer_name}&apos;s shout
           </span>
           {!round.closed && (
-            <span className="text-[9px] font-mono-stat uppercase tracking-widest bg-accent-pink/15 text-accent-pink px-1.5 py-0.5 rounded-full">Live</span>
+            <span className="animate-pulse text-[9px] font-mono-stat uppercase tracking-widest bg-accent-pink/15 text-accent-pink px-1.5 py-0.5 rounded-full">Live</span>
           )}
         </div>
         <div className="text-[12px] text-text-secondary truncate">
@@ -334,7 +334,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
         <div className="flex items-center gap-2">
           <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink">
+            <div className={`text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink${round.closed ? "" : " animate-pulse"}`}>
               {round.closed ? "Locked" : "Live"}
             </div>
             <div className="font-heading text-lg font-bold text-text-primary truncate">
@@ -368,7 +368,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
                     className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-pink/40 bg-accent-pink/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
                     data-testid="modal-usual"
                   >
-                    <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Usual →</span>
+                    <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Order →</span>
                     <span className="text-sm truncate flex-1">{usual}</span>
                   </button>
                 )}
@@ -411,7 +411,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
                     <span className="font-heading text-lg font-black tabular-nums text-accent-pink shrink-0">{g.riders.length}×</span>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm text-white leading-tight">{g.display}</div>
-                      <div className="text-[10px] text-white/70 font-mono-stat uppercase tracking-widest truncate">{g.riders.join(" · ")}</div>
+                      <div className="text-[10px] text-white font-mono-stat uppercase tracking-widest truncate">{g.riders.join(" · ")}</div>
                     </div>
                   </li>
                 ))}
@@ -427,7 +427,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
                 <div key={o.user_id} className="bg-bg-secondary border border-border-subtle rounded-lg px-2.5 py-1.5 flex items-center gap-2">
                   <Avatar name={o.name} photo={o.photo} size="xs" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-mono-stat uppercase tracking-widest text-white/70">{o.name}</div>
+                    <div className="text-[10px] font-mono-stat uppercase tracking-widest text-white">{o.name}</div>
                     <div className="text-sm text-white">{o.text}</div>
                   </div>
                 </div>

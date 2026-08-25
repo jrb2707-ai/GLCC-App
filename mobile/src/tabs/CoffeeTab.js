@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Alert, RefreshControl, Modal,
+  Alert, RefreshControl, Modal, Animated,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { api, formatDetail } from "../lib/api";
@@ -34,6 +34,25 @@ function timeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function LivePill() {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.35, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <Animated.View style={[s.livePill, { opacity }]}>
+      <Text style={s.livePillTxt}>LIVE</Text>
+    </Animated.View>
+  );
+}
+
 function RoundRow({ round, onPress }) {
   return (
     <TouchableOpacity
@@ -45,7 +64,7 @@ function RoundRow({ round, onPress }) {
       <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text style={s.rowTitle} numberOfLines={1}>{round.buyer_name}'s shout</Text>
-          {!round.closed && <View style={s.livePill}><Text style={s.livePillTxt}>LIVE</Text></View>}
+          {!round.closed && <LivePill />}
         </View>
         <Text style={s.rowSub} numberOfLines={1}>{round.cafe_name} · {round.ride_name || "Ride"}</Text>
         <Text style={s.rowMeta}>{round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"} · {timeAgo(round.started_at).toUpperCase()}</Text>
@@ -331,7 +350,7 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
             <View>
               {usual ? (
                 <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-usual">
-                  <Text style={styleUsualPillLbl}>USUAL →</Text>
+                  <Text style={styleUsualPillLbl}>ORDER →</Text>
                   <Text style={styleUsualPillTxt} numberOfLines={1}>{usual}</Text>
                 </TouchableOpacity>
               ) : null}
@@ -366,7 +385,7 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
               <Text style={{ color: colors.accentPink, fontSize: 18, fontWeight: "900", width: 42 }}>{g.riders.length}×</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{g.display}</Text>
-                <Text style={{ color: "rgba(255,255,255,0.70)", fontSize: 10, letterSpacing: 1.5, fontWeight: "700" }} numberOfLines={1}>{g.riders.join(" · ").toUpperCase()}</Text>              </View>
+                <Text style={{ color: "#fff", fontSize: 10, letterSpacing: 1.5, fontWeight: "700" }} numberOfLines={1}>{g.riders.join(" · ").toUpperCase()}</Text>              </View>
             </View>
           ))}
         </View>
@@ -399,7 +418,7 @@ const styleseye = { color: colors.accentPink, fontSize: 10, letterSpacing: 3, fo
 const styleModalTitle = { color: colors.textPrimary, fontSize: 18, fontWeight: "700" };
 const styleRowSub = { color: colors.textSecondary, fontSize: 12 };
 const styleMyOrderBox = { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10, flexDirection: "row", alignItems: "center" };
-const styleOrderName = { color: "rgba(255,255,255,0.70)", fontSize: 9, letterSpacing: 2, fontWeight: "700" };
+const styleOrderName = { color: "#fff", fontSize: 9, letterSpacing: 2, fontWeight: "700" };
 const styleOrderText = { color: "#fff", fontSize: 13, marginTop: 2 };
 const styleOrderRow = { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6, flexDirection: "row", alignItems: "center" };
 const styleUsualPill = { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 };

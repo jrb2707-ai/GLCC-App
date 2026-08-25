@@ -228,7 +228,7 @@ export default function RideRoundBlock({ ride }) {
                   style={s.usualBtn}
                   testID="round-usual"
                 >
-                  <Text style={s.usualLbl}>USUAL →</Text>
+                  <Text style={s.usualLbl}>ORDER →</Text>
                   <Text style={s.usualTxt} numberOfLines={1}>{usual}</Text>
                 </TouchableOpacity>
               ) : null}
@@ -308,7 +308,7 @@ const s = StyleSheet.create({
   sendBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   sendBtnTxt: { color: "#fff", fontSize: 12, fontWeight: "900", letterSpacing: 2 },
   orderRow: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.20)", borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 8, marginTop: 6 },
-  orderName: { color: "rgba(255,255,255,0.75)", fontSize: 9, letterSpacing: 2, fontWeight: "700" },
+  orderName: { color: "#fff", fontSize: 9, letterSpacing: 2, fontWeight: "700" },
   orderText: { color: "#fff", fontSize: 13, marginTop: 1 },
   closeEarly: { marginTop: 14, borderColor: "rgba(239,68,68,0.4)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, alignItems: "center" },
   closeEarlyTxt: { color: "#dc2626", fontSize: 10, letterSpacing: 3, fontWeight: "900" },

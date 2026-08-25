@@ -38,7 +38,7 @@ function BaristaTally({ orders }) {
             </span>
             <div className="min-w-0 flex-1">
               <div className="text-sm text-text-primary leading-tight">{g.display}</div>
-              <div className="text-[10px] text-white/70 font-mono-stat uppercase tracking-widest truncate">
+              <div className="text-[10px] text-white font-mono-stat uppercase tracking-widest truncate">
                 {g.riders.join(" · ")}
               </div>
             </div>
@@ -82,7 +82,7 @@ function OrderList({ round, compact = false }) {
         >
           <Avatar name={o.name} photo={o.photo} size="xs" />
           <div className="flex-1 min-w-0">
-            <div className={compact ? "text-[11px] text-white/75 uppercase tracking-widest font-mono-stat" : "text-[10px] text-white/70 uppercase tracking-widest font-mono-stat"}>
+            <div className={compact ? "text-[11px] text-white uppercase tracking-widest font-mono-stat" : "text-[10px] text-white uppercase tracking-widest font-mono-stat"}>
               {o.name}
             </div>
             <div className={compact ? "text-sm text-white" : "text-[13px] text-white leading-snug"}>
@@ -365,7 +365,7 @@ export default function RideRoundBlock({ ride, initialCafe }) {
                   className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-pink/40 bg-accent-pink/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
                   data-testid="round-usual"
                 >
-                  <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Usual →</span>
+                  <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Order →</span>
                   <span className="text-sm truncate flex-1">{usual}</span>
                   <Send className="w-3.5 h-3.5 text-accent-pink shrink-0" />
                 </button>
