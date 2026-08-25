@@ -84,12 +84,14 @@ export default function CoffeeTab({ onNavigate }) {
       ]);
       setActive(a.data.rounds || []);
       setHistory(h.data.rounds || []);
-      // Pick the closest upcoming ride so the top-of-tab CTA has a target.
+      // Only attach the CTA to an actually-upcoming ride so a stale/past ride
+      // can't hide the buttons. If nothing upcoming → nextRide stays null and
+      // the tab shows a greyed "sync Strava" prompt.
       const now = Date.now();
       const upcoming = (r.data.rides || [])
         .filter((rd) => rd.starts_at && new Date(rd.starts_at).getTime() > now)
         .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
-      setNextRide(upcoming[0] || (r.data.rides || [])[0] || null);
+      setNextRide(upcoming[0] || null);
     } catch (_) { /* silent */ }
     finally { setLoading(false); }
   };
@@ -156,10 +158,43 @@ export default function CoffeeTab({ onNavigate }) {
       </div>
 
       {/* Quick-shout CTA: same block used on ride detail, bound to the next
-          upcoming ride so any rider can start a round without navigating. */}
-      {nextRide && (
+          upcoming ride so any rider can start a round without navigating.
+          When there's no upcoming ride we show a greyed prompt to sync Strava
+          rather than silently hiding the primary action. */}
+      {nextRide ? (
         <div data-testid="coffee-quick-shout">
           <RideRoundBlock ride={nextRide} initialCafe={nextRide.cafe} />
+        </div>
+      ) : !loading && (
+        <div
+          className="mt-2 pt-4 border-t border-border-subtle"
+          data-testid="coffee-no-upcoming"
+        >
+          <div className="flex items-center gap-2 text-text-muted mb-2">
+            <Coffee className="w-3.5 h-3.5" />
+            <span className="text-[10px] uppercase tracking-widest font-mono-stat font-bold">
+              Coffee shout
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              disabled
+              className="bg-bg-secondary border border-border-subtle text-text-muted font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl opacity-60 flex items-center justify-center gap-2 cursor-not-allowed"
+              data-testid="round-start-disabled"
+            >
+              <Coffee className="w-3.5 h-3.5" /> I&apos;m Buying
+            </button>
+            <button
+              disabled
+              className="bg-bg-secondary border border-border-subtle text-text-muted font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl opacity-60 cursor-not-allowed"
+              data-testid="round-not-my-turn-disabled"
+            >
+              Split the Bill
+            </button>
+          </div>
+          <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
+            No upcoming rides — sync Strava
+          </div>
         </div>
       )}
 
@@ -203,7 +238,7 @@ export default function CoffeeTab({ onNavigate }) {
           <div className="h-16 rounded-2xl border border-border-subtle animate-pulse bg-bg-secondary/40" />
         ) : active.length === 0 ? (
           <div className="text-[12px] text-text-muted italic px-1" data-testid="active-empty">
-            No active rounds. Open a ride and shout the peloton a coffee ☕
+            No live rounds right now.
           </div>
         ) : (
           <div className="space-y-2">

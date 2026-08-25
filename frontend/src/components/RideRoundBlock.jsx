@@ -103,13 +103,12 @@ export default function RideRoundBlock({ ride, initialCafe }) {
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
   const [showCloseView, setShowCloseView] = useState(false);
-  const notMyTurnKey = `glcc.notMyTurn.${ride.id}`;
-  const [notMyTurn, setNotMyTurn] = useState(() => {
-    try { return typeof localStorage !== "undefined" && localStorage.getItem(notMyTurnKey) === "1"; } catch { return false; }
-  });
+  // Session-only dismissal. Clears whenever the round cycles (new round
+  // starts, closes, or ride changes) so the CTA always returns after timeout.
+  const [notMyTurn, setNotMyTurn] = useState(false);
   function dismissMyTurn() {
-    try { localStorage.setItem(notMyTurnKey, "1"); } catch (_) {}
     setNotMyTurn(true);
+    toast("Split it — someone else can shout ☕");
   }
 
   useEffect(() => {
@@ -137,6 +136,10 @@ export default function RideRoundBlock({ ride, initialCafe }) {
       }
     });
   }, [subscribe, ride.id]);
+
+  // Reset the "Split the Bill" dismissal whenever the round cycles or the
+  // ride changes so the CTA re-appears after any round closes / expires.
+  useEffect(() => { setNotMyTurn(false); }, [ride.id, round?.id, round?.closed]);
 
   const myOrder = useMemo(
     () => round?.orders?.find((o) => o.user_id === user?.id),

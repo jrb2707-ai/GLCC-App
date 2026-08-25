@@ -78,7 +78,7 @@ export default function CoffeeTab() {
       const upcoming = (r.data.rides || [])
         .filter((rd) => rd.starts_at && new Date(rd.starts_at).getTime() > now)
         .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
-      setNextRide(upcoming[0] || (r.data.rides || [])[0] || null);
+      setNextRide(upcoming[0] || null);
     } catch (_) {}
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -128,6 +128,19 @@ export default function CoffeeTab() {
         <View testID="coffee-quick-shout">
           <RideRoundBlock ride={nextRide} />
         </View>
+      ) : !loading ? (
+        <View style={s.noUpcomingWrap} testID="coffee-no-upcoming">
+          <Text style={s.noUpcomingEyebrow}>☕ COFFEE SHOUT</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={[s.noUpcomingBtn, { backgroundColor: colors.bgSecondary }]}>
+              <Text style={s.noUpcomingBtnTxt}>☕ I'M BUYING</Text>
+            </View>
+            <View style={s.noUpcomingBtn}>
+              <Text style={s.noUpcomingBtnTxt}>SPLIT THE BILL</Text>
+            </View>
+          </View>
+          <Text style={s.noUpcomingHint}>NO UPCOMING RIDES — SYNC STRAVA</Text>
+        </View>
       ) : null}
 
       {/* Usual order */}
@@ -164,7 +177,7 @@ export default function CoffeeTab() {
         {loading ? (
           <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary }} />
         ) : active.length === 0 ? (
-          <Text style={s.emptyTxt} testID="active-empty">No active rounds. Open a ride and shout the peloton a coffee ☕</Text>
+          <Text style={s.emptyTxt} testID="active-empty">No live rounds right now.</Text>
         ) : (
           active.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)
         )}
@@ -235,6 +248,11 @@ const s = StyleSheet.create({
   myOrderBox: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10, flexDirection: "row", alignItems: "center" },
   copyBarBtn: { marginTop: 12, backgroundColor: "rgba(201,152,106,0.15)", borderColor: "rgba(201,152,106,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, alignItems: "center" },
   copyBarBtnTxt: { color: colors.accentCoffee, fontSize: 11, fontWeight: "900", letterSpacing: 2 },
+  noUpcomingWrap: { marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.borderSubtle },
+  noUpcomingEyebrow: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "900", marginBottom: 10 },
+  noUpcomingBtn: { flex: 1, backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", opacity: 0.55 },
+  noUpcomingBtnTxt: { color: colors.textMuted, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
+  noUpcomingHint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", textAlign: "center", marginTop: 8 },
 });
 
 function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {

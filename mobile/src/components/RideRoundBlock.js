@@ -55,6 +55,10 @@ export default function RideRoundBlock({ ride }) {
     }
   }), [subscribe, ride.id]);
 
+  // Reset "Split the Bill" dismissal on ride/round change so the CTA
+  // reappears after any round closes or times out.
+  useEffect(() => { setNotMyTurn(false); }, [ride.id, round?.id, round?.closed]);
+
   const myOrder = useMemo(
     () => round?.orders?.find((o) => o.user_id === user?.id),
     [round, user],
