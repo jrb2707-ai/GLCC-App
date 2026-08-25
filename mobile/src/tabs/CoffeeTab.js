@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   Alert, RefreshControl, Modal,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
@@ -84,6 +85,10 @@ export default function CoffeeTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // The bottom-tab navigator keeps screens mounted, so re-fetch every time
+  // the Coffee tab regains focus. Without this, a round started on the Rides
+  // screen won't show up here until a manual pull-to-refresh.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => { setUsual(user?.coffee || "Medium Flat White"); }, [user?.coffee]);
 
   useEffect(() => subscribe((evt) => {

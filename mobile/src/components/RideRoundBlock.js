@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet,
   Alert, ScrollView, Clipboard, AppState,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
@@ -47,6 +48,19 @@ export default function RideRoundBlock({ ride }) {
     });
     return () => { cancelled = true; sub?.remove?.(); };
   }, [ride.id]);
+
+  // Refetch on tab focus so a round started on another screen (or missed
+  // over a dropped WebSocket) shows up the moment the user lands here.
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get(`/rides/${ride.id}/round`);
+        if (!cancelled) setRound(data.round);
+      } catch (_) { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [ride.id]));
 
   useEffect(() => subscribe((evt) => {
     if (!evt.round || evt.round.ride_id !== ride.id) return;
