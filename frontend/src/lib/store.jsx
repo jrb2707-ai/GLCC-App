@@ -178,8 +178,43 @@ export function AppProviders({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, booted, login, register, logout, refreshMe, formatDetail }}>
-      <EventsCtx.Provider value={{ subscribe }}>{children}</EventsCtx.Provider>
-    </AuthCtx.Provider>
+    <ThemeProvider>
+      <AuthCtx.Provider value={{ user, booted, login, register, logout, refreshMe, formatDetail }}>
+        <EventsCtx.Provider value={{ subscribe }}>{children}</EventsCtx.Provider>
+      </AuthCtx.Provider>
+    </ThemeProvider>
   );
+}
+
+
+// ---- Theme (light / dark / auto) ----
+// Admins can flip the whole app between light and dark, or leave it on auto
+// which follows the OS/browser preference. Choice persists per browser.
+const ThemeCtx = createContext(null);
+export const useTheme = () => useContext(ThemeCtx);
+
+const THEME_KEY = "glcc.theme";
+function readSavedTheme() {
+  try { const v = localStorage.getItem(THEME_KEY); return v === "light" || v === "dark" ? v : "auto"; } catch { return "auto"; }
+}
+
+export function ThemeProvider({ children }) {
+  const [theme, setThemeState] = useState(() => readSavedTheme());
+
+  useEffect(() => {
+    const html = document.documentElement;
+    if (theme === "auto") {
+      html.removeAttribute("data-theme");
+    } else {
+      html.setAttribute("data-theme", theme);
+    }
+    try { localStorage.setItem(THEME_KEY, theme); } catch (_) { /* private mode */ }
+  }, [theme]);
+
+  const setTheme = useCallback((t) => setThemeState(t), []);
+  const cycleTheme = useCallback(() => {
+    setThemeState((cur) => (cur === "auto" ? "light" : cur === "light" ? "dark" : "auto"));
+  }, []);
+
+  return <ThemeCtx.Provider value={{ theme, setTheme, cycleTheme }}>{children}</ThemeCtx.Provider>;
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff } from "lucide-react";
-import { useAuth, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor } from "lucide-react";
+import { useAuth, useTheme, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
 import { toast } from "sonner";
 import RidesTab from "./tabs/RidesTab";
 import CoffeeTab from "./tabs/CoffeeTab";
@@ -19,6 +19,7 @@ const TABS = [
 export default function HomeShell() {
   const [tab, setTab] = useState("coffee");
   const { user, logout } = useAuth();
+  const { theme, cycleTheme } = useTheme();
   const [perm, setPerm] = useState(browserPushPermission());
   const swipeRef = React.useRef({ x: 0, y: 0, active: false });
 
@@ -83,6 +84,17 @@ export default function HomeShell() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          {user?.is_admin && (
+            <button
+              onClick={cycleTheme}
+              title={`Theme: ${theme} — tap to cycle`}
+              className="p-1.5 rounded-full text-text-secondary hover:text-brand-accent border border-transparent hover:border-border-subtle transition"
+              data-testid="theme-toggle"
+              aria-label={`Theme: ${theme}`}
+            >
+              {theme === "light" ? <Sun className="w-4 h-4" /> : theme === "dark" ? <Moon className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+            </button>
+          )}
           <button
             onClick={togglePush}
             title={bellEnabled ? "Notifications on" : "Enable notifications"}

@@ -31,6 +31,33 @@
   }
 }
 
+/* Explicit user override via ThemeContext (data-theme attribute on <html>).
+   Wins over prefers-color-scheme when the user has picked light or dark. */
+html[data-theme="dark"] {
+  --glcc-bg-primary: #0D1117;
+  --glcc-bg-secondary: #161B22;
+  --glcc-bg-card: #21262D;
+  --glcc-border-subtle: #30363D;
+  --glcc-border-active: #58A6FF;
+  --glcc-text-primary: #F0F6FC;
+  --glcc-text-secondary: #8B949E;
+  --glcc-text-muted: #6E7681;
+  --glcc-shell-bg: #05070b;
+  --glcc-frame-bezel: #111318;
+}
+html[data-theme="light"] {
+  --glcc-bg-primary: #FFFFFF;
+  --glcc-bg-secondary: #F4F5F7;
+  --glcc-bg-card: #FFFFFF;
+  --glcc-border-subtle: #E5E7EB;
+  --glcc-border-active: #007AFF;
+  --glcc-text-primary: #0D1117;
+  --glcc-text-secondary: #4B5563;
+  --glcc-text-muted: #6B7280;
+  --glcc-shell-bg: #EDEEF1;
+  --glcc-frame-bezel: #1E2126;
+}
+
 html,
 body,
 #root {
@@ -42,7 +69,7 @@ body,
 
 body {
   font-family: "Inter", "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #f0f6fc;
+  color: var(--glcc-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

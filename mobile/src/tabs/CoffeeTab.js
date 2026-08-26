@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Alert, RefreshControl, Modal, Animated,
+  Alert, RefreshControl, Modal, Animated, ImageBackground,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { api, formatDetail } from "../lib/api";
@@ -50,6 +50,25 @@ function LivePill() {
     <Animated.View style={[s.livePill, { opacity }]}>
       <Text style={s.livePillTxt}>LIVE</Text>
     </Animated.View>
+  );
+}
+
+function LiveNowHeader() {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.4, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <Animated.Text style={[s.liveNowHeader, { opacity }]} testID="live-now-header">
+      ● LIVE NOW
+    </Animated.Text>
   );
 }
 
@@ -131,7 +150,14 @@ export default function CoffeeTab() {
     try {
       await api.patch("/riders/me", { coffee: trimmed });
       await refreshMe?.();
-      Alert.alert("Saved", "Usual locked in — one tap next round.");
+      // If a live round is happening, dive straight in — no toast, no
+      // context switch. Riders complained that the "saved" message felt like
+      // an accidental dead-end when the LIVE pill was flashing.
+      if (active.length > 0) {
+        setDetail(active[0]);
+      } else {
+        Alert.alert("Saved", "Usual locked in — one tap next round.");
+      }
     } catch (e) { Alert.alert("Coffee", formatDetail(e)); }
     finally { setSavingUsual(false); }
   }
@@ -195,11 +221,18 @@ export default function CoffeeTab() {
       {/* Active */}
       <View style={{ marginTop: 24 }} testID="active-rounds-section">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <Text style={[s.sectionHead, { color: colors.accentPink }]}>LIVE NOW</Text>
+          {active.length > 0 && !loading ? (
+            <LiveNowHeader />
+          ) : (
+            <Text style={[s.sectionHead, { color: colors.textMuted }]}>LIVE NOW</Text>
+          )}
           <View style={s.hr} />
         </View>
         {loading ? (
-          <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary }} />
+          <View testID="active-skeleton">
+            <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary, marginBottom: 8, opacity: 0.6 }} />
+            <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary, opacity: 0.4 }} />
+          </View>
         ) : active.length === 0 ? (
           <Text style={s.emptyTxt} testID="active-empty">No live rounds right now.</Text>
         ) : (
@@ -210,29 +243,38 @@ export default function CoffeeTab() {
       {/* History */}
       <View style={{ marginTop: 24 }} testID="history-section">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <Text style={s.sectionHead}>PAST ROUNDS</Text>
+          <Text style={s.sectionHead}>PAST ROUNDS · LAST 24H</Text>
           <View style={s.hr} />
         </View>
         {history.length === 0 ? (
-          <Text style={s.emptyTxt} testID="history-empty">Nothing here yet — history keeps the last 7 days.</Text>
+          <Text style={s.emptyTxt} testID="history-empty">Nothing in the last 24 hours.</Text>
         ) : (
           history.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)
         )}
       </View>
 
-      {/* Detail modal — inline order input + live orders list */}
+      {/* Detail modal — coffee-cup background, 85% height, swipe-to-dismiss */}
       <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
         <View style={s.modalBg}>
           <View style={s.modalCard}>
-            {detail && (
-              <RoundDetailBody
-                round={detail}
-                onChange={setDetail}
-                onClose={() => setDetail(null)}
-                usual={user?.coffee}
-                subscribe={subscribe}
-              />
-            )}
+            <ImageBackground
+              source={{ uri: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=60" }}
+              style={{ flex: 1 }}
+              resizeMode="cover"
+            >
+              <ScrollView style={s.modalOverlay} contentContainerStyle={{ paddingBottom: 40 }}>
+                <View style={s.dragHandle} />
+                {detail && (
+                  <RoundDetailBody
+                    round={detail}
+                    onChange={setDetail}
+                    onClose={() => setDetail(null)}
+                    usual={user?.coffee}
+                    subscribe={subscribe}
+                  />
+                )}
+              </ScrollView>
+            </ImageBackground>
           </View>
         </View>
       </Modal>
@@ -257,9 +299,12 @@ const s = StyleSheet.create({
   rowMeta: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", marginTop: 2 },
   livePill: { backgroundColor: "rgba(236,72,153,0.15)", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
   livePillTxt: { color: colors.accentPink, fontSize: 9, letterSpacing: 1.5, fontWeight: "900" },
+  liveNowHeader: { color: colors.accentPink, fontSize: 15, letterSpacing: 2, fontWeight: "900" },
   emptyTxt: { color: colors.textMuted, fontSize: 12, fontStyle: "italic" },
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: colors.bgPrimary, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, borderTopWidth: 1, borderColor: colors.borderSubtle },
+  modalCard: { height: "85%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#1a1210" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 20 },
+  dragHandle: { alignSelf: "center", width: 48, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.4)", marginBottom: 12 },
   modalTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: "700" },
   orderRow: { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6 },
   orderName: { color: colors.textMuted, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
@@ -327,39 +372,40 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styleseye]}>{round.closed ? "LOCKED" : "LIVE"}</Text>
+          <Text style={[styleseye]}>{round.closed ? "● LOCKED" : "● LIVE"}</Text>
           <Text style={styleModalTitle} numberOfLines={1}>{round.buyer_name}'s shout</Text>
           <Text style={styleRowSub} numberOfLines={1}>{round.cafe_name} · {round.ride_name}</Text>
         </View>
-        <TouchableOpacity onPress={onClose}><Text style={{ color: colors.textMuted, fontSize: 20, padding: 4 }}>✕</Text></TouchableOpacity>
+        <TouchableOpacity onPress={onClose}><Text style={{ color: "#fff", fontSize: 22, padding: 4, opacity: 0.85 }}>✕</Text></TouchableOpacity>
       </View>
 
       {!round.closed && (
-        <View style={{ marginTop: 14 }}>
+        <View style={{ marginTop: 16 }}>
           {myOrder ? (
             <View style={styleMyOrderBox} testID="modal-my-order">
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styleOrderName, { color: "#16a34a" }]}>YOUR ORDER</Text>
+                <Text style={[styleOrderName, { color: "#4ade80" }]}>YOUR ORDER</Text>
                 <Text style={styleOrderText} numberOfLines={2}>{myOrder.text}</Text>
               </View>
               <TouchableOpacity onPress={retract} disabled={busy} testID="modal-retract">
-                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, paddingHorizontal: 6 }}>UNDO</Text>
+                <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900", letterSpacing: 1.5, paddingHorizontal: 6, opacity: 0.7 }}>UNDO</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View>
               {usual ? (
                 <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-usual">
-                  <Text style={styleUsualPillLbl}>ORDER →</Text>
-                  <Text style={styleUsualPillTxt} numberOfLines={1}>{usual}</Text>
+                  <Text style={styleUsualPillLbl}>TAP TO ORDER MY USUAL</Text>
+                  <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {usual}</Text>
                 </TouchableOpacity>
               ) : null}
+              <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 10, letterSpacing: 2, fontWeight: "700", textAlign: "center", marginBottom: 6 }}>OR TYPE SOMETHING DIFFERENT</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TextInput
                   value={orderText}
                   onChangeText={setOrderText}
                   placeholder="Flat white, no sugar…"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor="rgba(255,255,255,0.5)"
                   style={styleInput}
                   maxLength={140}
                   testID="modal-order-input"
@@ -374,34 +420,36 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
         </View>
       )}
 
-      <Text style={[styleHint, { marginTop: 14 }]}>
+      <Text style={[styleHint, { marginTop: 18, color: "rgba(255,255,255,0.8)" }]}>
         {round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"}{round.closed ? " · LOCKED" : ""}
       </Text>
       {round.orders.length > 0 && (
-        <View style={{ marginTop: 8, padding: 10, borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(201,152,106,0.30)", backgroundColor: "rgba(0,0,0,0.30)" }} testID="modal-tally">
-          <Text style={[styleseye, { marginBottom: 6 }]}>BARISTA TALLY</Text>
+        <View style={{ marginTop: 10, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(201,152,106,0.55)", backgroundColor: "rgba(0,0,0,0.55)" }} testID="modal-tally">
+          <Text style={{ color: colors.accentCoffee, fontSize: 12, letterSpacing: 3, fontWeight: "900", marginBottom: 12 }}>☕ BARISTA TALLY</Text>
           {tallyOrders(round.orders).map((g) => (
-            <View key={g.display} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 4 }}>
-              <Text style={{ color: colors.accentPink, fontSize: 18, fontWeight: "900", width: 42 }}>{g.riders.length}×</Text>
+            <View key={g.display} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 12 }}>
+              <Text style={{ color: colors.accentPink, fontSize: 30, fontWeight: "900", width: 60, lineHeight: 32 }}>{g.riders.length}×</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{g.display}</Text>
-                <Text style={{ color: "#fff", fontSize: 10, letterSpacing: 1.5, fontWeight: "700" }} numberOfLines={1}>{g.riders.join(" · ").toUpperCase()}</Text>              </View>
+                <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", lineHeight: 22 }}>{g.display}</Text>
+                <Text style={{ color: "#fff", fontSize: 11, letterSpacing: 1.5, fontWeight: "700", marginTop: 2 }} numberOfLines={2}>{g.riders.join(" · ").toUpperCase()}</Text>
+              </View>
             </View>
           ))}
         </View>
       )}
-      <ScrollView style={{ maxHeight: 220, marginTop: 8 }} testID="modal-order-list">
+      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 2, fontWeight: "800", marginTop: 16, marginBottom: 8 }}>BY RIDER · SCROLL FOR MORE</Text>
+      <View testID="modal-order-list">
         {round.orders.map((o) => (
           <View key={o.user_id} style={styleOrderRow}>
-            <Avatar name={o.name} photo={o.photo} size="xs" />
-            <View style={{ flex: 1, marginLeft: 8, minWidth: 0 }}>
+            <Avatar name={o.name} photo={o.photo} size="sm" />
+            <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
               <Text style={styleOrderName}>{(o.name || "").toUpperCase()}</Text>
-              <Text style={styleOrderText}>{o.text}</Text>
+              <Text style={styleOrderText} numberOfLines={2}>{o.text}</Text>
             </View>
           </View>
         ))}
-        {round.orders.length === 0 && <Text style={styleHint}>No orders in yet.</Text>}
-      </ScrollView>
+        {round.orders.length === 0 && <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, fontStyle: "italic" }}>No orders in yet.</Text>}
+      </View>
 
       {round.closed && round.orders.length > 0 && (
         <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
@@ -414,19 +462,21 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
 
 // Aliases so the inner component can reuse the outer stylesheet without a
 // forward-ref dance. Keeps the file flat and readable.
-const styleseye = { color: colors.accentPink, fontSize: 10, letterSpacing: 3, fontWeight: "700" };
-const styleModalTitle = { color: colors.textPrimary, fontSize: 18, fontWeight: "700" };
-const styleRowSub = { color: colors.textSecondary, fontSize: 12 };
-const styleMyOrderBox = { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10, flexDirection: "row", alignItems: "center" };
-const styleOrderName = { color: "#fff", fontSize: 9, letterSpacing: 2, fontWeight: "700" };
-const styleOrderText = { color: "#fff", fontSize: 13, marginTop: 2 };
-const styleOrderRow = { backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 6, flexDirection: "row", alignItems: "center" };
-const styleUsualPill = { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 };
-const styleUsualPillLbl = { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" };
-const styleUsualPillTxt = { color: colors.textPrimary, fontSize: 13, flex: 1 };
-const styleInput = { flex: 1, backgroundColor: colors.bgSecondary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 };
+const styleseye = { color: colors.accentPink, fontSize: 11, letterSpacing: 3, fontWeight: "900" };
+const styleModalTitle = { color: "#fff", fontSize: 20, fontWeight: "900" };
+const styleRowSub = { color: "rgba(255,255,255,0.85)", fontSize: 13 };
+const styleMyOrderBox = { backgroundColor: "rgba(34,197,94,0.15)", borderColor: "rgba(34,197,94,0.45)", borderWidth: 1, borderRadius: radius.md, padding: 12, flexDirection: "row", alignItems: "center" };
+// White cards with black text for the by-rider expand — max legibility for
+// older riders in bright cafés and low-light morning starts.
+const styleOrderName = { color: "#000", fontSize: 10, letterSpacing: 2, fontWeight: "900" };
+const styleOrderText = { color: "#000", fontSize: 16, marginTop: 2, fontWeight: "600" };
+const styleOrderRow = { backgroundColor: "rgba(255,255,255,0.96)", borderRadius: radius.md, padding: 12, marginBottom: 8, flexDirection: "row", alignItems: "center" };
+const styleUsualPill = { flexDirection: "column", alignItems: "flex-start", gap: 4, backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10 };
+const styleUsualPillLbl = { color: "#fff", fontSize: 10, letterSpacing: 2, fontWeight: "900", opacity: 0.9 };
+const styleUsualPillTxt = { color: "#fff", fontSize: 17, fontWeight: "800" };
+const styleInput = { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: "#fff", fontSize: 14 };
 const styleSendBtn = { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" };
 const styleSendBtnTxt = { color: "#fff", fontSize: 11, fontWeight: "900", letterSpacing: 2 };
-const styleHint = { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700" };
-const styleCopyBar = { marginTop: 12, backgroundColor: "rgba(201,152,106,0.15)", borderColor: "rgba(201,152,106,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, alignItems: "center" };
-const styleCopyBarTxt = { color: colors.accentCoffee, fontSize: 11, fontWeight: "900", letterSpacing: 2 };
+const styleHint = { color: "rgba(255,255,255,0.7)", fontSize: 10, letterSpacing: 2, fontWeight: "700" };
+const styleCopyBar = { marginTop: 14, backgroundColor: "rgba(201,152,106,0.25)", borderColor: "rgba(201,152,106,0.55)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 12, alignItems: "center" };
+const styleCopyBarTxt = { color: "#fff", fontSize: 12, fontWeight: "900", letterSpacing: 2 };

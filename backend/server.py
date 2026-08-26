@@ -65,6 +65,46 @@ PyObjectId = Annotated[str, BeforeValidator(obj_id_str)]
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
+def _dedupe_location(raw: Optional[str]) -> Optional[str]:
+    """Collapse repeated tokens/phrases in a location string.
+    Strava's `address` field sometimes echoes the same locality
+    ("Auckland Auckland", "Grey Lynn Grey Lynn, Auckland", "Auckland,
+    Auckland, New Zealand"), which spills into ride cards.
+    """
+    if not raw:
+        return raw
+
+    def _dedupe_phrase(p: str) -> str:
+        """Collapse `X X` → `X` for adjacent identical words AND for the
+        full-phrase mirror case (e.g. 'Grey Lynn Grey Lynn' → 'Grey Lynn')."""
+        words = [w for w in p.split() if w]
+        if not words:
+            return p
+        # Adjacent word dedupe
+        collapsed = [words[0]]
+        for w in words[1:]:
+            if w.lower().strip("-·") != collapsed[-1].lower().strip("-·"):
+                collapsed.append(w)
+        # Full-phrase mirror: split length, compare halves case-insensitively
+        n = len(collapsed)
+        if n >= 2 and n % 2 == 0:
+            half = n // 2
+            if [w.lower() for w in collapsed[:half]] == [w.lower() for w in collapsed[half:]]:
+                collapsed = collapsed[:half]
+        return " ".join(collapsed)
+
+    parts = [p.strip() for p in re.split(r"[,]", raw) if p and p.strip()]
+    seen: set[str] = set()
+    kept: list[str] = []
+    for p in parts:
+        p_clean = _dedupe_phrase(p)
+        k = p_clean.lower()
+        if k not in seen:
+            seen.add(k)
+            kept.append(p_clean)
+    return ", ".join(kept) or None
+
+
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -120,7 +160,7 @@ def serialize_ride(doc: dict) -> dict:
         "name": doc.get("name"),
         "distance": doc.get("distance"),
         "elevation": doc.get("elevation"),
-        "location": doc.get("location"),
+        "location": _dedupe_location(doc.get("location")),
         "route": doc.get("route"),
         "route_description": doc.get("route_description"),
         "cafe": doc.get("cafe"),
@@ -1271,7 +1311,7 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
         "name": ev.get("title") or "Strava club ride",
         "distance": distance,
         "elevation": elevation,
-        "location": ev.get("address"),
+        "location": _dedupe_location(ev.get("address")),
         "route": route_label,
         "route_description": route_description,
         "strava_url": strava_url,
@@ -1814,7 +1854,7 @@ async def public_ride(ride_id: str):
         "distance": doc.get("distance"),
         "elevation": doc.get("elevation"),
         "pace": doc.get("pace", "28-31 kph"),
-        "location": doc.get("location"),
+        "location": _dedupe_location(doc.get("location")),
         "route": doc.get("route"),
         "route_description": doc.get("route_description"),
         "cafe": doc.get("cafe"),
@@ -2172,10 +2212,12 @@ async def coffee_active_rounds(user: dict = Depends(require_approved)):
 
 @api.get("/coffee/rounds/history")
 async def coffee_rounds_history(user: dict = Depends(require_approved), limit: int = 10):
-    """Recently-closed coordinated rounds — used by the Coffee tab's history."""
+    """Recently-closed coordinated rounds — Coffee tab history, last 24h."""
     now = now_utc()
+    cutoff = now - timedelta(hours=24)
     docs = await db.coffee_rounds.find({
         "buyer_user_id": {"$exists": True},
+        "started_at": {"$gte": cutoff},
         "$or": [
             {"close_at": {"$lte": now}},
             {"closed_manually_at": {"$exists": True}},

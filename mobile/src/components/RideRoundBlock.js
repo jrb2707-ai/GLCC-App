@@ -228,8 +228,8 @@ export default function RideRoundBlock({ ride }) {
                   style={s.usualBtn}
                   testID="round-usual"
                 >
-                  <Text style={s.usualLbl}>ORDER →</Text>
-                  <Text style={s.usualTxt} numberOfLines={1}>{usual}</Text>
+                  <Text style={s.usualLbl}>TAP TO ORDER MY USUAL</Text>
+                  <Text style={s.usualTxt} numberOfLines={2}>☕  {usual}</Text>
                 </TouchableOpacity>
               ) : null}
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -301,9 +301,9 @@ const s = StyleSheet.create({
   myOrderEye: { color: "#16a34a", fontSize: 10, letterSpacing: 2, fontWeight: "700", marginBottom: 2 },
   myOrderText: { color: colors.textPrimary, fontSize: 14, flex: 1 },
   retractTxt: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, paddingHorizontal: 4 },
-  usualBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderColor: "rgba(236,72,153,0.4)", borderWidth: 1, backgroundColor: "rgba(236,72,153,0.10)", borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
-  usualLbl: { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" },
-  usualTxt: { color: colors.textPrimary, fontSize: 13, flex: 1 },
+  usualBtn: { flexDirection: "column", alignItems: "flex-start", gap: 4, backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10 },
+  usualLbl: { color: "#fff", fontSize: 10, letterSpacing: 2, fontWeight: "900", opacity: 0.9 },
+  usualTxt: { color: "#fff", fontSize: 17, fontWeight: "800", flex: 1 },
   input: { flex: 1, backgroundColor: colors.bgPrimary, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 },
   sendBtn: { backgroundColor: colors.accentPink, borderRadius: radius.md, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   sendBtnTxt: { color: "#fff", fontSize: 12, fontWeight: "900", letterSpacing: 2 },

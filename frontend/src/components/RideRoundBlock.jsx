@@ -362,14 +362,20 @@ export default function RideRoundBlock({ ride, initialCafe }) {
                 <button
                   onClick={() => submitOrder(usual)}
                   disabled={busy}
-                  className="w-full mb-2 text-left px-3 py-2 rounded-xl border border-accent-pink/40 bg-accent-pink/10 text-text-primary flex items-center gap-2 active:scale-[0.98]"
+                  className="w-full mb-3 px-4 py-4 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
                   data-testid="round-usual"
                 >
-                  <span className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink shrink-0">Order →</span>
-                  <span className="text-sm truncate flex-1">{usual}</span>
-                  <Send className="w-3.5 h-3.5 text-accent-pink shrink-0" />
+                  <Coffee className="w-5 h-5 shrink-0" />
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Tap to order my usual</div>
+                    <div className="text-base font-bold truncate">{usual}</div>
+                  </div>
+                  <Send className="w-5 h-5 shrink-0" />
                 </button>
               )}
+              <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-1.5 text-center">
+                Or type something different
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   value={orderText}
