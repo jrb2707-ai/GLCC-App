@@ -315,7 +315,7 @@ const s = StyleSheet.create({
   liveNowHeader: { color: colors.accentPink, fontSize: 15, letterSpacing: 2, fontWeight: "900" },
   emptyTxt: { color: colors.textMuted, fontSize: 12, fontStyle: "italic" },
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
-  modalCard: { height: "85%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#1a1210" },
+  modalCard: { height: "92%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#1a1210" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 20 },
   dragHandle: { alignSelf: "center", width: 48, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.4)", marginBottom: 12 },
   modalTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: "700" },
@@ -385,12 +385,35 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styleseye]}>{round.closed ? "● LOCKED" : "● LIVE"}</Text>
+          <Text style={[styleseye]}>{round.closed ? "● LOCKED" : "● LIVE"} · {round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"}</Text>
           <Text style={styleModalTitle} numberOfLines={1}>{round.buyer_name}'s shout</Text>
           <Text style={styleRowSub} numberOfLines={1}>{round.cafe_name} · {round.ride_name}</Text>
         </View>
         <TouchableOpacity onPress={onClose}><Text style={{ color: "#fff", fontSize: 22, padding: 4, opacity: 0.85 }}>✕</Text></TouchableOpacity>
       </View>
+
+      {/* Barista tally — HERO position, right after the header, visible on
+          open without scrolling. Order controls + by-rider details follow. */}
+      {round.orders.length > 0 && (
+        <View style={{ marginTop: 14, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(201,152,106,0.55)", backgroundColor: "rgba(0,0,0,0.55)" }} testID="modal-tally">
+          <Text style={{ color: colors.accentCoffee, fontSize: 12, letterSpacing: 3, fontWeight: "900", marginBottom: 12 }}>☕ BARISTA TALLY</Text>
+          {tallyOrders(round.orders).map((g) => (
+            <View key={g.display} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 12 }}>
+              <Text style={{ color: colors.accentPink, fontSize: 30, fontWeight: "900", width: 60, lineHeight: 32 }}>{g.riders.length}×</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", lineHeight: 22 }}>{g.display}</Text>
+                <Text style={{ color: "#fff", fontSize: 11, letterSpacing: 1.5, fontWeight: "700", marginTop: 2 }} numberOfLines={2}>{g.riders.join(" · ").toUpperCase()}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {round.closed && round.orders.length > 0 && (
+        <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
+          <Text style={styleCopyBarTxt}>COPY LIST FOR BARISTA</Text>
+        </TouchableOpacity>
+      )}
 
       {!round.closed && (
         <View style={{ marginTop: 16 }}>
@@ -433,24 +456,7 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
         </View>
       )}
 
-      <Text style={[styleHint, { marginTop: 18, color: "rgba(255,255,255,0.8)" }]}>
-        {round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"}{round.closed ? " · LOCKED" : ""}
-      </Text>
-      {round.orders.length > 0 && (
-        <View style={{ marginTop: 10, padding: 16, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(201,152,106,0.55)", backgroundColor: "rgba(0,0,0,0.55)" }} testID="modal-tally">
-          <Text style={{ color: colors.accentCoffee, fontSize: 12, letterSpacing: 3, fontWeight: "900", marginBottom: 12 }}>☕ BARISTA TALLY</Text>
-          {tallyOrders(round.orders).map((g) => (
-            <View key={g.display} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 12 }}>
-              <Text style={{ color: colors.accentPink, fontSize: 30, fontWeight: "900", width: 60, lineHeight: 32 }}>{g.riders.length}×</Text>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", lineHeight: 22 }}>{g.display}</Text>
-                <Text style={{ color: "#fff", fontSize: 11, letterSpacing: 1.5, fontWeight: "700", marginTop: 2 }} numberOfLines={2}>{g.riders.join(" · ").toUpperCase()}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 2, fontWeight: "800", marginTop: 16, marginBottom: 8 }}>BY RIDER · SCROLL FOR MORE</Text>
+      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, letterSpacing: 2, fontWeight: "800", marginTop: 18, marginBottom: 8 }}>BY RIDER · SCROLL FOR MORE</Text>
       <View testID="modal-order-list">
         {round.orders.map((o) => (
           <View key={o.user_id} style={styleOrderRow}>
@@ -463,12 +469,6 @@ function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
         ))}
         {round.orders.length === 0 && <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, fontStyle: "italic" }}>No orders in yet.</Text>}
       </View>
-
-      {round.closed && round.orders.length > 0 && (
-        <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
-          <Text style={styleCopyBarTxt}>COPY LIST FOR BARISTA</Text>
-        </TouchableOpacity>
-      )}
     </>
   );
 }

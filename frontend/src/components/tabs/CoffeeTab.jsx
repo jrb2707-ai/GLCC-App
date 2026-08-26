@@ -426,7 +426,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
       <div
         className="w-full sm:max-w-md relative overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-2xl transition-transform"
         style={{
-          height: "85vh",
+          height: "92vh",
           backgroundImage:
             "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.85) 55%, rgba(0,0,0,0.95) 100%), url(https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=60)",
           backgroundSize: "cover",
@@ -439,17 +439,17 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          className="pt-3 pb-2 flex justify-center cursor-grab select-none"
+          className="pt-2 pb-1 flex justify-center cursor-grab select-none"
           data-testid="modal-drag-handle"
         >
           <div className="w-12 h-1.5 bg-white/40 rounded-full" />
         </div>
-        <div className="px-5 pb-6 h-[calc(85vh-2rem)] overflow-y-auto">
+        <div className="px-5 pb-6 h-[calc(92vh-1.5rem)] overflow-y-auto">
         <div className="flex items-center gap-3">
           <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
           <div className="flex-1 min-w-0">
             <div className={`text-[11px] font-mono-stat uppercase tracking-widest text-accent-pink${round.closed ? "" : " animate-pulse"}`}>
-              {round.closed ? "● Locked" : "● Live"}
+              {round.closed ? "● Locked" : "● Live"} · {round.orders.length} order{round.orders.length === 1 ? "" : "s"}
             </div>
             <div className="font-heading text-xl font-black text-white truncate drop-shadow">
               {round.buyer_name}&apos;s shout
@@ -460,6 +460,38 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white p-2" aria-label="Close">✕</button>
         </div>
+
+        {/* Barista tally — HERO position, right after the header, so it's
+            always visible without scrolling. Order controls + by-rider
+            details drop below it. */}
+        {round.orders.length > 0 && (
+          <div className="mt-4 border border-accent-coffee/60 rounded-2xl p-4 bg-black/60 backdrop-blur-sm" data-testid="modal-tally">
+            <div className="text-[11px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-3 font-bold">
+              ☕ Barista tally
+            </div>
+            <ul className="space-y-3">
+              {tallyOrders(round.orders).map((g) => (
+                <li key={g.display} className="flex items-baseline gap-3">
+                  <span className="font-heading text-3xl font-black tabular-nums text-accent-pink shrink-0 leading-none">{g.riders.length}×</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-lg text-white font-bold leading-tight">{g.display}</div>
+                    <div className="text-xs text-white/95 font-mono-stat uppercase tracking-widest truncate mt-0.5">{g.riders.join(" · ")}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {round.closed && round.orders.length > 0 && (
+          <button
+            onClick={copyList}
+            className="mt-3 w-full text-xs font-black uppercase tracking-widest bg-accent-coffee/30 border border-accent-coffee/70 text-white py-3 rounded-xl active:scale-95"
+            data-testid="modal-copy"
+          >
+            Copy list for barista
+          </button>
+        )}
 
         {!round.closed && (
           <div className="mt-4">
@@ -489,7 +521,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
                     </div>
                   </button>
                 )}
-                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-1.5 text-center">
+                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-white/80 mb-1.5 text-center">
                   Or type something different
                 </div>
                 <div className="flex items-center gap-2">
@@ -498,7 +530,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
                     onChange={(e) => setOrderText(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && submitOrder()}
                     placeholder="Flat white, no sugar…"
-                    className="flex-1 bg-bg-secondary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-pink outline-none"
+                    className="flex-1 bg-black/50 border border-white/25 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/50 focus:border-accent-pink outline-none"
                     data-testid="modal-order-input"
                     maxLength={140}
                   />
@@ -516,58 +548,25 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
           </div>
         )}
 
-        <div className="mt-5">
-          <div className="text-[11px] font-mono-stat uppercase tracking-widest text-white/80 mb-2">
-            {round.orders.length} order{round.orders.length === 1 ? "" : "s"}{round.closed ? " · locked" : ""}
-          </div>
-          {round.orders.length > 0 && (
-            <div className="mb-4 border border-accent-coffee/50 rounded-2xl p-4 bg-black/55 backdrop-blur-sm" data-testid="modal-tally">
-              <div className="text-[11px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-3 font-bold">
-                ☕ Barista tally
-              </div>
-              <ul className="space-y-3">
-                {tallyOrders(round.orders).map((g) => (
-                  <li key={g.display} className="flex items-baseline gap-3">
-                    <span className="font-heading text-3xl font-black tabular-nums text-accent-pink shrink-0 leading-none">{g.riders.length}×</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-lg text-white font-bold leading-tight">{g.display}</div>
-                      <div className="text-xs text-white/95 font-mono-stat uppercase tracking-widest truncate mt-0.5">{g.riders.join(" · ")}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <details className="group">
-            <summary className="text-[11px] font-mono-stat uppercase tracking-widest text-white/80 cursor-pointer hover:text-white select-none mb-2 font-bold">
-              By rider · tap to expand
-            </summary>
-            <div className="space-y-2 max-h-80 overflow-auto" data-testid="modal-order-list">
-              {round.orders.map((o) => (
-                <div key={o.user_id} className="bg-white/95 border border-white/20 rounded-xl px-3 py-2.5 flex items-center gap-3">
-                  <Avatar name={o.name} photo={o.photo} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-mono-stat uppercase tracking-widest text-black font-bold">{o.name}</div>
-                    <div className="text-base text-black font-medium leading-tight">{o.text}</div>
-                  </div>
+        <details className="group mt-5">
+          <summary className="text-[11px] font-mono-stat uppercase tracking-widest text-white/80 cursor-pointer hover:text-white select-none mb-2 font-bold">
+            By rider · tap to expand
+          </summary>
+          <div className="space-y-2 max-h-80 overflow-auto" data-testid="modal-order-list">
+            {round.orders.map((o) => (
+              <div key={o.user_id} className="bg-white/95 border border-white/20 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                <Avatar name={o.name} photo={o.photo} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-mono-stat uppercase tracking-widest text-black font-bold">{o.name}</div>
+                  <div className="text-base text-black font-medium leading-tight">{o.text}</div>
                 </div>
-              ))}
-              {round.orders.length === 0 && (
-                <div className="text-[13px] text-white/70 italic">No orders in yet.</div>
-              )}
-            </div>
-          </details>
-        </div>
-
-        {round.closed && round.orders.length > 0 && (
-          <button
-            onClick={copyList}
-            className="mt-4 w-full text-xs font-black uppercase tracking-widest bg-accent-coffee/25 border border-accent-coffee/60 text-white py-3 rounded-xl active:scale-95"
-            data-testid="modal-copy"
-          >
-            Copy list for barista
-          </button>
-        )}
+              </div>
+            ))}
+            {round.orders.length === 0 && (
+              <div className="text-[13px] text-white/70 italic">No orders in yet.</div>
+            )}
+          </div>
+        </details>
         </div>
       </div>
     </div>
