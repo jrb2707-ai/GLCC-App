@@ -174,6 +174,18 @@ export default function CoffeeTab() {
         <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
       </View>
 
+      {/* Hoist live rounds to the very top when present — nobody should
+          have to scroll past the CTA to see who's shouting right now. */}
+      {active.length > 0 && !loading ? (
+        <View style={{ marginBottom: 16 }} testID="active-rounds-top">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <LiveNowHeader />
+            <View style={s.hr} />
+          </View>
+          {active.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)}
+        </View>
+      ) : null}
+
       {nextRide ? (
         <View testID="coffee-quick-shout">
           <RideRoundBlock ride={nextRide} />
@@ -218,27 +230,24 @@ export default function CoffeeTab() {
         <Text style={s.hint}>Pre-fills when someone starts a round. One tap and you're in.</Text>
       </View>
 
-      {/* Active */}
-      <View style={{ marginTop: 24 }} testID="active-rounds-section">
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          {active.length > 0 && !loading ? (
-            <LiveNowHeader />
-          ) : (
+      {/* Lower "Live now" strip — kept only for the loading/empty state so
+          we don't duplicate the block we hoisted to the top when active. */}
+      {(loading || active.length === 0) && (
+        <View style={{ marginTop: 24 }} testID="active-rounds-section">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <Text style={[s.sectionHead, { color: colors.textMuted }]}>LIVE NOW</Text>
-          )}
-          <View style={s.hr} />
-        </View>
-        {loading ? (
-          <View testID="active-skeleton">
-            <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary, marginBottom: 8, opacity: 0.6 }} />
-            <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary, opacity: 0.4 }} />
+            <View style={s.hr} />
           </View>
-        ) : active.length === 0 ? (
-          <Text style={s.emptyTxt} testID="active-empty">No live rounds right now.</Text>
-        ) : (
-          active.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)
-        )}
-      </View>
+          {loading ? (
+            <View testID="active-skeleton">
+              <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary, marginBottom: 8, opacity: 0.6 }} />
+              <View style={{ height: 60, borderRadius: radius.md, backgroundColor: colors.bgSecondary, opacity: 0.4 }} />
+            </View>
+          ) : (
+            <Text style={s.emptyTxt} testID="active-empty">No live rounds right now.</Text>
+          )}
+        </View>
+      )}
 
       {/* History */}
       <View style={{ marginTop: 24 }} testID="history-section">

@@ -205,6 +205,23 @@ export default function CoffeeTab({ onNavigate }) {
         </span>
       </div>
 
+      {/* When a round is live, hoist it to the very top so nobody has to
+          scroll past the quick-shout CTA or the "Your Usual" card to see
+          "who's shouting right now". */}
+      {active.length > 0 && !loading && (
+        <div className="mb-4" data-testid="active-rounds-top">
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <span className="font-heading text-base font-black uppercase tracking-widest text-accent-pink animate-pulse" data-testid="live-now-header">
+              ● Live now
+            </span>
+            <div className="flex-1 h-px bg-border-subtle" />
+          </div>
+          <div className="space-y-2">
+            {active.map((r) => <RoundRow key={r.id} round={r} onOpen={openRound} />)}
+          </div>
+        </div>
+      )}
+
       {/* Quick-shout CTA: same block used on ride detail, bound to the next
           upcoming ride so any rider can start a round without navigating.
           When there's no upcoming ride we show a greyed prompt to sync Strava
@@ -276,33 +293,27 @@ export default function CoffeeTab({ onNavigate }) {
         </div>
       </div>
 
-      {/* Active rounds */}
-      <div className="mt-6" data-testid="active-rounds-section">
-        <div className="flex items-center gap-2 mb-2 px-1">
-          {active.length > 0 && !loading ? (
-            <span className="font-heading text-base font-black uppercase tracking-widest text-accent-pink animate-pulse" data-testid="live-now-header">
-              ● Live now
-            </span>
-          ) : (
+      {/* Lower "Live now" section — only rendered as an empty/loading state
+          when no round is currently active (avoids duplicating the block we
+          hoisted to the top of the tab). */}
+      {(loading || active.length === 0) && (
+        <div className="mt-6" data-testid="active-rounds-section">
+          <div className="flex items-center gap-2 mb-2 px-1">
             <span className="text-[11px] font-mono-stat uppercase tracking-widest text-text-muted font-bold">Live now</span>
+            <div className="flex-1 h-px bg-border-subtle" />
+          </div>
+          {loading ? (
+            <div className="space-y-2" data-testid="active-skeleton">
+              <div className="h-16 rounded-2xl border border-border-subtle animate-pulse bg-bg-secondary/40" />
+              <div className="h-16 rounded-2xl border border-border-subtle animate-pulse bg-bg-secondary/40" />
+            </div>
+          ) : (
+            <div className="text-[12px] text-text-muted italic px-1" data-testid="active-empty">
+              No live rounds right now.
+            </div>
           )}
-          <div className="flex-1 h-px bg-border-subtle" />
         </div>
-        {loading ? (
-          <div className="space-y-2" data-testid="active-skeleton">
-            <div className="h-16 rounded-2xl border border-border-subtle animate-pulse bg-bg-secondary/40" />
-            <div className="h-16 rounded-2xl border border-border-subtle animate-pulse bg-bg-secondary/40" />
-          </div>
-        ) : active.length === 0 ? (
-          <div className="text-[12px] text-text-muted italic px-1" data-testid="active-empty">
-            No live rounds right now.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {active.map((r) => <RoundRow key={r.id} round={r} onOpen={openRound} />)}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* History */}
       <div className="mt-6" data-testid="history-section">
