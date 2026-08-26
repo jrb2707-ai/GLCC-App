@@ -262,45 +262,40 @@ export default function RideRoundBlock({ ride, initialCafe }) {
 
   return (
     <div
-      className="mt-5 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/40 rounded-2xl p-4"
+      className="mt-1 bg-gradient-to-br from-[#2C1E18] to-bg-primary border border-accent-coffee/40 rounded-2xl p-3"
       data-testid="ride-round-block"
     >
-      <div className="flex items-start gap-3">
-        <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
+      <div className="flex items-center gap-2.5">
+        <Avatar name={round.buyer_name} photo={round.buyer_photo} size="sm" />
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee">
-            {isBuyer ? "You're shouting" : `${round.buyer_name}'s shout`}
+          <div className={`text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee${!closed ? " animate-pulse" : ""}`}>
+            ● {isBuyer ? "You're shouting" : `${round.buyer_name}'s shout`}
           </div>
-          <div className="font-heading text-lg font-bold text-text-primary leading-tight truncate" data-testid="round-cafe-name">
+          <div className="font-heading text-sm font-bold text-text-primary leading-tight truncate" data-testid="round-cafe-name">
             {round.cafe_name}
           </div>
-          {round.cafe_address && (
-            <div className="text-[11px] text-text-muted truncate">{round.cafe_address}</div>
-          )}
         </div>
+        {!closed && (
+          <div className="text-right shrink-0">
+            <div className="text-[9px] font-mono-stat uppercase tracking-widest text-text-muted">Closes</div>
+            <div className="text-accent-pink font-bold text-sm tabular-nums" data-testid="round-countdown">{countdown.text}</div>
+          </div>
+        )}
       </div>
 
       {!closed && (
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-            <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Orders close in</span>
-            <span className="text-accent-pink font-bold tabular-nums" data-testid="round-countdown">{countdown.text}</span>
-          </div>
-          <div className="h-1.5 mt-1 rounded-full bg-border-subtle overflow-hidden">
-            <div
-              className="h-full bg-accent-pink transition-all"
-              style={{ width: `${pctLeft}%` }}
-            />
-          </div>
+        <div className="h-1 mt-2 rounded-full bg-border-subtle overflow-hidden">
+          <div
+            className="h-full bg-accent-pink transition-all"
+            style={{ width: `${pctLeft}%` }}
+          />
         </div>
       )}
 
-      {/* Live barista tally — sits right under the shouter's card so the
-          buyer never has to hunt through modals to see who ordered what.
-          Only rendered when there's at least one order (the buyer's usual
-          auto-locks in on "I'm Buying" so this shows up immediately). */}
+      {/* Live barista tally — hero position, right under the shouter's card.
+          Auto-scales so it stays visible without scrolling on any device. */}
       {!closed && round.orders.length > 0 && (
-        <div className="mt-4 bg-black/40 border border-accent-coffee/40 rounded-xl p-3" data-testid="round-live-tally">
+        <div className="mt-3 bg-black/40 border border-accent-coffee/40 rounded-xl p-3" data-testid="round-live-tally">
           <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-2 font-bold">
             ☕ Barista tally · {round.orders.length} order{round.orders.length === 1 ? "" : "s"}
           </div>

@@ -227,30 +227,9 @@ export default function CoffeeTab({ onNavigate }) {
         </div>
       )}
 
-      {/* When a round is live, hoist it to the very top so nobody has to
-          scroll past the quick-shout CTA or the "Your Usual" card to see
-          "who's shouting right now". */}
-      {active.length > 0 && !loading && (
-        <div className="mb-4" data-testid="active-rounds-top">
-          <div className="flex items-center gap-2 mb-2 px-1">
-            <span className="font-heading text-base font-black uppercase tracking-widest text-accent-pink animate-pulse" data-testid="live-now-header">
-              ● Live now
-            </span>
-            <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-              {active.length} live · {history.length} past
-            </span>
-            <div className="flex-1 h-px bg-border-subtle" />
-          </div>
-          <div className="space-y-2">
-            {active.map((r) => <RoundRow key={r.id} round={r} onOpen={openRound} />)}
-          </div>
-        </div>
-      )}
-
-      {/* Quick-shout CTA: same block used on ride detail, bound to the next
-          upcoming ride so any rider can start a round without navigating.
-          When there's no upcoming ride we show a greyed prompt to sync Strava
-          rather than silently hiding the primary action. */}
+      {/* PRIMARY position: the ride-round card (with its inline barista
+          tally) is the hero the second a round is live. This lets the
+          buyer see the tally without scrolling past a duplicate row. */}
       {nextRide ? (
         <div data-testid="coffee-quick-shout">
           <RideRoundBlock ride={nextRide} initialCafe={nextRide.cafe} />
@@ -309,9 +288,27 @@ export default function CoffeeTab({ onNavigate }) {
         </div>
       </div>
 
+      {/* Other live rounds (that aren't on the pinned nextRide the
+          RideRoundBlock already renders). Only visible when there's more
+          than one round in flight across the club. */}
+      {(() => {
+        const others = active.filter((r) => r.ride_id !== nextRide?.id);
+        if (loading || others.length === 0) return null;
+        return (
+          <div className="mt-6" data-testid="active-rounds-others">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="text-[11px] font-mono-stat uppercase tracking-widest text-accent-pink font-bold animate-pulse">Also live</span>
+              <div className="flex-1 h-px bg-border-subtle" />
+            </div>
+            <div className="space-y-2">
+              {others.map((r) => <RoundRow key={r.id} round={r} onOpen={openRound} />)}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Lower "Live now" section — only rendered as an empty/loading state
-          when no round is currently active (avoids duplicating the block we
-          hoisted to the top of the tab). */}
+          when no round is currently active. */}
       {(loading || active.length === 0) && (
         <div className="mt-6" data-testid="active-rounds-section">
           <div className="flex items-center gap-2 mb-2 px-1">
