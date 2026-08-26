@@ -184,7 +184,7 @@ export default function CoffeeTab({ onNavigate }) {
 
   return (
     <div
-      className="px-4 pt-4 pb-8"
+      className={active.length > 0 ? "px-4 pt-1 pb-8" : "px-4 pt-4 pb-8"}
       data-testid="coffee-tab"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -198,12 +198,17 @@ export default function CoffeeTab({ onNavigate }) {
           </div>
         </div>
       )}
-      <div className="flex items-baseline justify-between mb-3 px-1">
-        <h2 className="font-heading text-3xl font-black uppercase text-text-primary">Coffee</h2>
-        <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-          {active.length} live · {history.length} past
-        </span>
-      </div>
+      {/* Hide the tall COFFEE title when a round is live so the shout card
+          is above the fold on tiny viewports (mobile Safari eats ~150px
+          for the chrome). Falls back to the full header otherwise. */}
+      {active.length > 0 && !loading ? null : (
+        <div className="flex items-baseline justify-between mb-3 px-1">
+          <h2 className="font-heading text-3xl font-black uppercase text-text-primary">Coffee</h2>
+          <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
+            {active.length} live · {history.length} past
+          </span>
+        </div>
+      )}
 
       {/* When a round is live, hoist it to the very top so nobody has to
           scroll past the quick-shout CTA or the "Your Usual" card to see
@@ -213,6 +218,9 @@ export default function CoffeeTab({ onNavigate }) {
           <div className="flex items-center gap-2 mb-2 px-1">
             <span className="font-heading text-base font-black uppercase tracking-widest text-accent-pink animate-pulse" data-testid="live-now-header">
               ● Live now
+            </span>
+            <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
+              {active.length} live · {history.length} past
             </span>
             <div className="flex-1 h-px bg-border-subtle" />
           </div>

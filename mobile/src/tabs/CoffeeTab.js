@@ -165,21 +165,25 @@ export default function CoffeeTab() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bgPrimary }}
-      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 64 }}
+      contentContainerStyle={{ padding: spacing.lg, paddingTop: active.length > 0 ? spacing.sm : spacing.lg, paddingBottom: 64 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accentPink} />}
       testID="coffee-tab"
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-        <Text style={s.h1}>COFFEE</Text>
-        <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
-      </View>
+      {active.length > 0 && !loading ? null : (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <Text style={s.h1}>COFFEE</Text>
+          <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
+        </View>
+      )}
 
       {/* Hoist live rounds to the very top when present — nobody should
-          have to scroll past the CTA to see who's shouting right now. */}
+          have to scroll past the CTA to see who's shouting right now.
+          Kills the tall COFFEE title too so the card is above the fold. */}
       {active.length > 0 && !loading ? (
-        <View style={{ marginBottom: 16 }} testID="active-rounds-top">
+        <View style={{ marginBottom: 16, marginTop: 4 }} testID="active-rounds-top">
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <LiveNowHeader />
+            <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
             <View style={s.hr} />
           </View>
           {active.map((r) => <RoundRow key={r.id} round={r} onPress={setDetail} />)}
