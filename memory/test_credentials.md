@@ -3,7 +3,7 @@
 Backend seeded these accounts on startup. All passwords are for development only.
 
 ## Admin (President — Jason Bryant)
-- Email: `jb@glcc.club`
+- Email: `jb@greylynncc.com`  (was `jb@glcc.club` prior to 2026-08-26 migration)
 - Password: `Roenick2707`
 - Name: Jason Bryant
 - Role: El Presidente (is_admin=true, is_president=true)

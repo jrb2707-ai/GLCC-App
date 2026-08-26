@@ -157,15 +157,14 @@ export default function CoffeeTab({ onNavigate }) {
     };
   }, []);  // eslint-disable-line
 
-  // Live update when any round starts / gets an order / closes.
+  // Live update when any round starts / gets an order / closes. The
+  // global LiveRoundOverlay in HomeShell handles auto-opening the tally
+  // splash — CoffeeTab just keeps its local list in sync here.
   useEffect(() => {
     return subscribe((evt) => {
       if (!evt.round) return;
       if (evt.type === "coffee.round.started") {
         setActive((prev) => [evt.round, ...prev.filter((r) => r.id !== evt.round.id)]);
-        // Auto-open the tally splash for the buyer AND for anyone else who
-        // just got notified — one shared surface, ordering happens in-place.
-        setDetail(evt.round);
       }
       if (evt.type === "coffee.round.updated") {
         setActive((prev) => prev.map((r) => (r.id === evt.round.id ? evt.round : r)));
@@ -235,7 +234,12 @@ export default function CoffeeTab({ onNavigate }) {
           buyer see the tally without scrolling past a duplicate row. */}
       {nextRide ? (
         <div data-testid="coffee-quick-shout">
-          <RideRoundBlock ride={nextRide} initialCafe={nextRide.cafe} />
+          <RideRoundBlock
+            ride={nextRide}
+            initialCafe={nextRide.cafe}
+            otherActiveRound={active.find((r) => r.ride_id !== nextRide.id) || null}
+            onOpenOther={(r) => setDetail(r)}
+          />
         </div>
       ) : !loading && (
         <div
@@ -362,7 +366,7 @@ export default function CoffeeTab({ onNavigate }) {
   );
 }
 
-function RoundDetailModal({ round, onClose, onChange, usual }) {
+export function RoundDetailModal({ round, onClose, onChange, usual }) {
   const { subscribe } = useEvents();
   const [orderText, setOrderText] = useState("");
   const [busy, setBusy] = useState(false);

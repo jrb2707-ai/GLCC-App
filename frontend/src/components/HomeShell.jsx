@@ -1,12 +1,60 @@
 import React, { useEffect, useState } from "react";
 import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor } from "lucide-react";
-import { useAuth, useTheme, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { useAuth, useTheme, useEvents, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { api } from "../lib/api";
 import { toast } from "sonner";
 import RidesTab from "./tabs/RidesTab";
-import CoffeeTab from "./tabs/CoffeeTab";
+import CoffeeTab, { RoundDetailModal } from "./tabs/CoffeeTab";
 import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
 import PendingBanner from "./PendingBanner";
+
+// Global overlay: whenever a round is live and the user hasn't explicitly
+// dismissed THIS round yet, we render the barista tally splash over any tab.
+// Dismissal is per round.id and clears when a new round starts.
+function LiveRoundOverlay() {
+  const { user } = useAuth();
+  const { subscribe } = useEvents();
+  const [round, setRound] = useState(null);
+  const [dismissedIds, setDismissedIds] = useState(() => new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/coffee/rounds/active");
+        const first = (data.rounds || [])[0];
+        if (!cancelled && first) setRound(first);
+      } catch (_) { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => subscribe((evt) => {
+    if (!evt.round) return;
+    if (evt.type === "coffee.round.started") {
+      // Fresh round → clear dismissal for it (though it shouldn't be present).
+      setDismissedIds((prev) => { const next = new Set(prev); next.delete(evt.round.id); return next; });
+      setRound(evt.round);
+    }
+    if (evt.type === "coffee.round.updated") {
+      setRound((cur) => (cur && cur.id === evt.round.id ? evt.round : cur));
+    }
+    if (evt.type === "coffee.round.closed") {
+      setRound((cur) => (cur && cur.id === evt.round.id ? null : cur));
+    }
+  }), [subscribe]);
+
+  if (!round || dismissedIds.has(round.id)) return null;
+  return (
+    <RoundDetailModal
+      round={round}
+      usual={user?.coffee}
+      onChange={(next) => setRound(next)}
+      onClose={() => setDismissedIds((prev) => new Set(prev).add(round.id))}
+    />
+  );
+}
 
 const TABS = [
   { id: "rides", label: "Rides", icon: Bike, activeClass: "text-accent-strava" },
@@ -137,6 +185,10 @@ export default function HomeShell() {
           {tab === "chat" && <ChatTab />}
         </div>
       </div>
+
+      {/* Global live-round barista splash. Renders over any tab so the
+          peloton can't miss a shout regardless of where they're browsing. */}
+      <LiveRoundOverlay />
 
       {/* Tab bar */}
       <div className="border-t border-border-subtle bg-bg-secondary/95 backdrop-blur-xl px-2 pt-2 pb-6">

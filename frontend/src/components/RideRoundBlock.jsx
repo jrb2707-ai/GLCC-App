@@ -106,7 +106,7 @@ function OrderList({ round, compact = false }) {
   );
 }
 
-export default function RideRoundBlock({ ride, initialCafe }) {
+export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, onOpenOther }) {
   const { user } = useAuth();
   const { subscribe } = useEvents();
   const [round, setRound] = useState(null);
@@ -229,6 +229,30 @@ export default function RideRoundBlock({ ride, initialCafe }) {
     const showStart = !round || countdown.expired;
     if (!showStart) return null;
     const cafeName = ride.cafe || initialCafe;
+    // If another rider has already shouted, funnel this rider into that
+    // round instead of starting a competing one.
+    if (otherActiveRound && onOpenOther) {
+      return (
+        <div className="mt-6 pt-4 border-t border-border-subtle" data-testid="ride-round-block">
+          <div className="flex items-center gap-2 text-accent-pink mb-2">
+            <Coffee className="w-3.5 h-3.5" />
+            <span className="text-[10px] uppercase tracking-widest font-mono-stat font-bold">
+              Round in progress · {otherActiveRound.buyer_name}
+            </span>
+          </div>
+          <button
+            onClick={() => onOpenOther(otherActiveRound)}
+            className="w-full bg-accent-pink text-white font-black uppercase tracking-[0.18em] text-sm py-4 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2"
+            data-testid="round-add-my-coffee"
+          >
+            <Coffee className="w-4 h-4" /> Add my coffee
+          </button>
+          <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
+            Opens {otherActiveRound.buyer_name}&apos;s tally · orders close in the same window
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         className="mt-6 pt-4 border-t border-border-subtle"
@@ -246,7 +270,7 @@ export default function RideRoundBlock({ ride, initialCafe }) {
           className="w-full bg-accent-pink text-white font-black uppercase tracking-[0.18em] text-sm py-4 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50"
           data-testid="round-start"
         >
-          <Coffee className="w-4 h-4" /> I'm Buying
+          <Coffee className="w-4 h-4" /> I&apos;m Buying
         </button>
         <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
           Shout drops a 5-min push to the peloton · your usual auto-locks in
