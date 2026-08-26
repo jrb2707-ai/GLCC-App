@@ -117,7 +117,9 @@ export default function CoffeeTab({ onNavigate }) {
   const ptrStartRef = React.useRef(null);
   const ptrTriggeredRef = React.useRef(false);
   function onTouchStart(e) {
-    // Only allow pull if the scroll container (window) is at the very top.
+    // Don't run tab PTR while a round modal is open — otherwise the tab
+    // scroll and the modal drag fight each other.
+    if (detail) return;
     if (window.scrollY > 0) return;
     ptrStartRef.current = e.touches[0].clientY;
     ptrTriggeredRef.current = false;
@@ -125,14 +127,15 @@ export default function CoffeeTab({ onNavigate }) {
   function onTouchMove(e) {
     if (ptrStartRef.current == null) return;
     const dy = e.touches[0].clientY - ptrStartRef.current;
-    // Only track when the user is actually pulling down significantly —
-    // ignore small drift so vertical scroll gestures don't misfire refresh.
-    if (dy > 30) setPtrDelta(Math.min(180, dy - 30));
+    // Larger dead-zone so a normal scroll gesture never surfaces the
+    // indicator. Riders have to VERY deliberately pull past 60px before
+    // anything visible happens.
+    if (dy > 60) setPtrDelta(Math.min(220, dy - 60));
   }
   function onTouchEnd() {
-    // Deliberate threshold — 130px past the 30px dead-zone. Prevents the
-    // "too sensitive" complaint where a small scroll tap re-fetched.
-    if (ptrDelta > 130 && !ptrTriggeredRef.current) {
+    // Requires an intentional ~260px pull (60 dead-zone + 200 pull) to
+    // actually fire refresh. Kills the "accidentally reloaded" complaint.
+    if (ptrDelta > 200 && !ptrTriggeredRef.current) {
       ptrTriggeredRef.current = true;
       load();
       toast("Refreshing…");
@@ -206,12 +209,12 @@ export default function CoffeeTab({ onNavigate }) {
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      style={{ transform: `translateY(${ptrDelta * 0.4}px)`, transition: ptrDelta ? "none" : "transform 200ms" }}
+      style={{ transform: `translateY(${ptrDelta * 0.3}px)`, transition: ptrDelta ? "none" : "transform 200ms" }}
     >
-      {ptrDelta > 20 && (
+      {ptrDelta > 80 && (
         <div className="absolute left-0 right-0 -top-2 flex justify-center pointer-events-none" data-testid="ptr-indicator">
-          <div className={`text-[10px] font-mono-stat uppercase tracking-widest ${ptrDelta > 70 ? "text-accent-pink" : "text-text-muted"}`}>
-            {ptrDelta > 70 ? "↓ Release to refresh" : "↓ Pull to refresh"}
+          <div className={`text-[10px] font-mono-stat uppercase tracking-widest ${ptrDelta > 200 ? "text-accent-pink" : "text-text-muted"}`}>
+            {ptrDelta > 200 ? "↓ Release to refresh" : "↓ Keep pulling…"}
           </div>
         </div>
       )}
@@ -377,7 +380,11 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
   useEffect(() => { if (myOrder?.text) setOrderText(myOrder.text); }, [myOrder?.text]);
 
   function onTouchStart(e) {
-    dragStartRef.current = e.touches[0].clientY;
+    // Only allow drag when the touch STARTS in the top ~30% of the screen.
+    // Prevents accidental dismiss when scrolling the tally / order list.
+    const y = e.touches[0].clientY;
+    if (y > window.innerHeight * 0.3) return;
+    dragStartRef.current = y;
     setDragY(0);
   }
   function onTouchMove(e) {
@@ -386,7 +393,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
     if (dy > 0) setDragY(dy);
   }
   function onTouchEnd() {
-    if (dragY > 120) { onClose(); }
+    if (dragY > 100) { onClose(); }
     setDragY(0);
     dragStartRef.current = null;
   }
@@ -426,6 +433,9 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
     <div
       className="fixed inset-0 z-50"
       onClick={(e) => e.target === e.currentTarget && onClose()}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       data-testid="coffee-round-modal"
       style={{
         backgroundImage:
@@ -434,21 +444,28 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
         backgroundPosition: "center",
         transform: `translateY(${dragY}px)`,
         transition: dragY ? "none" : "transform 200ms",
+        paddingTop: "env(safe-area-inset-top)",
       }}
     >
-      {/* Ultra-compact header: swipe-down handle + close only. Everything
-          else moves to give the Barista tally the entire viewport. */}
+      {/* Whole header block is grabbable — pull anywhere from the drag
+          handle down through the shout row to dismiss. Frees riders from
+          hunting for the 12px pill. */}
       <div className="flex flex-col h-full max-w-md mx-auto px-5">
         <div
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          className="pt-3 pb-1 flex justify-center cursor-grab select-none"
+          className="pt-2 pb-1 flex justify-center cursor-grab select-none"
           data-testid="modal-drag-handle"
         >
-          <div className="w-12 h-1.5 bg-white/40 rounded-full" />
+          <div className="w-16 h-1.5 bg-white/60 rounded-full" />
         </div>
-        <div className="flex items-center justify-between pb-2">
+        <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          className="flex items-center justify-between pb-2 cursor-grab select-none"
+        >
           <div className="min-w-0">
             <div className={`text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink${round.closed ? "" : " animate-pulse"}`}>
               {round.closed ? "● Locked" : "● Live"} · {round.orders.length} order{round.orders.length === 1 ? "" : "s"} · {round.cafe_name}
@@ -463,7 +480,7 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
         {/* Barista tally — takes the whole splash. If there are no orders
             we fall through to a friendly empty state. */}
         {round.orders.length > 0 ? (
-          <div className="flex-1 flex flex-col justify-center overflow-y-auto py-2" data-testid="modal-tally">
+          <div className="overflow-y-auto py-2" data-testid="modal-tally">
             <div className="border border-accent-coffee/60 rounded-3xl p-5 bg-black/55 backdrop-blur-sm">
               <div className="text-xs font-mono-stat uppercase tracking-[0.25em] text-accent-coffee mb-4 font-black">
                 ☕ Barista tally
