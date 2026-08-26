@@ -9,6 +9,44 @@ import { useAuth, useEvents } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "./Avatar";
 
+function normalizeOrder(text) {
+  return (text || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Inline tally used under the "You're shouting" card. Auto-scales the font
+// size based on how many distinct orders exist so the whole tally fits.
+function InlineTally({ orders }) {
+  const groups = new Map();
+  for (const o of orders) {
+    const key = normalizeOrder(o.text);
+    if (!key) continue;
+    const g = groups.get(key) || { display: o.text.trim(), riders: [] };
+    g.riders.push(o.name);
+    groups.set(key, g);
+  }
+  const rows = Array.from(groups.values()).sort((a, b) => b.riders.length - a.riders.length);
+  if (!rows.length) return null;
+  const n = rows.length;
+  const sz = n <= 3 ? { row: 12, count: 32, name: 16, riders: 11 }
+    : n <= 6 ? { row: 10, count: 26, name: 14, riders: 10 }
+    : n <= 10 ? { row: 8, count: 22, name: 13, riders: 10 }
+    : { row: 6, count: 18, name: 12, riders: 9 };
+  return (
+    <View>
+      {rows.map((g) => (
+        <View key={g.display} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: sz.row }}>
+          <Text style={{ color: colors.accentPink, fontSize: sz.count, fontWeight: "900", width: 60, lineHeight: sz.count }}>{g.riders.length}×</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: "#fff", fontSize: sz.name, fontWeight: "800", lineHeight: sz.name + 4 }}>{g.display}</Text>
+            <Text style={{ color: "#fff", fontSize: sz.riders, letterSpacing: 1.5, fontWeight: "700", marginTop: 2 }} numberOfLines={2}>{g.riders.join(" · ").toUpperCase()}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+
 function useCountdown(iso) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -31,7 +69,6 @@ export default function RideRoundBlock({ ride }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
-  const [notMyTurn, setNotMyTurn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,10 +106,6 @@ export default function RideRoundBlock({ ride }) {
     }
   }), [subscribe, ride.id]);
 
-  // Reset "Split the Bill" dismissal on ride/round change so the CTA
-  // reappears after any round closes or times out.
-  useEffect(() => { setNotMyTurn(false); }, [ride.id, round?.id, round?.closed]);
-
   const myOrder = useMemo(
     () => round?.orders?.find((o) => o.user_id === user?.id),
     [round, user],
@@ -92,6 +125,16 @@ export default function RideRoundBlock({ ride }) {
         cafe_name: cafeName, close_in_seconds: 300,
       });
       setRound(data);
+      // Auto-slot the buyer's saved usual so they never have to confirm
+      // their coffee twice. Silent fail if the round POST raced — buyer
+      // can still tap the "usual" pill inside the tally splash.
+      const usualText = (user?.coffee || "").trim();
+      if (usualText) {
+        try {
+          const { data: withOrder } = await api.post(`/rides/${ride.id}/round/order`, { text: usualText });
+          setRound(withOrder);
+        } catch (_) { /* soft-fail */ }
+      }
     } catch (e) { Alert.alert("Round", formatDetail(e)); }
     finally { setBusy(false); }
   }
@@ -141,22 +184,16 @@ export default function RideRoundBlock({ ride }) {
   const isBuyer = round?.buyer_user_id === user?.id;
   const usual = user?.coffee;
 
-  // No round → two-button CTA at the bottom
+  // No round → single-action CTA at the bottom
   if (!round || (closed && !round?.closed_manually_at)) {
-    if (notMyTurn) return null;
     const cafeName = ride.cafe;
     return (
       <View style={s.ctaWrap} testID="ride-round-block">
         <Text style={s.ctaEyebrow}>☕ COFFEE AT {(cafeName || "THE CAFÉ").toUpperCase()}</Text>
-        <View style={s.ctaRow}>
-          <TouchableOpacity onPress={startRound} disabled={busy} style={[s.ctaBuy, busy && { opacity: 0.5 }]} testID="round-start">
-            <Text style={s.ctaBuyTxt}>☕ I'M BUYING</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setNotMyTurn(true)} style={s.ctaSkip} testID="round-not-my-turn">
-            <Text style={s.ctaSkipTxt}>SPLIT THE BILL</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={s.hint}>SHOUT DROPS A 5-MIN PUSH TO THE PELOTON</Text>
+        <TouchableOpacity onPress={startRound} disabled={busy} style={[s.ctaBuy, { flex: undefined }, busy && { opacity: 0.5 }]} testID="round-start">
+          <Text style={s.ctaBuyTxt}>☕ I'M BUYING</Text>
+        </TouchableOpacity>
+        <Text style={s.hint}>SHOUT DROPS A 5-MIN PUSH · YOUR USUAL AUTO-LOCKS IN</Text>
       </View>
     );
   }
@@ -183,6 +220,15 @@ export default function RideRoundBlock({ ride }) {
           <View style={s.barTrack}>
             <View style={[s.barFill, { width: `${Math.max(0, Math.min(100, (countdown.seconds / 300) * 100))}%` }]} />
           </View>
+        </View>
+      )}
+
+      {/* Live barista tally — sits right under the shouter's card so the
+          buyer never has to hunt for who's ordered what. */}
+      {!closed && round.orders.length > 0 && (
+        <View style={s.liveTallyWrap} testID="round-live-tally">
+          <Text style={s.liveTallyEye}>☕ BARISTA TALLY · {round.orders.length} ORDER{round.orders.length === 1 ? "" : "S"}</Text>
+          <InlineTally orders={round.orders} />
         </View>
       )}
 
@@ -298,6 +344,8 @@ const s = StyleSheet.create({
   barTrack: { height: 4, backgroundColor: colors.borderSubtle, borderRadius: 999, marginTop: 4, overflow: "hidden" },
   barFill: { height: 4, backgroundColor: colors.accentPink },
   myOrderBox: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)", borderWidth: 1, borderRadius: radius.md, padding: 10 },
+  liveTallyWrap: { marginTop: 14, backgroundColor: "rgba(0,0,0,0.4)", borderColor: "rgba(201,152,106,0.5)", borderWidth: 1, borderRadius: radius.md, padding: 14 },
+  liveTallyEye: { color: colors.accentCoffee, fontSize: 10, letterSpacing: 2, fontWeight: "900", marginBottom: 10 },
   myOrderEye: { color: "#16a34a", fontSize: 10, letterSpacing: 2, fontWeight: "700", marginBottom: 2 },
   myOrderText: { color: colors.textPrimary, fontSize: 14, flex: 1 },
   retractTxt: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, paddingHorizontal: 4 },

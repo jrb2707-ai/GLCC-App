@@ -892,6 +892,9 @@ export default function RidersTab() {
   const [processingReport, setProcessingReport] = useState(null);
   const [openRider, setOpenRider] = useState(null);
   const [registerOpen, setRegisterOpen] = useState(false);
+  // Loading gate. Without this the count flickers "0 members → 33 members"
+  // and the grid briefly shows empty on every tab switch.
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -908,6 +911,8 @@ export default function RidersTab() {
       setReports(rep.data.reports || []);
     } catch (e) {
       // ignore
+    } finally {
+      setLoading(false);
     }
   }, [user.is_admin]);
 
@@ -950,7 +955,7 @@ export default function RidersTab() {
       <div className="flex items-baseline justify-between mb-3 px-1">
         <h2 className="font-heading text-3xl font-black uppercase">Riders</h2>
         <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-          {riders.length} members
+          {loading ? "···" : `${riders.length} members`}
         </span>
       </div>
 
@@ -1043,7 +1048,22 @@ export default function RidersTab() {
       )}
 
       <div className="space-y-2">
-        {riders.map((r) => (
+        {loading ? (
+          // Skeleton grid — kills the flash of an empty list while /riders is
+          // in flight and prevents "0 members" from ever rendering.
+          <div className="space-y-2" data-testid="riders-skeleton">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-bg-secondary border border-border-subtle animate-pulse">
+                <div className="w-11 h-11 rounded-full bg-bg-primary/60" />
+                <div className="flex-1">
+                  <div className="h-3 w-32 bg-bg-primary/60 rounded" />
+                  <div className="h-2.5 w-24 bg-bg-primary/40 rounded mt-2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          riders.map((r) => (
           <button
             key={r.id}
             onClick={() => setOpenRider(r)}
@@ -1070,7 +1090,8 @@ export default function RidersTab() {
               </div>
             </div>
           </button>
-        ))}
+          ))
+        )}
       </div>
 
       {openRider && !openRider.__edit && (

@@ -13,7 +13,7 @@ function normalizeOrder(text) {
     .trim();
 }
 
-function BaristaTally({ orders }) {
+function BaristaTally({ orders, headerless }) {
   // Group by normalized order text; preserve the first-seen "display" version.
   const groups = new Map();
   for (const o of orders) {
@@ -25,20 +25,31 @@ function BaristaTally({ orders }) {
   }
   const rows = Array.from(groups.values()).sort((a, b) => b.riders.length - a.riders.length);
   if (!rows.length) return null;
+  // Auto-scale — big & bold on tiny lists, tighter as the peloton grows.
+  const n = rows.length;
+  const sz = n <= 3
+    ? { ul: "space-y-3", gap: "gap-4", count: "text-4xl", name: "text-lg", riders: "text-[11px]" }
+    : n <= 6
+      ? { ul: "space-y-2", gap: "gap-3", count: "text-3xl", name: "text-base", riders: "text-[10px]" }
+      : n <= 10
+        ? { ul: "space-y-1.5", gap: "gap-2", count: "text-2xl", name: "text-sm", riders: "text-[10px]" }
+        : { ul: "space-y-1", gap: "gap-2", count: "text-lg", name: "text-xs", riders: "text-[9px]" };
   return (
-    <div className="mt-3 border-t border-accent-coffee/25 pt-3" data-testid="round-tally">
-      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-1.5">
-        Barista tally
-      </div>
-      <ul className="space-y-1.5">
+    <div className={headerless ? "" : "mt-3 border-t border-accent-coffee/25 pt-3"} data-testid="round-tally">
+      {!headerless && (
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-1.5">
+          Barista tally
+        </div>
+      )}
+      <ul className={sz.ul}>
         {rows.map((g) => (
-          <li key={g.display} className="flex items-baseline gap-2" data-testid={`tally-row-${g.display.slice(0,20)}`}>
-            <span className="font-heading text-lg font-black tabular-nums text-accent-pink shrink-0">
+          <li key={g.display} className={`flex items-baseline ${sz.gap}`} data-testid={`tally-row-${g.display.slice(0,20)}`}>
+            <span className={`font-heading font-black tabular-nums text-accent-pink shrink-0 leading-none ${sz.count}`}>
               {g.riders.length}×
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-text-primary leading-tight">{g.display}</div>
-              <div className="text-[10px] text-white font-mono-stat uppercase tracking-widest truncate">
+              <div className={`text-white font-bold leading-tight ${sz.name}`}>{g.display}</div>
+              <div className={`text-white font-mono-stat uppercase tracking-widest truncate ${sz.riders}`}>
                 {g.riders.join(" · ")}
               </div>
             </div>
@@ -103,13 +114,6 @@ export default function RideRoundBlock({ ride, initialCafe }) {
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
   const [showCloseView, setShowCloseView] = useState(false);
-  // Session-only dismissal. Clears whenever the round cycles (new round
-  // starts, closes, or ride changes) so the CTA always returns after timeout.
-  const [notMyTurn, setNotMyTurn] = useState(false);
-  function dismissMyTurn() {
-    setNotMyTurn(true);
-    toast("Split it — someone else can shout ☕");
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +143,7 @@ export default function RideRoundBlock({ ride, initialCafe }) {
 
   // Reset the "Split the Bill" dismissal whenever the round cycles or the
   // ride changes so the CTA re-appears after any round closes / expires.
-  useEffect(() => { setNotMyTurn(false); }, [ride.id, round?.id, round?.closed]);
+  useEffect(() => { /* round cycle no-op (kept for future hooks) */ }, [ride.id, round?.id, round?.closed]);
 
   const myOrder = useMemo(
     () => round?.orders?.find((o) => o.user_id === user?.id),
@@ -164,6 +168,18 @@ export default function RideRoundBlock({ ride, initialCafe }) {
         close_in_seconds: 300,
       });
       setRound(data);
+      // Auto-slot the buyer's saved usual as the first order. Otherwise the
+      // buyer — the one person who has to read the tally at the counter —
+      // is forced to confirm their coffee twice (once by shouting, once by
+      // ordering). If they don't have a usual yet the tally opens empty
+      // and they can type it in.
+      const usualText = (user?.coffee || "").trim();
+      if (usualText) {
+        try {
+          const { data: withOrder } = await api.post(`/rides/${ride.id}/round/order`, { text: usualText });
+          setRound(withOrder);
+        } catch (_) { /* soft-fail: round is up, user can tap usual manually */ }
+      }
       toast("Round on ☕", { description: `${cafeName} — 5 min to order.` });
     } catch (e) { toast.error(formatDetail(e)); }
     finally { setBusy(false); }
@@ -208,11 +224,10 @@ export default function RideRoundBlock({ ride, initialCafe }) {
     );
   }
 
-  // No active round → show the two-button CTA pair
+  // No active round → single-action CTA
   if (!round || (closed && !showCloseView && !round?.closed_manually_at)) {
     const showStart = !round || countdown.expired;
     if (!showStart) return null;
-    if (notMyTurn) return null;
     const cafeName = ride.cafe || initialCafe;
     return (
       <div
@@ -225,26 +240,16 @@ export default function RideRoundBlock({ ride, initialCafe }) {
             Coffee at {cafeName || "the café"}
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={startRound}
-            disabled={busy}
-            className="bg-accent-pink text-white font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50"
-            data-testid="round-start"
-          >
-            <Coffee className="w-3.5 h-3.5" /> I'm Buying
-          </button>
-          <button
-            onClick={dismissMyTurn}
-            disabled={busy}
-            className="bg-bg-secondary border border-border-subtle text-text-secondary font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl active:scale-95 hover:border-text-muted"
-            data-testid="round-not-my-turn"
-          >
-            Split the Bill
-          </button>
-        </div>
+        <button
+          onClick={startRound}
+          disabled={busy}
+          className="w-full bg-accent-pink text-white font-black uppercase tracking-[0.18em] text-sm py-4 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2 disabled:opacity-50"
+          data-testid="round-start"
+        >
+          <Coffee className="w-4 h-4" /> I'm Buying
+        </button>
         <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
-          Shout drops a 5-min push to the peloton
+          Shout drops a 5-min push to the peloton · your usual auto-locks in
         </div>
       </div>
     );
@@ -287,6 +292,19 @@ export default function RideRoundBlock({ ride, initialCafe }) {
               style={{ width: `${pctLeft}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Live barista tally — sits right under the shouter's card so the
+          buyer never has to hunt through modals to see who ordered what.
+          Only rendered when there's at least one order (the buyer's usual
+          auto-locks in on "I'm Buying" so this shows up immediately). */}
+      {!closed && round.orders.length > 0 && (
+        <div className="mt-4 bg-black/40 border border-accent-coffee/40 rounded-xl p-3" data-testid="round-live-tally">
+          <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-2 font-bold">
+            ☕ Barista tally · {round.orders.length} order{round.orders.length === 1 ? "" : "s"}
+          </div>
+          <BaristaTally orders={round.orders} headerless />
         </div>
       )}
 

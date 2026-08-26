@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor } from "lucide-react";
 import { useAuth, useTheme, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
 import { toast } from "sonner";
@@ -124,22 +123,19 @@ export default function HomeShell() {
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
+        {/* No AnimatePresence wait: mount the new tab instantly with its
+            own skeleton so we never render the previous tab's content
+            under the new tab-bar highlight. */}
         <PendingBanner />
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.18 }}
-            className={tab === "chat" ? "h-full" : "min-h-full"}
-          >
-            {tab === "rides" && <RidesTab onNavigate={setTab} />}
-            {tab === "coffee" && <CoffeeTab onNavigate={setTab} />}
-            {tab === "riders" && <RidersTab />}
-            {tab === "chat" && <ChatTab />}
-          </motion.div>
-        </AnimatePresence>
+        <div
+          key={tab}
+          className={tab === "chat" ? "h-full" : "min-h-full"}
+        >
+          {tab === "rides" && <RidesTab onNavigate={setTab} />}
+          {tab === "coffee" && <CoffeeTab onNavigate={setTab} />}
+          {tab === "riders" && <RidersTab />}
+          {tab === "chat" && <ChatTab />}
+        </div>
       </div>
 
       {/* Tab bar */}

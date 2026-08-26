@@ -26,6 +26,16 @@ function tallyOrders(orders) {
   return Array.from(groups.values()).sort((a, b) => b.riders.length - a.riders.length);
 }
 
+// Scale the barista tally card so every group fits on the splash without
+// scrolling regardless of order count. Chunky when few, condensed when many.
+function tallyScale(n) {
+  if (n <= 3) return { ul: "space-y-5", gap: "gap-5", count: "text-6xl", name: "text-2xl", riders: "text-xs" };
+  if (n <= 6) return { ul: "space-y-4", gap: "gap-4", count: "text-5xl", name: "text-xl", riders: "text-[11px]" };
+  if (n <= 10) return { ul: "space-y-3", gap: "gap-3", count: "text-4xl", name: "text-lg", riders: "text-[10px]" };
+  if (n <= 15) return { ul: "space-y-2", gap: "gap-2.5", count: "text-3xl", name: "text-base", riders: "text-[10px]" };
+  return { ul: "space-y-1.5", gap: "gap-2", count: "text-2xl", name: "text-sm", riders: "text-[9px]" };
+}
+
 function timeAgo(iso) {
   if (!iso) return "";
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -115,10 +125,14 @@ export default function CoffeeTab({ onNavigate }) {
   function onTouchMove(e) {
     if (ptrStartRef.current == null) return;
     const dy = e.touches[0].clientY - ptrStartRef.current;
-    if (dy > 0) setPtrDelta(Math.min(120, dy));
+    // Only track when the user is actually pulling down significantly —
+    // ignore small drift so vertical scroll gestures don't misfire refresh.
+    if (dy > 30) setPtrDelta(Math.min(180, dy - 30));
   }
   function onTouchEnd() {
-    if (ptrDelta > 70 && !ptrTriggeredRef.current) {
+    // Deliberate threshold — 130px past the 30px dead-zone. Prevents the
+    // "too sensitive" complaint where a small scroll tap re-fetched.
+    if (ptrDelta > 130 && !ptrTriggeredRef.current) {
       ptrTriggeredRef.current = true;
       load();
       toast("Refreshing…");
@@ -146,6 +160,9 @@ export default function CoffeeTab({ onNavigate }) {
       if (!evt.round) return;
       if (evt.type === "coffee.round.started") {
         setActive((prev) => [evt.round, ...prev.filter((r) => r.id !== evt.round.id)]);
+        // Auto-open the tally splash for the buyer AND for anyone else who
+        // just got notified — one shared surface, ordering happens in-place.
+        setDetail(evt.round);
       }
       if (evt.type === "coffee.round.updated") {
         setActive((prev) => prev.map((r) => (r.id === evt.round.id ? evt.round : r)));
@@ -249,22 +266,13 @@ export default function CoffeeTab({ onNavigate }) {
               Coffee shout
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              disabled
-              className="bg-bg-secondary border border-border-subtle text-text-muted font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl opacity-60 flex items-center justify-center gap-2 cursor-not-allowed"
-              data-testid="round-start-disabled"
-            >
-              <Coffee className="w-3.5 h-3.5" /> I&apos;m Buying
-            </button>
-            <button
-              disabled
-              className="bg-bg-secondary border border-border-subtle text-text-muted font-black uppercase tracking-[0.18em] text-xs py-3.5 rounded-xl opacity-60 cursor-not-allowed"
-              data-testid="round-not-my-turn-disabled"
-            >
-              Split the Bill
-            </button>
-          </div>
+          <button
+            disabled
+            className="w-full bg-bg-secondary border border-border-subtle text-text-muted font-black uppercase tracking-[0.18em] text-sm py-4 rounded-xl opacity-60 flex items-center justify-center gap-2 cursor-not-allowed"
+            data-testid="round-start-disabled"
+          >
+            <Coffee className="w-4 h-4" /> I&apos;m Buying
+          </button>
           <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
             No upcoming rides — sync Strava
           </div>
@@ -419,117 +427,121 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50"
       onClick={(e) => e.target === e.currentTarget && onClose()}
       data-testid="coffee-round-modal"
+      style={{
+        backgroundImage:
+          "linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.88) 55%, rgba(0,0,0,0.96) 100%), url(https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=70)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        transform: `translateY(${dragY}px)`,
+        transition: dragY ? "none" : "transform 200ms",
+      }}
     >
-      <div
-        className="w-full sm:max-w-md relative overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-2xl transition-transform"
-        style={{
-          height: "92vh",
-          backgroundImage:
-            "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.85) 55%, rgba(0,0,0,0.95) 100%), url(https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=60)",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          transform: `translateY(${dragY}px)`,
-        }}
-      >
-        {/* Swipe-down handle */}
+      {/* Ultra-compact header: swipe-down handle + close only. Everything
+          else moves to give the Barista tally the entire viewport. */}
+      <div className="flex flex-col h-full max-w-md mx-auto px-5">
         <div
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          className="pt-2 pb-1 flex justify-center cursor-grab select-none"
+          className="pt-3 pb-1 flex justify-center cursor-grab select-none"
           data-testid="modal-drag-handle"
         >
           <div className="w-12 h-1.5 bg-white/40 rounded-full" />
         </div>
-        <div className="px-5 pb-6 h-[calc(92vh-1.5rem)] overflow-y-auto">
-        <div className="flex items-center gap-3">
-          <Avatar name={round.buyer_name} photo={round.buyer_photo} size="md" />
-          <div className="flex-1 min-w-0">
-            <div className={`text-[11px] font-mono-stat uppercase tracking-widest text-accent-pink${round.closed ? "" : " animate-pulse"}`}>
-              {round.closed ? "● Locked" : "● Live"} · {round.orders.length} order{round.orders.length === 1 ? "" : "s"}
+        <div className="flex items-center justify-between pb-2">
+          <div className="min-w-0">
+            <div className={`text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink${round.closed ? "" : " animate-pulse"}`}>
+              {round.closed ? "● Locked" : "● Live"} · {round.orders.length} order{round.orders.length === 1 ? "" : "s"} · {round.cafe_name}
             </div>
-            <div className="font-heading text-xl font-black text-white truncate drop-shadow">
+            <div className="font-heading text-lg font-black text-white truncate drop-shadow">
               {round.buyer_name}&apos;s shout
             </div>
-            <div className="text-sm text-white/90 truncate drop-shadow">
-              {round.cafe_name} · {round.ride_name}
-            </div>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white p-2" aria-label="Close">✕</button>
+          <button onClick={onClose} className="text-white/85 hover:text-white text-xl p-2 -mr-2" aria-label="Close">✕</button>
         </div>
 
-        {/* Barista tally — HERO position, right after the header, so it's
-            always visible without scrolling. Order controls + by-rider
-            details drop below it. */}
-        {round.orders.length > 0 && (
-          <div className="mt-4 border border-accent-coffee/60 rounded-2xl p-4 bg-black/60 backdrop-blur-sm" data-testid="modal-tally">
-            <div className="text-[11px] font-mono-stat uppercase tracking-widest text-accent-coffee mb-3 font-bold">
-              ☕ Barista tally
+        {/* Barista tally — takes the whole splash. If there are no orders
+            we fall through to a friendly empty state. */}
+        {round.orders.length > 0 ? (
+          <div className="flex-1 flex flex-col justify-center overflow-y-auto py-2" data-testid="modal-tally">
+            <div className="border border-accent-coffee/60 rounded-3xl p-5 bg-black/55 backdrop-blur-sm">
+              <div className="text-xs font-mono-stat uppercase tracking-[0.25em] text-accent-coffee mb-4 font-black">
+                ☕ Barista tally
+              </div>
+              <ul className={tallyScale(tallyOrders(round.orders).length).ul}>
+                {tallyOrders(round.orders).map((g) => {
+                  const sz = tallyScale(tallyOrders(round.orders).length);
+                  return (
+                    <li key={g.display} className={`flex items-baseline ${sz.gap}`}>
+                      <span className={`font-heading font-black tabular-nums text-accent-pink shrink-0 leading-none ${sz.count}`}>{g.riders.length}×</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-white font-black leading-tight ${sz.name}`}>{g.display}</div>
+                        <div className={`text-white font-mono-stat uppercase tracking-widest truncate mt-1 ${sz.riders}`}>{g.riders.join(" · ")}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
-            <ul className="space-y-3">
-              {tallyOrders(round.orders).map((g) => (
-                <li key={g.display} className="flex items-baseline gap-3">
-                  <span className="font-heading text-3xl font-black tabular-nums text-accent-pink shrink-0 leading-none">{g.riders.length}×</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-lg text-white font-bold leading-tight">{g.display}</div>
-                    <div className="text-xs text-white/95 font-mono-stat uppercase tracking-widest truncate mt-0.5">{g.riders.join(" · ")}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {round.closed && (
+              <button
+                onClick={copyList}
+                className="mt-3 w-full text-sm font-black uppercase tracking-widest bg-accent-coffee text-black py-4 rounded-2xl active:scale-95 shadow-2xl"
+                data-testid="modal-copy"
+              >
+                Copy list for barista
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center text-white/80">
+              <div className="text-6xl mb-3">☕</div>
+              <div className="text-lg font-bold">No orders in yet</div>
+              <div className="text-sm text-white/60 mt-1">Riders can tap their usual in a second.</div>
+            </div>
           </div>
         )}
 
-        {round.closed && round.orders.length > 0 && (
-          <button
-            onClick={copyList}
-            className="mt-3 w-full text-xs font-black uppercase tracking-widest bg-accent-coffee/30 border border-accent-coffee/70 text-white py-3 rounded-xl active:scale-95"
-            data-testid="modal-copy"
-          >
-            Copy list for barista
-          </button>
-        )}
-
+        {/* Order controls — pinned to the bottom of the splash. Only render
+            when the round is live and the user hasn't ordered. */}
         {!round.closed && (
-          <div className="mt-4">
+          <div className="pb-6 pt-3 border-t border-white/10">
             {myOrder ? (
-              <div className="bg-status-going/10 border border-status-going/30 rounded-xl p-3 flex items-center gap-2" data-testid="modal-my-order">
+              <div className="bg-status-going/15 border border-status-going/40 rounded-xl p-3 flex items-center gap-2" data-testid="modal-my-order">
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] font-mono-stat uppercase tracking-widest text-status-going">Your order</div>
-                  <div className="text-sm text-text-primary truncate">{myOrder.text}</div>
+                  <div className="text-sm text-white truncate">{myOrder.text}</div>
                 </div>
-                <button onClick={retract} disabled={busy} className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-status-cant px-2" data-testid="modal-retract">
+                <button onClick={retract} disabled={busy} className="text-[10px] font-black uppercase tracking-widest text-white/70 hover:text-status-cant px-2" data-testid="modal-retract">
                   Undo
                 </button>
               </div>
             ) : (
-              <div>
+              <>
                 {usual && (
                   <button
                     onClick={() => submitOrder(usual)}
                     disabled={busy}
-                    className="w-full mb-3 px-4 py-4 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
+                    className="w-full mb-2 px-4 py-3.5 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
                     data-testid="modal-usual"
                   >
                     <Coffee className="w-5 h-5 shrink-0" />
                     <div className="flex-1 min-w-0 text-left">
                       <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Tap to order my usual</div>
-                      <div className="text-base font-bold truncate">{usual}</div>
+                      <div className="text-sm font-bold truncate">{usual}</div>
                     </div>
                   </button>
                 )}
-                <div className="text-[10px] font-mono-stat uppercase tracking-widest text-white/80 mb-1.5 text-center">
-                  Or type something different
-                </div>
                 <div className="flex items-center gap-2">
                   <input
                     value={orderText}
                     onChange={(e) => setOrderText(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && submitOrder()}
-                    placeholder="Flat white, no sugar…"
+                    placeholder="Or type something different…"
                     className="flex-1 bg-black/50 border border-white/25 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/50 focus:border-accent-pink outline-none"
                     data-testid="modal-order-input"
                     maxLength={140}
@@ -537,37 +549,16 @@ function RoundDetailModal({ round, onClose, onChange, usual }) {
                   <button
                     onClick={() => submitOrder()}
                     disabled={busy || !orderText.trim()}
-                    className="bg-accent-pink text-white rounded-xl px-3 py-2.5 disabled:opacity-40 active:scale-95 text-[11px] font-black uppercase tracking-widest"
+                    className="bg-accent-pink text-white rounded-xl px-4 py-2.5 disabled:opacity-40 active:scale-95 text-[11px] font-black uppercase tracking-widest"
                     data-testid="modal-submit"
                   >
                     Send
                   </button>
                 </div>
-              </div>
+              </>
             )}
           </div>
         )}
-
-        <details className="group mt-5">
-          <summary className="text-[11px] font-mono-stat uppercase tracking-widest text-white/80 cursor-pointer hover:text-white select-none mb-2 font-bold">
-            By rider · tap to expand
-          </summary>
-          <div className="space-y-2 max-h-80 overflow-auto" data-testid="modal-order-list">
-            {round.orders.map((o) => (
-              <div key={o.user_id} className="bg-white/95 border border-white/20 rounded-xl px-3 py-2.5 flex items-center gap-3">
-                <Avatar name={o.name} photo={o.photo} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-mono-stat uppercase tracking-widest text-black font-bold">{o.name}</div>
-                  <div className="text-base text-black font-medium leading-tight">{o.text}</div>
-                </div>
-              </div>
-            ))}
-            {round.orders.length === 0 && (
-              <div className="text-[13px] text-white/70 italic">No orders in yet.</div>
-            )}
-          </div>
-        </details>
-        </div>
       </div>
     </div>
   );

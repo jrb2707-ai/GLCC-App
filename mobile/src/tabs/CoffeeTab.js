@@ -133,6 +133,9 @@ export default function CoffeeTab() {
     if (!evt.round) return;
     if (evt.type === "coffee.round.started") {
       setActive((prev) => [evt.round, ...prev.filter((r) => r.id !== evt.round.id)]);
+      // Auto-open the barista tally splash the instant someone shouts —
+      // one shared surface for everyone, no hunting through tabs.
+      setDetail(evt.round);
     }
     if (evt.type === "coffee.round.updated") {
       setActive((prev) => prev.map((r) => (r.id === evt.round.id ? evt.round : r)));
@@ -197,13 +200,8 @@ export default function CoffeeTab() {
       ) : !loading ? (
         <View style={s.noUpcomingWrap} testID="coffee-no-upcoming">
           <Text style={s.noUpcomingEyebrow}>☕ COFFEE SHOUT</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={[s.noUpcomingBtn, { backgroundColor: colors.bgSecondary }]}>
-              <Text style={s.noUpcomingBtnTxt}>☕ I'M BUYING</Text>
-            </View>
-            <View style={s.noUpcomingBtn}>
-              <Text style={s.noUpcomingBtnTxt}>SPLIT THE BILL</Text>
-            </View>
+          <View style={[s.noUpcomingBtn, { alignSelf: "stretch" }]}>
+            <Text style={s.noUpcomingBtnTxt}>☕ I'M BUYING</Text>
           </View>
           <Text style={s.noUpcomingHint}>NO UPCOMING RIDES — SYNC STRAVA</Text>
         </View>
