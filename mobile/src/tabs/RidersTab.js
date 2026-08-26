@@ -4,7 +4,7 @@ import {
   RefreshControl, Modal, TextInput, Alert,
 } from "react-native";
 import { api, formatDetail } from "../lib/api";
-import { useAuth, useEvents } from "../lib/store";
+import { useAuth, useEvents, useTheme } from "../lib/store";
 import { colors, radius, spacing, COFFEES } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import MemberCard from "../components/MemberCard";
@@ -224,6 +224,7 @@ export default function RidersTab() {
 // -------------------- Profile Modal --------------------
 function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
   const { user } = useAuth();
+  const { theme, cycleTheme } = useTheme();
   const [name, setName] = useState(rider.name || "");
   const [role, setRole] = useState(rider.role || "Member");
   const [bio, setBio] = useState(rider.bio || "");
@@ -475,6 +476,19 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
               >
                 {testingPush && <ActivityIndicator size="small" color={colors.accentVolt} style={{ marginRight: 6 }} />}
                 <Text style={s.pushBtnTxt}>🔔 SEND A TEST PUSH</Text>
+              </TouchableOpacity>
+            )}
+
+            {isMe && user?.is_admin && (
+              <TouchableOpacity
+                onPress={cycleTheme}
+                style={s.themeBtn}
+                testID="theme-toggle"
+              >
+                <Text style={s.themeBtnTxt}>
+                  {theme === "light" ? "☀️ THEME: LIGHT" : theme === "dark" ? "🌙 THEME: DARK" : "🖥️ THEME: AUTO"}
+                </Text>
+                <Text style={s.themeBtnHint}>TAP TO CYCLE · FULL LIGHT MODE ROLLING OUT</Text>
               </TouchableOpacity>
             )}
 
@@ -791,6 +805,9 @@ const s = StyleSheet.create({
 
   pushBtn: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(212,255,0,0.10)", borderColor: "rgba(212,255,0,0.40)", borderWidth: 1, borderRadius: radius.md, paddingVertical: 12 },
   pushBtnTxt: { color: colors.accentVolt, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+  themeBtn: { marginTop: 8, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.06)", borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, paddingVertical: 12 },
+  themeBtnTxt: { color: colors.textPrimary, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+  themeBtnHint: { color: colors.textMuted, fontWeight: "700", letterSpacing: 1.5, fontSize: 9, marginTop: 4 },
 
   blockBtn: { marginTop: 8, borderWidth: 1, borderColor: "rgba(239,68,68,0.40)", backgroundColor: "rgba(239,68,68,0.10)", borderRadius: radius.md, paddingVertical: 12, alignItems: "center" },
   blockBtnActive: { backgroundColor: colors.statusCant, borderColor: colors.statusCant },

@@ -205,3 +205,44 @@ export function useEvents() {
   if (!ctx) throw new Error("useEvents must be inside <AuthProvider>");
   return ctx;
 }
+
+
+// ---- Theme (light / dark / auto) ----
+// Admins can pick their preferred colour scheme. Choice persists across
+// launches via SecureStore. The full light-mode visual pass is landing in
+// a follow-up — for now the toggle is wired so the choice is captured and
+// the app respects the value on next render.
+const ThemeContext = createContext(null);
+const THEME_KEY = "glcc.theme";
+
+export function ThemeProvider({ children }) {
+  const [theme, setThemeState] = useState("auto");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await SecureStore.getItemAsync(THEME_KEY);
+        if (v === "light" || v === "dark" || v === "auto") setThemeState(v);
+      } catch (_) { /* ignore */ }
+    })();
+  }, []);
+
+  const setTheme = useCallback(async (t) => {
+    setThemeState(t);
+    try { await SecureStore.setItemAsync(THEME_KEY, t); } catch (_) { /* ignore */ }
+  }, []);
+
+  const cycleTheme = useCallback(async () => {
+    const next = theme === "auto" ? "light" : theme === "light" ? "dark" : "auto";
+    await setTheme(next);
+  }, [theme, setTheme]);
+
+  const value = useMemo(() => ({ theme, setTheme, cycleTheme }), [theme, setTheme, cycleTheme]);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+export function useTheme() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error("useTheme must be inside <ThemeProvider>");
+  return ctx;
+}

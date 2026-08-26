@@ -3,7 +3,7 @@ import { View, ActivityIndicator, StatusBar as RNStatusBar } from "react-native"
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
-import { AuthProvider, useAuth } from "./src/lib/store";
+import { AuthProvider, ThemeProvider, useAuth } from "./src/lib/store";
 import AuthScreen from "./src/screens/AuthScreen";
 import HomeShell from "./src/screens/HomeShell";
 import { colors } from "./src/constants/theme";
@@ -25,9 +25,11 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        <AuthProvider>
-          <Gate />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <Gate />
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
