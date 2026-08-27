@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor } from "lucide-react";
+import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor, Mail } from "lucide-react";
 import { useAuth, useTheme, useEvents, useLiveRound, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import CoffeeTab, { RoundDetailModal } from "./tabs/CoffeeTab";
 import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
 import PendingBanner from "./PendingBanner";
+import DMDrawer from "./DMDrawer";
 
 // Global overlay: mirrors the shared LiveRoundContext state. Any tab can
 // force-open (via `useLiveRound().open()`) or dismiss. Dismissal is scoped
@@ -88,9 +89,12 @@ export default function HomeShell() {
   const [tab, setTab] = useState("coffee");
   const { user, logout } = useAuth();
   const { theme, cycleTheme } = useTheme();
+  const { subscribe } = useEvents();
   const isDark = useEffectiveDark(theme);
   const ridersActiveCls = isDark ? "text-status-cant" : "text-black";
   const [perm, setPerm] = useState(browserPushPermission());
+  const [dmOpen, setDmOpen] = useState(false);
+  const [dmUnread, setDmUnread] = useState(0);
   const swipeRef = React.useRef({ x: 0, y: 0, active: false });
 
   const changeTab = (dir) => {
@@ -116,6 +120,28 @@ export default function HomeShell() {
   useEffect(() => {
     setPerm(browserPushPermission());
   }, []);
+
+  // Hydrate DM unread badge on login and keep it live via WS. `dm.message`
+  // arriving for me from anyone → bump. `dm.read` → recompute from source.
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/dm/unread");
+        if (!cancelled) setDmUnread(data.unread_total || 0);
+      } catch (_) { /* ignore */ }
+    })();
+    const unsub = subscribe(async (evt) => {
+      if (evt.type === "dm.message" || evt.type === "dm.read") {
+        try {
+          const { data } = await api.get("/dm/unread");
+          setDmUnread(data.unread_total || 0);
+        } catch (_) { /* ignore */ }
+      }
+    });
+    return () => { cancelled = true; unsub && unsub(); };
+  }, [user, subscribe]);
 
   async function togglePush() {
     if (!browserPushSupported()) {
@@ -148,7 +174,7 @@ export default function HomeShell() {
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent-pink" />
           <span className="font-heading text-xl font-black uppercase tracking-wider">GLCC.</span>
           {user?.is_admin && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30">
+            <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-widest font-bold border ${user.is_president ? "bg-accent-pink/15 text-accent-pink border-accent-pink/40" : "bg-accent-volt/15 text-brand-accent border-accent-volt/30"}`}>
               {user.is_president ? "El Prez" : "Admin"}
             </span>
           )}
@@ -165,6 +191,23 @@ export default function HomeShell() {
               {theme === "light" ? <Sun className="w-4 h-4" /> : theme === "dark" ? <Moon className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
             </button>
           )}
+          <button
+            onClick={() => setDmOpen(true)}
+            title="Messages"
+            className="relative p-1.5 rounded-full text-text-secondary hover:text-brand-accent border border-transparent hover:border-border-subtle transition"
+            data-testid="dm-open"
+            aria-label="Open messages"
+          >
+            <Mail className="w-4 h-4" />
+            {dmUnread > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent-pink text-white text-[9px] font-black flex items-center justify-center leading-none"
+                data-testid="dm-badge"
+              >
+                {dmUnread > 9 ? "9+" : dmUnread}
+              </span>
+            )}
+          </button>
           <button
             onClick={togglePush}
             title={bellEnabled ? "Notifications on" : "Enable notifications"}
@@ -212,6 +255,9 @@ export default function HomeShell() {
       {/* Global live-round barista splash. Renders over any tab so the
           peloton can't miss a shout regardless of where they're browsing. */}
       <LiveRoundOverlay />
+
+      {/* Rider-to-rider DMs */}
+      <DMDrawer open={dmOpen} onClose={() => setDmOpen(false)} />
 
       {/* Tab bar */}
       <div className="border-t border-border-subtle bg-bg-secondary/95 backdrop-blur-xl px-2 pt-2 pb-6">

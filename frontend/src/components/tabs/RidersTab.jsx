@@ -753,7 +753,7 @@ function RegisterRiderModal({ onClose }) {
         >
           <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto" />
         </div>
-        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-brand-accent">Invite a rider</div>
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-primary">Invite a rider</div>
         <h3 className="font-heading text-2xl font-black uppercase mt-1">New rider</h3>
         <p className="text-[11px] text-text-muted mt-1">
           They&apos;ll appear as <span className="text-status-maybe">Invited</span> until they sign up with their own email.

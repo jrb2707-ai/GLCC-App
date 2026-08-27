@@ -60,6 +60,15 @@ export function AppProviders({ children }) {
     });
   }, []);
 
+  // Send arbitrary JSON events over the WS. Used by the DM drawer to
+  // announce focus/blur so the backend can skip push while a thread is
+  // already open on this device.
+  const wsSend = useCallback((payload) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try { ws.send(JSON.stringify(payload)); } catch (_) { /* ignore */ }
+  }, []);
+
   const connectWs = useCallback(
     (token) => {
       if (!token) return;
@@ -138,6 +147,33 @@ export function AppProviders({ children }) {
     // eslint-disable-next-line
   }, []);
 
+  // When the tab/PWA returns to the foreground, the WebSocket may have
+  // silently died without firing `onclose` (common on iOS Home Screen
+  // installs). Force a reconnect so live events don't stall until the
+  // 30s polling catches up.
+  useEffect(() => {
+    const resume = () => {
+      const t = getToken();
+      if (!t) return;
+      const ws = wsRef.current;
+      const dead = !ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING;
+      if (dead) {
+        connectWs(t);
+      } else if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send("ping"); } catch (_) { /* triggers onclose → reconnect */ }
+      }
+    };
+    const onVis = () => { if (document.visibilityState === "visible") resume(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("focus", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("focus", resume);
+    };
+  }, [connectWs]);
+
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
     setToken(data.token);
@@ -180,7 +216,7 @@ export function AppProviders({ children }) {
   return (
     <ThemeProvider>
       <AuthCtx.Provider value={{ user, booted, login, register, logout, refreshMe, formatDetail }}>
-        <EventsCtx.Provider value={{ subscribe }}>
+        <EventsCtx.Provider value={{ subscribe, wsSend }}>
           <LiveRoundProvider>{children}</LiveRoundProvider>
         </EventsCtx.Provider>
       </AuthCtx.Provider>

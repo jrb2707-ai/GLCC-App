@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, BeforeValidator, EmailStr, Field, ConfigDict
 
 # ---------- Config ----------
@@ -640,18 +641,37 @@ async def get_weather() -> dict:
 # ---------- WebSocket Manager ----------
 class ConnectionManager:
     def __init__(self):
-        # list of {"ws", "user"} — plus we track by user_id for targeted sends
+        # list of {"ws", "user", "dm_peer"} — dm_peer is set when the
+        # client opens a DM thread so we can skip push for the peer whose
+        # window is currently in focus.
         self.active: List[Dict[str, Any]] = []
         self.lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, user: dict):
         await websocket.accept()
         async with self.lock:
-            self.active.append({"ws": websocket, "user": user})
+            self.active.append({"ws": websocket, "user": user, "dm_peer": None})
 
     async def disconnect(self, websocket: WebSocket):
         async with self.lock:
             self.active = [c for c in self.active if c["ws"] is not websocket]
+
+    async def set_dm_peer(self, websocket: WebSocket, peer_id: Optional[str]) -> None:
+        async with self.lock:
+            for c in self.active:
+                if c["ws"] is websocket:
+                    c["dm_peer"] = peer_id
+                    return
+
+    def user_has_dm_focus(self, user_id: str, peer_id: str) -> bool:
+        """True if any of user_id's live sockets has the DM thread with
+        peer_id currently focused — used to skip push notifications."""
+        uid = str(user_id)
+        pid = str(peer_id)
+        for c in self.active:
+            if str(c["user"].get("_id")) == uid and str(c.get("dm_peer") or "") == pid:
+                return True
+        return False
 
     async def _send(self, ws: WebSocket, payload: str) -> bool:
         try:
@@ -1106,6 +1126,9 @@ class BlockIn(BaseModel):
 
 class DeleteAccountIn(BaseModel):
     password: str = Field(min_length=1)
+
+class DMSendIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
 
 # ---------- App ----------
 app = FastAPI(title="GLCC API")
@@ -2598,6 +2621,325 @@ async def remove_block(target_id: str, user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
+# ---------- Private DMs (Rider ↔ Rider) ----------
+# Two collections:
+#   dm_conversations: { participants:[uid_a, uid_b] (sorted), last_text,
+#     last_at, last_sender_id, unread:{uid: count}, created_at }
+#   dm_messages: { conversation_id, sender_id, recipient_id, text,
+#     created_at, read }
+# Blocking (from the existing `blocks` collection) hides the peer in both
+# directions and blocks new sends. Push is skipped if the recipient has
+# the DM thread focused (tracked via WS presence).
+
+def _dm_participants(uid_a: str, uid_b: str) -> List[str]:
+    return sorted([str(uid_a), str(uid_b)])
+
+
+def _dm_pair_key(uid_a: str, uid_b: str) -> str:
+    parts = _dm_participants(uid_a, uid_b)
+    return f"{parts[0]}|{parts[1]}"
+
+
+async def _dm_blocked_between(uid_a: str, uid_b: str) -> bool:
+    """True if either party has blocked the other."""
+    hit = await db.blocks.find_one({
+        "$or": [
+            {"user_id": str(uid_a), "target_id": str(uid_b)},
+            {"user_id": str(uid_b), "target_id": str(uid_a)},
+        ],
+    })
+    return bool(hit)
+
+
+async def _dm_get_or_create(me_id: str, peer_id: str) -> dict:
+    parts = _dm_participants(me_id, peer_id)
+    pair_key = _dm_pair_key(me_id, peer_id)
+    convo = await db.dm_conversations.find_one({"pair_key": pair_key})
+    if convo:
+        return convo
+    # Backfill legacy rows that pre-date pair_key.
+    convo = await db.dm_conversations.find_one({"participants": parts})
+    if convo:
+        await db.dm_conversations.update_one({"_id": convo["_id"]}, {"$set": {"pair_key": pair_key}})
+        return convo
+    doc = {
+        "participants": parts,
+        "pair_key": pair_key,
+        "last_text": "",
+        "last_at": now_utc(),
+        "last_sender_id": None,
+        "unread": {parts[0]: 0, parts[1]: 0},
+        "created_at": now_utc(),
+    }
+    try:
+        res = await db.dm_conversations.insert_one(doc)
+        doc["_id"] = res.inserted_id
+    except DuplicateKeyError:
+        # Race: another request created it between find_one + insert.
+        doc = await db.dm_conversations.find_one({"pair_key": pair_key})
+    return doc
+
+
+def _dm_serialize_message(doc: dict) -> dict:
+    created = doc.get("created_at")
+    return {
+        "id": str(doc["_id"]),
+        "conversation_id": str(doc.get("conversation_id")),
+        "sender_id": doc.get("sender_id"),
+        "recipient_id": doc.get("recipient_id"),
+        "text": doc.get("text", ""),
+        "read": bool(doc.get("read")),
+        "created_at": created.isoformat() if isinstance(created, datetime) else created,
+    }
+
+
+def _dm_serialize_convo(convo: dict, me_id: str, peer: dict) -> dict:
+    last_at = convo.get("last_at")
+    return {
+        "id": str(convo["_id"]),
+        "peer": {
+            "id": str(peer["_id"]),
+            "name": peer.get("name"),
+            "photo": peer.get("photo"),
+            "role": peer.get("role"),
+        },
+        "last_text": convo.get("last_text") or "",
+        "last_at": last_at.isoformat() if isinstance(last_at, datetime) else last_at,
+        "last_sender_id": convo.get("last_sender_id"),
+        "unread": int((convo.get("unread") or {}).get(str(me_id), 0)),
+    }
+
+
+@api.get("/dm/conversations")
+async def dm_list_conversations(user: dict = Depends(get_current_user)):
+    me_id = str(user["_id"])
+    # Ids we've blocked or been blocked by — hide those threads.
+    blocked_docs = await db.blocks.find({
+        "$or": [{"user_id": me_id}, {"target_id": me_id}],
+    }).to_list(None)
+    blocked_ids: set = set()
+    for b in blocked_docs:
+        blocked_ids.add(str(b.get("target_id")) if b.get("user_id") == me_id else str(b.get("user_id")))
+
+    convos = await db.dm_conversations.find({"participants": me_id}).sort("last_at", -1).to_list(200)
+    peer_ids: List[str] = []
+    for c in convos:
+        peer_id = next((p for p in c.get("participants", []) if p != me_id), None)
+        if peer_id and peer_id not in blocked_ids:
+            peer_ids.append(peer_id)
+    peer_oids = []
+    for pid in peer_ids:
+        try:
+            peer_oids.append(ObjectId(pid))
+        except InvalidId:
+            pass
+    peers = {}
+    if peer_oids:
+        async for p in db.users.find({"_id": {"$in": peer_oids}}):
+            peers[str(p["_id"])] = p
+
+    out = []
+    for c in convos:
+        peer_id = next((p for p in c.get("participants", []) if p != me_id), None)
+        if not peer_id or peer_id in blocked_ids:
+            continue
+        peer = peers.get(peer_id)
+        if not peer:
+            continue
+        out.append(_dm_serialize_convo(c, me_id, peer))
+    total_unread = sum(x["unread"] for x in out)
+    return {"conversations": out, "unread_total": total_unread}
+
+
+@api.get("/dm/unread")
+async def dm_unread_total(user: dict = Depends(get_current_user)):
+    me_id = str(user["_id"])
+    # Exclude blocked convos from the badge count.
+    blocked_docs = await db.blocks.find({
+        "$or": [{"user_id": me_id}, {"target_id": me_id}],
+    }).to_list(None)
+    blocked_ids = set()
+    for b in blocked_docs:
+        blocked_ids.add(str(b.get("target_id")) if b.get("user_id") == me_id else str(b.get("user_id")))
+    convos = await db.dm_conversations.find({"participants": me_id}).to_list(500)
+    total = 0
+    for c in convos:
+        peer_id = next((p for p in c.get("participants", []) if p != me_id), None)
+        if not peer_id or peer_id in blocked_ids:
+            continue
+        total += int((c.get("unread") or {}).get(me_id, 0))
+    return {"unread_total": total}
+
+
+@api.get("/dm/conversations/{peer_id}")
+async def dm_get_conversation(peer_id: str, user: dict = Depends(get_current_user)):
+    me_id = str(user["_id"])
+    if peer_id == me_id:
+        raise HTTPException(status_code=400, detail="Can't DM yourself")
+    try:
+        peer_oid = ObjectId(peer_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rider id")
+    peer = await db.users.find_one({"_id": peer_oid})
+    if not peer or peer.get("status") != "approved":
+        raise HTTPException(status_code=404, detail="Rider not found")
+    if await _dm_blocked_between(me_id, peer_id):
+        raise HTTPException(status_code=403, detail="Rider unavailable")
+
+    convo = await _dm_get_or_create(me_id, peer_id)
+    convo_id = str(convo["_id"])
+    messages = await db.dm_messages.find({"conversation_id": convo_id}).sort("created_at", 1).to_list(500)
+    return {
+        "conversation": _dm_serialize_convo(convo, me_id, peer),
+        "messages": [_dm_serialize_message(m) for m in messages],
+    }
+
+
+@api.post("/dm/conversations/{peer_id}/messages")
+async def dm_send_message(peer_id: str, body: DMSendIn, user: dict = Depends(get_current_user)):
+    me_id = str(user["_id"])
+    if peer_id == me_id:
+        raise HTTPException(status_code=400, detail="Can't DM yourself")
+    try:
+        peer_oid = ObjectId(peer_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rider id")
+    peer = await db.users.find_one({"_id": peer_oid})
+    if not peer or peer.get("status") != "approved":
+        raise HTTPException(status_code=404, detail="Rider not found")
+    if await _dm_blocked_between(me_id, peer_id):
+        raise HTTPException(status_code=403, detail="Rider unavailable")
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Empty message")
+
+    convo = await _dm_get_or_create(me_id, peer_id)
+    convo_id = str(convo["_id"])
+    ts = now_utc()
+
+    msg_doc = {
+        "conversation_id": convo_id,
+        "sender_id": me_id,
+        "recipient_id": peer_id,
+        "text": text,
+        "read": False,
+        "created_at": ts,
+    }
+    res = await db.dm_messages.insert_one(msg_doc)
+    msg_doc["_id"] = res.inserted_id
+
+    # Bump the convo: latest snippet + last_at + increment recipient unread.
+    await db.dm_conversations.update_one(
+        {"_id": convo["_id"]},
+        {
+            "$set": {"last_text": text, "last_at": ts, "last_sender_id": me_id},
+            "$inc": {f"unread.{peer_id}": 1, f"unread.{me_id}": 0},
+        },
+    )
+    fresh_convo = await db.dm_conversations.find_one({"_id": convo["_id"]})
+
+    payload_msg = _dm_serialize_message(msg_doc)
+    # Emit to both parties so both windows update in real-time.
+    ws_event_sender = {
+        "type": "dm.message",
+        "message": payload_msg,
+        "conversation": _dm_serialize_convo(fresh_convo, me_id, peer),
+    }
+    ws_event_recipient = {
+        "type": "dm.message",
+        "message": payload_msg,
+        "conversation": _dm_serialize_convo(fresh_convo, peer_id, user),
+    }
+    await manager.send_user(me_id, ws_event_sender)
+    await manager.send_user(peer_id, ws_event_recipient)
+
+    # Push notification unless the recipient already has this thread focused.
+    if not manager.user_has_dm_focus(peer_id, me_id):
+        preview = text if len(text) <= 120 else text[:117] + "…"
+        await push_to_users(
+            [peer_id],
+            f"{user.get('name') or 'A rider'}",
+            preview,
+            {"type": "dm", "peer_id": me_id, "conversation_id": convo_id},
+        )
+
+    return {"message": payload_msg, "conversation": _dm_serialize_convo(fresh_convo, me_id, peer)}
+
+
+@api.post("/dm/conversations/{peer_id}/read")
+async def dm_mark_read(peer_id: str, user: dict = Depends(get_current_user)):
+    me_id = str(user["_id"])
+    parts = _dm_participants(me_id, peer_id)
+    convo = await db.dm_conversations.find_one({"participants": parts})
+    if not convo:
+        return {"ok": True, "unread": 0}
+    await db.dm_conversations.update_one(
+        {"_id": convo["_id"]},
+        {"$set": {f"unread.{me_id}": 0}},
+    )
+    await db.dm_messages.update_many(
+        {"conversation_id": str(convo["_id"]), "recipient_id": me_id, "read": False},
+        {"$set": {"read": True}},
+    )
+    # Notify my other tabs/devices so their unread badges clear.
+    await manager.send_user(me_id, {
+        "type": "dm.read",
+        "conversation_id": str(convo["_id"]),
+        "peer_id": peer_id,
+    })
+    return {"ok": True, "unread": 0}
+
+
+@api.delete("/dm/messages/{message_id}")
+async def dm_delete_message(message_id: str, user: dict = Depends(get_current_user)):
+    """Delete a single DM message. Sender can always remove their own;
+    the recipient can also hard-delete for parity with iMessage/Signal-
+    style expectations. Refresh conversation preview after."""
+    try:
+        oid = ObjectId(message_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid message id")
+    me_id = str(user["_id"])
+    msg = await db.dm_messages.find_one({"_id": oid})
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if me_id not in (str(msg.get("sender_id")), str(msg.get("recipient_id"))):
+        raise HTTPException(status_code=403, detail="Not your conversation")
+    convo_id = str(msg.get("conversation_id"))
+    await db.dm_messages.delete_one({"_id": oid})
+
+    # Recompute latest message + unread counts for the conversation.
+    latest = await db.dm_messages.find({"conversation_id": convo_id}).sort("created_at", -1).limit(1).to_list(1)
+    convo = await db.dm_conversations.find_one({"_id": ObjectId(convo_id)})
+    if convo:
+        parts = convo.get("participants", [])
+        if latest:
+            top = latest[0]
+            update = {
+                "last_text": top.get("text", ""),
+                "last_at": top.get("created_at"),
+                "last_sender_id": top.get("sender_id"),
+            }
+        else:
+            update = {"last_text": "", "last_at": convo.get("created_at"), "last_sender_id": None}
+        # Rebuild unread from source of truth to avoid drift.
+        unread = {}
+        for uid in parts:
+            unread[str(uid)] = await db.dm_messages.count_documents({
+                "conversation_id": convo_id, "recipient_id": str(uid), "read": False,
+            })
+        update["unread"] = unread
+        await db.dm_conversations.update_one({"_id": convo["_id"]}, {"$set": update})
+
+    # Notify both parties.
+    peer_id = msg.get("sender_id") if str(msg.get("sender_id")) != me_id else msg.get("recipient_id")
+    evt = {"type": "dm.deleted", "message_id": message_id, "conversation_id": convo_id}
+    await manager.send_user(me_id, evt)
+    await manager.send_user(peer_id, evt)
+    return {"ok": True}
+
+
 @api.delete("/auth/me")
 async def delete_my_account(body: DeleteAccountIn, user: dict = Depends(get_current_user)):
     """Rider-initiated account deletion (Apple Guideline 5.1.1(v)). Removes
@@ -2619,6 +2961,11 @@ async def delete_my_account(body: DeleteAccountIn, user: dict = Depends(get_curr
     await db.blocks.delete_many({"$or": [{"user_id": uid}, {"target_id": uid}]})
     await db.chat_reports.delete_many({"reporter_id": uid})
     await db.coffee_rounds.delete_many({"rider_id": uid})
+    # Wipe DMs: delete messages the rider sent/received and remove their
+    # side of every conversation. If the other participant has no history
+    # of their own the convo gets removed entirely.
+    await db.dm_messages.delete_many({"$or": [{"sender_id": uid}, {"recipient_id": uid}]})
+    await db.dm_conversations.delete_many({"participants": uid})
     # Pull user out of ride RSVPs so counts stay accurate.
     await db.rides.update_many(
         {f"rsvps.{uid}": {"$exists": True}},
@@ -2734,10 +3081,22 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
     try:
         await websocket.send_text(json.dumps({"type": "hello", "user": serialize_rider(user)}))
         while True:
-            # Keep-alive; clients can send pings
+            # Keep-alive; clients can send pings or DM focus events.
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
+                continue
+            # DM presence lets us skip push when the recipient already has
+            # the thread open. Anything else is silently ignored.
+            try:
+                payload = json.loads(data)
+            except Exception:
+                continue
+            if payload.get("type") == "dm.focus":
+                peer_id = payload.get("peer_id")
+                await manager.set_dm_peer(websocket, str(peer_id) if peer_id else None)
+            elif payload.get("type") == "dm.blur":
+                await manager.set_dm_peer(websocket, None)
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
     except Exception:
@@ -2851,6 +3210,20 @@ async def seed():
     await db.blocks.create_index([("user_id", 1), ("target_id", 1)], unique=True)
     await db.chat_reports.create_index("created_at")
     await db.password_reset_requests.create_index("email")
+    # Private DM indexes: non-unique multikey index on participants for
+    # fast list/find; uniqueness is enforced via `pair_key` (sorted "uid|uid"
+    # string) instead of `participants` array — a unique multikey index
+    # would reject any second convo a rider is part of.
+    # First drop the legacy unique index if present so the new non-unique
+    # index below can take its name.
+    try:
+        await db.dm_conversations.drop_index("participants_1")
+    except Exception:
+        pass
+    await db.dm_conversations.create_index("participants")
+    await db.dm_conversations.create_index("pair_key", unique=True, sparse=True)
+    await db.dm_conversations.create_index("last_at")
+    await db.dm_messages.create_index([("conversation_id", 1), ("created_at", 1)])
 
     admin_email = os.environ.get("ADMIN_EMAIL", "bryantj@xtra.co.nz").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Roenick2707")

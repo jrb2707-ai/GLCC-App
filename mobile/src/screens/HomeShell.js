@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, ImageBackground } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
@@ -10,6 +10,7 @@ import RidesTab from "../tabs/RidesTab";
 import CoffeeTab, { RoundDetailBody } from "../tabs/CoffeeTab";
 import RidersTab from "../tabs/RidersTab";
 import ChatTab from "../tabs/ChatTab";
+import DMScreen from "./DMScreen";
 
 function LiveRoundOverlay() {
   const { user } = useAuth();
@@ -89,7 +90,7 @@ const NavTheme = {
   },
 };
 
-function Header() {
+function Header({ onOpenDM, dmUnread }) {
   const { user, logout } = useAuth();
   return (
     <View style={s.header}>
@@ -102,17 +103,53 @@ function Header() {
           </View>
         )}
       </View>
-      <TouchableOpacity onPress={logout}>
-        <Text style={s.exit}>EXIT</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <TouchableOpacity onPress={onOpenDM} testID="dm-open" style={{ padding: 4 }}>
+          <Text style={{ fontSize: 18 }}>✉️</Text>
+          {dmUnread > 0 ? (
+            <View style={s.headerBadge} testID="dm-badge">
+              <Text style={s.headerBadgeTxt}>{dmUnread > 9 ? "9+" : String(dmUnread)}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={logout}>
+          <Text style={s.exit}>EXIT</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 export default function HomeShell() {
+  const { user } = useAuth();
+  const { subscribe } = useEvents();
+  const [dmOpen, setDmOpen] = useState(false);
+  const [dmUnread, setDmUnread] = useState(0);
+
+  // Hydrate DM unread badge + refresh on every dm.message / dm.read event.
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/dm/unread");
+        if (!cancelled) setDmUnread(data.unread_total || 0);
+      } catch (_) { /* ignore */ }
+    })();
+    const unsub = subscribe(async (evt) => {
+      if (evt.type === "dm.message" || evt.type === "dm.read") {
+        try {
+          const { data } = await api.get("/dm/unread");
+          setDmUnread(data.unread_total || 0);
+        } catch (_) { /* ignore */ }
+      }
+    });
+    return () => { cancelled = true; unsub && unsub(); };
+  }, [user, subscribe]);
+
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
-      <Header />
+      <Header onOpenDM={() => setDmOpen(true)} dmUnread={dmUnread} />
       <NavigationContainer theme={NavTheme} independent>
         <Tab.Navigator
           initialRouteName="Coffee"
@@ -131,6 +168,7 @@ export default function HomeShell() {
         </Tab.Navigator>
       </NavigationContainer>
       <LiveRoundOverlay />
+      <DMScreen visible={dmOpen} onClose={() => setDmOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -147,7 +185,9 @@ const s = StyleSheet.create({
   },
   pinkDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentPink },
   logo: { color: colors.textPrimary, fontSize: 20, fontWeight: "900", letterSpacing: 1 },
-  badge: { backgroundColor: "rgba(212,255,0,0.15)", borderColor: "rgba(212,255,0,0.30)", borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  badgeText: { color: colors.accentVolt, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
+  badge: { backgroundColor: "rgba(236,72,153,0.15)", borderColor: "rgba(236,72,153,0.40)", borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  badgeText: { color: colors.accentPink, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
   exit: { color: colors.textMuted, fontSize: 11, letterSpacing: 2, fontWeight: "700" },
+  headerBadge: { position: "absolute", top: -2, right: -6, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: colors.accentPink, alignItems: "center", justifyContent: "center" },
+  headerBadgeTxt: { color: "#fff", fontSize: 9, fontWeight: "900" },
 });

@@ -145,15 +145,32 @@ export default function CoffeeTab({ onNavigate }) {
     ptrStartRef.current = null;
   }
 
-  // Refresh on tab/page visibility change (returning to the app from a lock
-  // screen or a different browser tab). Also poll every 30s while visible so
-  // state can't drift silently if a WS event was missed.
+  // Refresh on tab/page visibility change (returning to the app from a
+  // lock screen, another browser tab, or when the installed Home Screen
+  // PWA is resumed from background). `visibilitychange` alone misses the
+  // iOS/Android PWA bfcache resume path, and `pageshow` fills the gap.
+  // `focus` catches desktop tab returns where visibility already reports
+  // "visible". A short in-flight guard keeps rapid triggers from stacking
+  // duplicate requests. 30s interval remains as a safety net for missed
+  // WS events.
   useEffect(() => {
-    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      try { await load(); } finally { inFlight = false; }
+    };
+    const onVis = () => { if (document.visibilityState === "visible") refresh(); };
+    const onPageShow = () => refresh();
+    const onFocus = () => refresh();
     document.addEventListener("visibilitychange", onVis);
-    const id = setInterval(() => { if (document.visibilityState === "visible") load(); }, 30000);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onFocus);
+    const id = setInterval(refresh, 30000);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onFocus);
       clearInterval(id);
     };
   }, []);  // eslint-disable-line

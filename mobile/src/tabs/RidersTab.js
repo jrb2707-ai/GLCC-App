@@ -790,7 +790,7 @@ const s = StyleSheet.create({
   coffeeItem: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: radius.md },
   coffeeItemActive: { backgroundColor: "rgba(212,255,0,0.10)", borderWidth: 1, borderColor: colors.accentVolt },
 
-  eyebrowInvite: { color: colors.accentVolt, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
+  eyebrowInvite: { color: colors.textPrimary, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
   inviteHint: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
 
   photoBtn: { position: "absolute", right: -4, bottom: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accentVolt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.bgSecondary },

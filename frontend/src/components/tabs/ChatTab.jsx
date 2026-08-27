@@ -258,16 +258,16 @@ export default function ChatTab() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white text-neutral-900 rounded-t-3xl overflow-hidden" data-testid="chat-tab">
+    <div className="h-full flex flex-col bg-bg-primary text-text-primary rounded-t-3xl overflow-hidden" data-testid="chat-tab">
       {/* Announce toggle — pinned above everything, El Prez only */}
       {user.is_president && (
-        <div className="px-3 pt-3 pb-1 bg-white">
+        <div className="px-3 pt-3 pb-1 bg-bg-primary">
           <button
             type="button"
             onClick={() => setAnnouncement((v) => !v)}
             disabled={isPending}
             aria-pressed={announcement}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black uppercase tracking-[0.2em] text-xs active:scale-[0.98] ${announcement ? "bg-brand-accent text-black shadow-[0_4px_14px_rgba(212,255,0,0.4)]" : "bg-white text-neutral-900 border border-neutral-300"}`}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black uppercase tracking-[0.2em] text-xs active:scale-[0.98] ${announcement ? "bg-brand-accent text-black shadow-[0_4px_14px_rgba(212,255,0,0.4)]" : "bg-bg-secondary text-text-primary border border-border-subtle"}`}
             data-testid="chat-announce-btn"
           >
             <Megaphone className="w-3.5 h-3.5" />
@@ -277,26 +277,26 @@ export default function ChatTab() {
       )}
 
       {/* Weather header */}
-      <div className="px-5 pt-3 pb-3 border-b border-neutral-200 bg-neutral-50">
+      <div className="px-5 pt-3 pb-3 border-b border-border-subtle bg-bg-secondary">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[#007AFF]/15 text-[#007AFF] flex items-center justify-center">
             <Cloud className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-neutral-500">
+            <div className="font-mono-stat text-[10px] uppercase tracking-widest text-text-muted">
               {weather ? `${weather.location} · ${weather.wind} wind` : "Loading weather…"}
             </div>
-            <div className="text-sm font-semibold text-neutral-900">
+            <div className="text-sm font-semibold text-text-primary">
               {weather ? `${weather.temp_c}°C · ${weather.condition}` : ""}
               {weather && (
-                <span className="ml-1 text-neutral-500 text-xs">· {weather.rain_chance}% rain</span>
+                <span className="ml-1 text-text-muted text-xs">· {weather.rain_chance}% rain</span>
               )}
             </div>
           </div>
           {user.is_admin && (
             <button
               onClick={wipe}
-              className="text-[10px] font-mono-stat uppercase tracking-widest text-neutral-500 hover:text-status-cant border border-neutral-300 hover:border-status-cant rounded-full px-2.5 py-1 active:scale-95"
+              className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted hover:text-status-cant border border-border-subtle hover:border-status-cant rounded-full px-2.5 py-1 active:scale-95"
               title="Wipe every chat message right now"
               data-testid="chat-wipe-button"
             >
@@ -304,7 +304,7 @@ export default function ChatTab() {
             </button>
           )}
         </div>
-        <div className="mt-1.5 text-[10px] text-neutral-400 font-mono-stat uppercase tracking-widest">
+        <div className="mt-1.5 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest">
           Messages auto-clear after 7 days
         </div>
       </div>
@@ -314,11 +314,11 @@ export default function ChatTab() {
       {!isPending && <MechanicalMiniMap messages={messages} />}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-1.5 bg-white" data-testid="chat-messages">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-1.5 bg-bg-primary" data-testid="chat-messages">
         {isPending ? (
           <div className="h-full min-h-[220px] flex items-center justify-center px-6" data-testid="chat-locked">
-            <div className="text-center text-neutral-500 text-xs leading-relaxed max-w-[240px]">
-              <div className="text-[10px] uppercase tracking-widest font-mono-stat text-neutral-400 mb-1">
+            <div className="text-center text-text-muted text-xs leading-relaxed max-w-[240px]">
+              <div className="text-[10px] uppercase tracking-widest font-mono-stat text-text-muted mb-1">
                 Chat locked
               </div>
               The peloton opens up once an admin approves you.
@@ -381,7 +381,7 @@ export default function ChatTab() {
                     )}
                   </div>
                 ) : (
-                  <div className="inline-block bg-neutral-100 text-neutral-600 text-[11px] px-3 py-1 rounded-full">
+                  <div className="inline-block bg-bg-secondary border border-border-subtle text-text-secondary text-[11px] px-3 py-1 rounded-full">
                     {m.text}
                   </div>
                 )}
@@ -410,7 +410,7 @@ export default function ChatTab() {
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} group`} data-testid={`msg-${m.id}`}>
               <div className="max-w-[78%]">
                 {!mine && (
-                  <div className="text-[10px] uppercase font-mono-stat tracking-widest text-neutral-500 mb-0.5 ml-3">
+                  <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted mb-0.5 ml-3">
                     {m.name} · {fmtTime(m.created_at)}
                   </div>
                 )}
@@ -419,7 +419,7 @@ export default function ChatTab() {
                     className={
                       mine
                         ? "px-3.5 py-2 rounded-2xl rounded-br-md bg-[#007AFF] text-white"
-                        : "px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#E9E9EB] text-neutral-900"
+                        : "px-3.5 py-2 rounded-2xl rounded-bl-md bg-bg-secondary text-text-primary border border-border-subtle"
                     }
                   >
                     <div className="text-sm whitespace-pre-wrap break-words leading-snug">{m.text}</div>
@@ -427,7 +427,7 @@ export default function ChatTab() {
                   {!mine && (
                     <button
                       onClick={() => setReportMessage(m)}
-                      className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity mt-1 p-1 rounded text-neutral-500 hover:text-status-cant"
+                      className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity mt-1 p-1 rounded text-text-muted hover:text-status-cant"
                       title="Report this message"
                       data-testid={`report-open-${m.id}`}
                     >
@@ -436,7 +436,7 @@ export default function ChatTab() {
                   )}
                 </div>
                 {mine && (
-                  <div className="text-[9px] text-neutral-400 font-mono-stat text-right mt-0.5 mr-2">
+                  <div className="text-[9px] text-text-muted font-mono-stat text-right mt-0.5 mr-2">
                     {fmtTime(m.created_at)}
                   </div>
                 )}

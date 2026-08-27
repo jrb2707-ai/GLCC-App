@@ -47,6 +47,14 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  // Send arbitrary JSON events over the WS. Used by the DM screen to
+  // announce focus/blur so the backend skips push when the thread is open.
+  const wsSend = useCallback((payload) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== 1) return;
+    try { ws.send(JSON.stringify(payload)); } catch (_) { /* ignore */ }
+  }, []);
+
   const closeWs = useCallback(() => {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
     if (wsRef.current) {
@@ -185,7 +193,7 @@ export function AuthProvider({ children }) {
     () => ({ user, booted, login, register, logout, refreshMe, pendingRideId, consumePendingRide }),
     [user, booted, login, register, logout, refreshMe, pendingRideId, consumePendingRide]
   );
-  const eventsValue = useMemo(() => ({ subscribe }), [subscribe]);
+  const eventsValue = useMemo(() => ({ subscribe, wsSend }), [subscribe, wsSend]);
 
   return (
     <AuthContext.Provider value={authValue}>
