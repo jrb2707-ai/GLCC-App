@@ -146,6 +146,10 @@ def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
         "status": doc.get("status", "approved"),  # approved | pending | invited
         "member_no": doc.get("member_no"),
         "ride_reminders": doc.get("ride_reminders", True),
+        "notification_prefs": doc.get("notification_prefs") or {
+            "mechanical": True, "coffee": True, "chat": True, "dm": True,
+        },
+        "has_seen_notification_prompt": bool(doc.get("has_seen_notification_prompt")),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
         "member_since": (doc.get("member_since") or doc.get("created_at")).isoformat() if (doc.get("member_since") or doc.get("created_at")) else None,
     }
@@ -551,6 +555,7 @@ async def send_pending_ride_1h_pushes() -> dict:
             title,
             body,
             {"type": "ride.hour_reminder", "ride_id": str(ride["_id"])},
+            category="chat",
         )
         await db.rides.update_one(
             {"_id": ride["_id"]},
@@ -601,6 +606,7 @@ async def send_pending_weather_alerts() -> dict:
             title,
             body,
             {"type": "ride.weather_alert", "ride_id": str(ride["_id"])},
+            category="chat",
         )
         await db.rides.update_one(
             {"_id": ride["_id"]},
@@ -796,9 +802,39 @@ async def send_web_push(subs: List[dict], title: str, body: str, data: Optional[
         await db.web_push_subscriptions.delete_many({"_id": {"$in": stale_ids}})
 
 
-async def push_to_users(user_ids: List[str], title: str, body: str, data: Optional[dict] = None) -> None:
+async def _filter_users_by_pref(user_ids: List[str], category: str) -> List[str]:
+    """Drop any user_id whose `notification_prefs.<category>` is False.
+    Users with no prefs saved default to receiving everything, so this is
+    strictly opt-out (matches product default: everything on)."""
+    if not user_ids or not category:
+        return user_ids
+    oids = []
+    for uid in user_ids:
+        try:
+            oids.append(ObjectId(uid))
+        except InvalidId:
+            pass
+    if not oids:
+        return user_ids
+    muted = set()
+    async for u in db.users.find(
+        {"_id": {"$in": oids}, f"notification_prefs.{category}": False},
+        {"_id": 1},
+    ):
+        muted.add(str(u["_id"]))
+    return [uid for uid in user_ids if str(uid) not in muted]
+
+
+async def push_to_users(
+    user_ids: List[str], title: str, body: str,
+    data: Optional[dict] = None, category: Optional[str] = None,
+) -> None:
     if not user_ids:
         return
+    if category:
+        user_ids = await _filter_users_by_pref(user_ids, category)
+        if not user_ids:
+            return
     uid_list = list(map(str, user_ids))
     docs = await db.push_tokens.find({"user_id": {"$in": uid_list}}).to_list(None)
     tokens = [d["expo_push_token"] for d in docs]
@@ -809,8 +845,22 @@ async def push_to_users(user_ids: List[str], title: str, body: str, data: Option
         await send_web_push(subs, title, body, data)
 
 
-async def push_to_all_except(exclude_user_id: str, title: str, body: str, data: Optional[dict] = None) -> None:
+async def push_to_all_except(
+    exclude_user_id: str, title: str, body: str,
+    data: Optional[dict] = None, category: Optional[str] = None,
+) -> None:
     excl = str(exclude_user_id)
+    if category:
+        # Fetch approved rider ids honouring the pref filter, then push.
+        recipients = []
+        async for u in db.users.find(
+            {"_id": {"$ne": ObjectId(excl)} if ObjectId.is_valid(excl) else {"$ne": excl},
+             "status": "approved"},
+            {"_id": 1},
+        ):
+            recipients.append(str(u["_id"]))
+        await push_to_users(recipients, title, body, data, category=category)
+        return
     docs = await db.push_tokens.find({"user_id": {"$ne": excl}}).to_list(None)
     tokens = [d["expo_push_token"] for d in docs]
     if tokens:
@@ -1129,6 +1179,14 @@ class DeleteAccountIn(BaseModel):
 
 class DMSendIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class NotificationPrefsIn(BaseModel):
+    mechanical: Optional[bool] = None
+    coffee: Optional[bool] = None
+    chat: Optional[bool] = None
+    dm: Optional[bool] = None
+    has_seen_notification_prompt: Optional[bool] = None
 
 # ---------- App ----------
 app = FastAPI(title="GLCC API")
@@ -2062,6 +2120,7 @@ async def send_round(body: CoffeeRoundIn, user: dict = Depends(require_approved)
         "Coffee round ☕",
         f"{user.get('name')} is buying — {coffee}",
         {"type": "coffee.round", "round_id": str(result.inserted_id)},
+        category="coffee",
     ))
     return payload_round
 
@@ -2169,6 +2228,7 @@ async def start_ride_round(
             "round_id": payload["id"],
             "ride_id": ride_id,
         },
+        category="coffee",
     ))
     return payload
 
@@ -2367,6 +2427,7 @@ async def post_message(body: ChatMessageIn, user: dict = Depends(require_approve
             f"{user.get('name')} mentioned you",
             preview,
             {"type": "chat.mention", "message_id": payload["id"]},
+            category="chat",
         ))
 
     # El Presidente announcements push to every rider except the sender.
@@ -2376,6 +2437,7 @@ async def post_message(body: ChatMessageIn, user: dict = Depends(require_approve
             "📣 GLCC Announcement",
             f"{user.get('name')}: {text[:140]}",
             {"type": "chat.announcement", "message_id": payload["id"]},
+            category="chat",
         ))
     return payload
 
@@ -2434,6 +2496,7 @@ async def report_mechanical(body: MechanicalIn, user: dict = Depends(require_app
             "maps_link": maps_link,
             "reporter": user.get("name"),
         },
+        category="mechanical",
     ))
     return payload
 
@@ -2507,6 +2570,7 @@ async def resolve_mechanical(message_id: str, body: MechanicalResolveIn, user: d
             "original_id": str(oid),
             "status": body.status,
         },
+        category="mechanical",
     ))
     return {"resolved": updated_payload, "followup": follow_payload}
 
@@ -2664,6 +2728,95 @@ async def create_block(body: BlockIn, user: dict = Depends(get_current_user)):
         upsert=True,
     )
     return {"ok": True, "target_id": body.target_id}
+
+
+@api.put("/users/me/notification-prefs")
+async def update_notification_prefs(body: NotificationPrefsIn, user: dict = Depends(get_current_user)):
+    """Merge partial notification preferences into the current user.
+    The first call also implicitly clears `has_seen_notification_prompt`
+    unless the caller sets it explicitly."""
+    current = user.get("notification_prefs") or {"mechanical": True, "coffee": True, "chat": True, "dm": True}
+    updates = {}
+    for k in ("mechanical", "coffee", "chat", "dm"):
+        v = getattr(body, k)
+        if v is not None:
+            current[k] = bool(v)
+    updates["notification_prefs"] = current
+    if body.has_seen_notification_prompt is not None:
+        updates["has_seen_notification_prompt"] = bool(body.has_seen_notification_prompt)
+    else:
+        updates["has_seen_notification_prompt"] = True
+    await db.users.update_one({"_id": user["_id"]}, {"$set": updates})
+    fresh = await db.users.find_one({"_id": user["_id"]})
+    return serialize_rider(fresh, viewer=fresh)
+
+
+@api.get("/notifications")
+async def notifications_feed(user: dict = Depends(get_current_user)):
+    """Aggregate recent club events into a single chronological feed for
+    the bell popover: mechanicals (last 24 h), coffee shouts (last 6 h),
+    @mentions of the current user (last 24 h). Read state is derived from
+    `user.notifications_last_read_at` — anything newer counts as unread."""
+    me_id = str(user["_id"])
+    now = now_utc()
+    day_ago = now - timedelta(hours=24)
+    six_ago = now - timedelta(hours=6)
+    last_read = user.get("notifications_last_read_at") or (now - timedelta(days=30))
+    items = []
+
+    async for m in db.messages.find({
+        "mechanical": {"$exists": True, "$ne": None},
+        "created_at": {"$gte": day_ago},
+    }).sort("created_at", -1).limit(10):
+        items.append({
+            "kind": "mechanical",
+            "id": f"mech-{m['_id']}",
+            "title": m.get("name") or "A rider",
+            "subtitle": "reported a mechanical",
+            "created_at": m.get("created_at"),
+            "meta": {"message_id": str(m["_id"])},
+        })
+    async for r in db.coffee_rounds.find({
+        "started_at": {"$gte": six_ago},
+    }).sort("started_at", -1).limit(10):
+        items.append({
+            "kind": "coffee",
+            "id": f"coffee-{r['_id']}",
+            "title": r.get("buyer_name") or "A rider",
+            "subtitle": f"started a shout at {r.get('cafe_name') or 'a café'}",
+            "created_at": r.get("started_at"),
+            "meta": {"round_id": str(r["_id"])},
+        })
+    async for m in db.messages.find({
+        "mention_user_ids": me_id,
+        "created_at": {"$gte": day_ago},
+        "user_id": {"$ne": me_id},
+    }).sort("created_at", -1).limit(10):
+        items.append({
+            "kind": "mention",
+            "id": f"mention-{m['_id']}",
+            "title": m.get("name") or "A rider",
+            "subtitle": "mentioned you in Chat",
+            "created_at": m.get("created_at"),
+            "meta": {"message_id": str(m["_id"])},
+        })
+    items.sort(key=lambda x: x.get("created_at") or now, reverse=True)
+    # Cap total & tag unread state.
+    items = items[:25]
+    for it in items:
+        it["unread"] = bool(it.get("created_at") and it["created_at"] > last_read)
+        it["created_at"] = it["created_at"].isoformat() if it.get("created_at") else None
+    unread_count = sum(1 for it in items if it["unread"])
+    return {"items": items, "unread": unread_count}
+
+
+@api.post("/notifications/read")
+async def mark_notifications_read(user: dict = Depends(get_current_user)):
+    """Stamp `notifications_last_read_at = now` so the bell dot clears."""
+    await db.users.update_one(
+        {"_id": user["_id"]}, {"$set": {"notifications_last_read_at": now_utc()}},
+    )
+    return {"ok": True}
 
 
 @api.delete("/blocks/{target_id}")
@@ -2913,6 +3066,7 @@ async def dm_send_message(peer_id: str, body: DMSendIn, user: dict = Depends(get
             f"{user.get('name') or 'A rider'}",
             preview,
             {"type": "dm", "peer_id": me_id, "conversation_id": convo_id},
+            category="dm",
         )
 
     return {"message": payload_msg, "conversation": _dm_serialize_convo(fresh_convo, me_id, peer)}

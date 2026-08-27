@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor, Mail } from "lucide-react";
-import { useAuth, useTheme, useEvents, useLiveRound, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { Bike, Coffee, Users, MessageSquare } from "lucide-react";
+import { useAuth, useTheme, useEvents, useLiveRound } from "../lib/store";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 import RidesTab from "./tabs/RidesTab";
@@ -9,6 +9,8 @@ import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
 import PendingBanner from "./PendingBanner";
 import DMDrawer from "./DMDrawer";
+import Header from "./Header";
+import NotificationPrompt from "./NotificationPrompt";
 
 // Global overlay: mirrors the shared LiveRoundContext state. Any tab can
 // force-open (via `useLiveRound().open()`) or dismiss. Dismissal is scoped
@@ -92,9 +94,16 @@ export default function HomeShell() {
   const { subscribe } = useEvents();
   const isDark = useEffectiveDark(theme);
   const ridersActiveCls = isDark ? "text-status-cant" : "text-black";
-  const [perm, setPerm] = useState(browserPushPermission());
   const [dmOpen, setDmOpen] = useState(false);
   const [dmUnread, setDmUnread] = useState(0);
+  const [notifPrefs, setNotifPrefs] = useState(user?.notification_prefs || { mechanical: true, coffee: true, chat: true, dm: true });
+  const [showPrompt, setShowPrompt] = useState(false);
+  useEffect(() => {
+    if (user && !user.has_seen_notification_prompt) {
+      setShowPrompt(true);
+    }
+    if (user?.notification_prefs) setNotifPrefs(user.notification_prefs);
+  }, [user]);
   const swipeRef = React.useRef({ x: 0, y: 0, active: false });
 
   const changeTab = (dir) => {
@@ -116,10 +125,6 @@ export default function HomeShell() {
       changeTab(dx < 0 ? 1 : -1);
     }
   };
-
-  useEffect(() => {
-    setPerm(browserPushPermission());
-  }, []);
 
   // Hydrate DM unread badge on login and keep it live via WS. `dm.message`
   // arriving for me from anyone → bump. `dm.read` → recompute from source.
@@ -143,92 +148,14 @@ export default function HomeShell() {
     return () => { cancelled = true; unsub && unsub(); };
   }, [user, subscribe]);
 
-  async function togglePush() {
-    if (!browserPushSupported()) {
-      toast.error("Your browser doesn't support notifications");
-      return;
-    }
-    if (perm === "granted") {
-      toast("Notifications are on — silence them from your browser settings");
-      return;
-    }
-    const next = await requestBrowserPush();
-    setPerm(next);
-    if (next === "granted") {
-      localStorage.setItem("glcc_push_banner_dismissed", "1");
-      toast("Push notifications enabled", { description: "Coffee rounds and @mentions will ping you" });
-    } else if (next === "denied") {
-      localStorage.setItem("glcc_push_banner_dismissed", "1");
-      toast.error("Notifications blocked — enable them in browser settings");
-    }
-  }
-
-  const bellEnabled = perm === "granted";
-  const BellIcon = bellEnabled ? Bell : BellOff;
-
   return (
     <div className="relative h-full w-full flex flex-col" data-testid="home-shell">
-      {/* Header */}
-      <div className="pt-9 pb-3 px-5 flex items-center justify-between border-b border-border-subtle bg-bg-primary/80 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent-pink" />
-          <span className="font-heading text-xl font-black uppercase tracking-wider">GLCC.</span>
-          {user?.is_admin && (
-            <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-widest font-bold border ${user.is_president ? "bg-accent-pink/15 text-accent-pink border-accent-pink/40" : "bg-accent-volt/15 text-brand-accent border-accent-volt/30"}`}>
-              {user.is_president ? "El Prez" : "Admin"}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {user?.is_admin && (
-            <button
-              onClick={cycleTheme}
-              title={`Theme: ${theme} — tap to cycle`}
-              className="p-1.5 rounded-full text-text-secondary hover:text-brand-accent border border-transparent hover:border-border-subtle transition"
-              data-testid="theme-toggle"
-              aria-label={`Theme: ${theme}`}
-            >
-              {theme === "light" ? <Sun className="w-4 h-4" /> : theme === "dark" ? <Moon className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
-            </button>
-          )}
-          <button
-            onClick={() => setDmOpen(true)}
-            title="Messages"
-            className="relative p-1.5 rounded-full text-text-secondary hover:text-brand-accent border border-transparent hover:border-border-subtle transition"
-            data-testid="dm-open"
-            aria-label="Open messages"
-          >
-            <Mail className="w-4 h-4" />
-            {dmUnread > 0 && (
-              <span
-                className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent-pink text-white text-[9px] font-black flex items-center justify-center leading-none"
-                data-testid="dm-badge"
-              >
-                {dmUnread > 9 ? "9+" : dmUnread}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={togglePush}
-            title={bellEnabled ? "Notifications on" : "Enable notifications"}
-            className={`p-1.5 rounded-full transition ${
-              bellEnabled
-                ? "text-accent-pink bg-accent-pink/10 border border-accent-pink/30"
-                : "text-text-secondary hover:text-brand-accent border border-transparent"
-            }`}
-            data-testid="notifications-toggle"
-          >
-            <BellIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={logout}
-            className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-text-secondary hover:text-brand-accent"
-            data-testid="logout-button"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Exit
-          </button>
-        </div>
-      </div>
+      <Header
+        onOpenDM={() => setDmOpen(true)}
+        dmUnread={dmUnread}
+        notifPrefs={notifPrefs}
+        onPrefsChange={setNotifPrefs}
+      />
 
       {/* Content */}
       <div
@@ -237,9 +164,6 @@ export default function HomeShell() {
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {/* No AnimatePresence wait: mount the new tab instantly with its
-            own skeleton so we never render the previous tab's content
-            under the new tab-bar highlight. */}
         <PendingBanner />
         <div
           key={tab}
@@ -258,6 +182,11 @@ export default function HomeShell() {
 
       {/* Rider-to-rider DMs */}
       <DMDrawer open={dmOpen} onClose={() => setDmOpen(false)} />
+
+      {/* First-time notification-preferences prompt */}
+      {showPrompt && (
+        <NotificationPrompt onDone={(saved) => { setNotifPrefs(saved); setShowPrompt(false); }} />
+      )}
 
       {/* Tab bar */}
       <div className="border-t border-border-subtle bg-bg-secondary/95 backdrop-blur-xl px-2 pt-2 pb-6">

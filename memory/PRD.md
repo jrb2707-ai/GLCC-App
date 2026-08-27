@@ -97,6 +97,23 @@ Apple App Store 1.2 compliance (block/report/moderate).
 - **2026-02-27 — EL PREZ badge pink**: header badge now
   `bg-accent-pink/15 text-accent-pink border-accent-pink/40` for
   president; regular admin keeps volt yellow.
+- **2026-02-27 — Header Overhaul (Field Notes № 03)**: replaced GLCC
+  wordmark + inline bell/theme controls with the mockup's cleaner
+  cog+bell+mail+Exit row. Cog opens a **Settings popover** (four
+  notification toggles + Auto/Dark/Light theme segment). Bell opens a
+  **Notifications feed popover** (recent mechanicals, coffee shouts,
+  @mentions of me — chronological, pink dot per-item for unread).
+  All popovers use the pink 1px border/accent language from the mock.
+  New components: `/app/frontend/src/components/Header.jsx`.
+- **2026-02-27 — Notification Preferences Model**: added
+  `user.notification_prefs = {mechanical,coffee,chat,dm}` (all ON by
+  default) + `has_seen_notification_prompt` flag. New endpoints:
+  `PUT /api/users/me/notification-prefs`, `GET /api/notifications`,
+  `POST /api/notifications/read`. Every push call-site now passes
+  `category=` so muted riders are filtered out at dispatch time
+  (`_filter_users_by_pref`). First-time riders see a full-screen
+  "Stay in the Loop" prompt (`NotificationPrompt.jsx`) before they
+  land in the app.
 
 ## Backlog / Roadmap
 - **P0 — Private DMs (Rider → Rider)**: conversations + dm_messages
