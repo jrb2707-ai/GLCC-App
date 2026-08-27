@@ -38,6 +38,12 @@ Apple App Store 1.2 compliance (block/report/moderate).
 - 2026-02-23 — Automated App Store screenshot pipeline (35 screens)
 - 2026-02-22 — Mechanical live map (Leaflet)
 - 2026-02-22 — Two-step delete confirmation on rider profile
+- **2026-02-27 — Ride page "I'm buying" reroutes to live tally**: When a
+  coffee round is already live on any ride, tapping the CTA on any ride
+  detail page now shows "Round in progress · [buyer]" with an "Add my
+  coffee" button that opens the global Barista Tally overlay instead of
+  starting a competing shout. Uses `useLiveRound()` context, so Rides tab
+  and Coffee tab share the same funnel. Ported to Web + Mobile.
 
 ## Backlog / Roadmap
 - **P0 — Private DMs (Rider → Rider)**: conversations + dm_messages

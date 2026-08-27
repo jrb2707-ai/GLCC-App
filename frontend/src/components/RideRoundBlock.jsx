@@ -109,7 +109,7 @@ function OrderList({ round, compact = false }) {
 export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, onOpenOther }) {
   const { user } = useAuth();
   const { subscribe } = useEvents();
-  const { open: openLiveRound } = useLiveRound();
+  const { open: openLiveRound, round: globalLiveRound } = useLiveRound();
   const [round, setRound] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -235,26 +235,28 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
     const showStart = !round || countdown.expired;
     if (!showStart) return null;
     const cafeName = ride.cafe || initialCafe;
-    // If another rider has already shouted, funnel this rider into that
-    // round instead of starting a competing one.
-    if (otherActiveRound && onOpenOther) {
+    // A live round already running on another ride (or passed in from the
+    // Coffee tab) → funnel this rider into that round instead of starting
+    // a competing one. Tapping "Add my coffee" opens the global tally.
+    const alternate = otherActiveRound || (globalLiveRound && globalLiveRound.ride_id !== ride.id && !globalLiveRound.closed ? globalLiveRound : null);
+    if (alternate) {
       return (
         <div className="mt-6 pt-4 border-t border-border-subtle" data-testid="ride-round-block">
           <div className="flex items-center gap-2 text-accent-pink mb-2">
             <Coffee className="w-3.5 h-3.5" />
             <span className="text-[10px] uppercase tracking-widest font-mono-stat font-bold">
-              Round in progress · {otherActiveRound.buyer_name}
+              Round in progress · {alternate.buyer_name}
             </span>
           </div>
           <button
-            onClick={() => onOpenOther(otherActiveRound)}
+            onClick={() => (onOpenOther ? onOpenOther(alternate) : openLiveRound(alternate))}
             className="w-full bg-accent-pink text-white font-black uppercase tracking-[0.18em] text-sm py-4 rounded-xl active:scale-[0.98] shadow-pink flex items-center justify-center gap-2"
             data-testid="round-add-my-coffee"
           >
             <Coffee className="w-4 h-4" /> Add my coffee
           </button>
           <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest text-center">
-            Opens {otherActiveRound.buyer_name}&apos;s tally · orders close in the same window
+            Opens {alternate.buyer_name}&apos;s tally · orders close in the same window
           </div>
         </div>
       );

@@ -65,7 +65,7 @@ function useCountdown(iso) {
 export default function RideRoundBlock({ ride }) {
   const { user } = useAuth();
   const { subscribe } = useEvents();
-  const { open: openLiveRound } = useLiveRound();
+  const { open: openLiveRound, round: globalLiveRound } = useLiveRound();
   const [round, setRound] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -192,6 +192,20 @@ export default function RideRoundBlock({ ride }) {
   // No round → single-action CTA at the bottom
   if (!round || (closed && !round?.closed_manually_at)) {
     const cafeName = ride.cafe;
+    // If a round is already running on another ride, funnel this rider
+    // straight into that live tally instead of starting a competing shout.
+    const alternate = globalLiveRound && globalLiveRound.ride_id !== ride.id && !globalLiveRound.closed ? globalLiveRound : null;
+    if (alternate) {
+      return (
+        <View style={s.ctaWrap} testID="ride-round-block">
+          <Text style={s.ctaEyebrow}>☕ ROUND IN PROGRESS · {(alternate.buyer_name || "").toUpperCase()}</Text>
+          <TouchableOpacity onPress={() => openLiveRound(alternate)} style={[s.ctaBuy, { flex: undefined }]} testID="round-add-my-coffee">
+            <Text style={s.ctaBuyTxt}>☕ ADD MY COFFEE</Text>
+          </TouchableOpacity>
+          <Text style={s.hint}>OPENS {(alternate.buyer_name || "").toUpperCase()}'S TALLY · SAME 5-MIN WINDOW</Text>
+        </View>
+      );
+    }
     return (
       <View style={s.ctaWrap} testID="ride-round-block">
         <Text style={s.ctaEyebrow}>☕ COFFEE AT {(cafeName || "THE CAFÉ").toUpperCase()}</Text>
