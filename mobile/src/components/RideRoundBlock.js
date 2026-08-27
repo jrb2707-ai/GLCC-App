@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { api, formatDetail } from "../lib/api";
-import { useAuth, useEvents } from "../lib/store";
+import { useAuth, useEvents, useLiveRound } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "./Avatar";
 
@@ -65,6 +65,7 @@ function useCountdown(iso) {
 export default function RideRoundBlock({ ride }) {
   const { user } = useAuth();
   const { subscribe } = useEvents();
+  const { open: openLiveRound } = useLiveRound();
   const [round, setRound] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -129,12 +130,16 @@ export default function RideRoundBlock({ ride }) {
       // their coffee twice. Silent fail if the round POST raced — buyer
       // can still tap the "usual" pill inside the tally splash.
       const usualText = (user?.coffee || "").trim();
+      let latestRound = data;
       if (usualText) {
         try {
           const { data: withOrder } = await api.post(`/rides/${ride.id}/round/order`, { text: usualText });
+          latestRound = withOrder;
           setRound(withOrder);
         } catch (_) { /* soft-fail */ }
       }
+      // Force-open the global barista tally splash for the buyer.
+      try { openLiveRound(latestRound); } catch (_) { /* ignore */ }
     } catch (e) { Alert.alert("Round", formatDetail(e)); }
     finally { setBusy(false); }
   }

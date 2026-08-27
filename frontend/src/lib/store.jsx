@@ -180,7 +180,9 @@ export function AppProviders({ children }) {
   return (
     <ThemeProvider>
       <AuthCtx.Provider value={{ user, booted, login, register, logout, refreshMe, formatDetail }}>
-        <EventsCtx.Provider value={{ subscribe }}>{children}</EventsCtx.Provider>
+        <EventsCtx.Provider value={{ subscribe }}>
+          <LiveRoundProvider>{children}</LiveRoundProvider>
+        </EventsCtx.Provider>
       </AuthCtx.Provider>
     </ThemeProvider>
   );
@@ -217,4 +219,38 @@ export function ThemeProvider({ children }) {
   }, []);
 
   return <ThemeCtx.Provider value={{ theme, setTheme, cycleTheme }}>{children}</ThemeCtx.Provider>;
+}
+
+
+// ---- Live coffee round overlay ----
+// Any tab can force-open the tally splash (used by "I'm Buying" so the buyer
+// jumps straight to the barista card, and by the "View tally" chip on the
+// Coffee tab so a rider who dismissed can bring it back).
+const LiveRoundCtx = createContext(null);
+export const useLiveRound = () => useContext(LiveRoundCtx);
+
+export function LiveRoundProvider({ children }) {
+  const [round, setRound] = useState(null);
+  const [dismissedIds, setDismissedIds] = useState(() => new Set());
+  const open = useCallback((r) => {
+    if (!r) return;
+    setRound(r);
+    setDismissedIds((prev) => {
+      if (!prev.has(r.id)) return prev;
+      const next = new Set(prev); next.delete(r.id); return next;
+    });
+  }, []);
+  const dismiss = useCallback(() => {
+    setDismissedIds((prev) => {
+      if (!round) return prev;
+      const next = new Set(prev); next.add(round.id); return next;
+    });
+  }, [round]);
+  const hasHidden = round && dismissedIds.has(round.id);
+  const isVisible = !!round && !dismissedIds.has(round.id);
+  return (
+    <LiveRoundCtx.Provider value={{ round, setRound, open, dismiss, isVisible, hasHidden }}>
+      {children}
+    </LiveRoundCtx.Provider>
+  );
 }

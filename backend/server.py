@@ -2906,11 +2906,15 @@ async def seed():
         {"email": "sam@glcc.club", "password": "cycle123", "name": "Sam Whittaker", "role": "Sweep", "coffee": "Oat Flat White", "is_admin": False},
         {"email": "mika@glcc.club", "password": "cycle123", "name": "Mika Tanaka", "role": "Member", "coffee": "Small Cappuccino", "is_admin": False},
         {"email": "leo@glcc.club", "password": "cycle123", "name": "Leo Fifita", "role": "Member", "coffee": "Long Black", "is_admin": False},
-        # App Store reviewer accounts — Apple requires a working demo login.
-        # Both are always re-seeded so they survive DB wipes / rotations.
-        {"email": "apple-review@glcc.club", "password": "GreyLynn2026!", "name": "Apple Review",       "role": "Member", "coffee": "Medium Flat White", "is_admin": False, "bio": "App Store demo account — regular member. Chat, RSVP rides, view riders, order coffee. Use the report button on any chat message to demo Apple 1.2 moderation."},
-        {"email": "apple-review-admin@glcc.club", "password": "GreyLynn2026!", "name": "Apple Review (Admin)", "role": "Ride Captain", "coffee": "Medium Flat White", "is_admin": True,  "bio": "App Store demo account — admin. Announce, moderate, delete riders. Same password as the member account."},
+        # App Store reviewer — single account with admin powers so the whole
+        # rider + moderator surface is demoable from one login.
+        {"email": "reviewer@greylynncc.com", "password": "ReviewerGLCC", "name": "GLCC Reviewer", "role": "Ride Captain", "coffee": "Medium Flat White", "is_admin": True, "bio": "App Store demo account. Admin powers: announce, moderate chat, delete riders, plus every regular-rider flow (RSVP, coffee rounds, mechanical alerts, reports, blocks)."},
     ]
+
+    # Migrate away from the legacy paired reviewer accounts (member + admin)
+    # if they still exist from a prior deploy. Keep the new consolidated one.
+    for legacy in ("apple-review@glcc.club", "apple-review-admin@glcc.club"):
+        await db.users.delete_one({"email": legacy})
     for m in demo_members:
         existing = await db.users.find_one({"email": m["email"]})
         base_doc = {

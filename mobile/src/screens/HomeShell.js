@@ -1,14 +1,78 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, ImageBackground } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { colors } from "../constants/theme";
-import { useAuth } from "../lib/store";
+import { colors, radius } from "../constants/theme";
+import { useAuth, useEvents, useLiveRound } from "../lib/store";
+import { api } from "../lib/api";
 import RidesTab from "../tabs/RidesTab";
-import CoffeeTab from "../tabs/CoffeeTab";
+import CoffeeTab, { RoundDetailBody } from "../tabs/CoffeeTab";
 import RidersTab from "../tabs/RidersTab";
 import ChatTab from "../tabs/ChatTab";
+
+function LiveRoundOverlay() {
+  const { user } = useAuth();
+  const { subscribe } = useEvents();
+  const { round, setRound, open, dismiss, isVisible } = useLiveRound();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/coffee/rounds/active");
+        const first = (data.rounds || [])[0];
+        if (!cancelled && first) open(first);
+      } catch (_) { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  useEffect(() => subscribe((evt) => {
+    if (!evt.round) return;
+    if (evt.type === "coffee.round.started") open(evt.round);
+    if (evt.type === "coffee.round.updated") {
+      setRound((cur) => (cur && cur.id === evt.round.id ? evt.round : cur));
+    }
+    if (evt.type === "coffee.round.closed") {
+      setRound((cur) => (cur && cur.id === evt.round.id ? null : cur));
+    }
+  }), [subscribe, open, setRound]);
+
+  return (
+    <Modal visible={!!isVisible && !!round} transparent animationType="slide" onRequestClose={dismiss}>
+      <View style={overlayStyles.bg}>
+        <View style={overlayStyles.card}>
+          <ImageBackground
+            source={{ uri: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=60" }}
+            style={{ flex: 1 }}
+            resizeMode="cover"
+          >
+            <ScrollView style={overlayStyles.overlay} contentContainerStyle={{ paddingBottom: 40 }}>
+              <View style={overlayStyles.handle} />
+              {round && (
+                <RoundDetailBody
+                  round={round}
+                  onChange={setRound}
+                  onClose={dismiss}
+                  usual={user?.coffee}
+                  subscribe={subscribe}
+                />
+              )}
+            </ScrollView>
+          </ImageBackground>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const overlayStyles = StyleSheet.create({
+  bg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  card: { height: "92%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#1a1210" },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 20 },
+  handle: { alignSelf: "center", width: 48, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.4)", marginBottom: 12 },
+});
 
 const Tab = createBottomTabNavigator();
 
@@ -66,6 +130,7 @@ export default function HomeShell() {
           <Tab.Screen name="Chat" component={ChatTab} />
         </Tab.Navigator>
       </NavigationContainer>
+      <LiveRoundOverlay />
     </SafeAreaView>
   );
 }

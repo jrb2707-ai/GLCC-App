@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Bike, Coffee, Users, MessageSquare, LogOut, Bell, BellOff, Sun, Moon, Monitor } from "lucide-react";
-import { useAuth, useTheme, useEvents, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { useAuth, useTheme, useEvents, useLiveRound, browserPushSupported, browserPushPermission, requestBrowserPush } from "../lib/store";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 import RidesTab from "./tabs/RidesTab";
@@ -9,14 +9,13 @@ import RidersTab from "./tabs/RidersTab";
 import ChatTab from "./tabs/ChatTab";
 import PendingBanner from "./PendingBanner";
 
-// Global overlay: whenever a round is live and the user hasn't explicitly
-// dismissed THIS round yet, we render the barista tally splash over any tab.
-// Dismissal is per round.id and clears when a new round starts.
+// Global overlay: mirrors the shared LiveRoundContext state. Any tab can
+// force-open (via `useLiveRound().open()`) or dismiss. Dismissal is scoped
+// to the round.id so a fresh shout resurfaces the splash.
 function LiveRoundOverlay() {
   const { user } = useAuth();
   const { subscribe } = useEvents();
-  const [round, setRound] = useState(null);
-  const [dismissedIds, setDismissedIds] = useState(() => new Set());
+  const { round, setRound, open, dismiss, isVisible } = useLiveRound();
 
   useEffect(() => {
     let cancelled = false;
@@ -24,18 +23,17 @@ function LiveRoundOverlay() {
       try {
         const { data } = await api.get("/coffee/rounds/active");
         const first = (data.rounds || [])[0];
-        if (!cancelled && first) setRound(first);
+        if (!cancelled && first) open(first);
       } catch (_) { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [open]);
 
   useEffect(() => subscribe((evt) => {
     if (!evt.round) return;
     if (evt.type === "coffee.round.started") {
-      // Fresh round → clear dismissal for it (though it shouldn't be present).
-      setDismissedIds((prev) => { const next = new Set(prev); next.delete(evt.round.id); return next; });
-      setRound(evt.round);
+      // New round → force open (clears any prior dismissal for a new id).
+      open(evt.round);
     }
     if (evt.type === "coffee.round.updated") {
       setRound((cur) => (cur && cur.id === evt.round.id ? evt.round : cur));
@@ -43,15 +41,15 @@ function LiveRoundOverlay() {
     if (evt.type === "coffee.round.closed") {
       setRound((cur) => (cur && cur.id === evt.round.id ? null : cur));
     }
-  }), [subscribe]);
+  }), [subscribe, open, setRound]);
 
-  if (!round || dismissedIds.has(round.id)) return null;
+  if (!isVisible || !round) return null;
   return (
     <RoundDetailModal
       round={round}
       usual={user?.coffee}
       onChange={(next) => setRound(next)}
-      onClose={() => setDismissedIds((prev) => new Set(prev).add(round.id))}
+      onClose={dismiss}
     />
   );
 }

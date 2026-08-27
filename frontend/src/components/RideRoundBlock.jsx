@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Coffee, Clock, Send, X, Check, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatDetail } from "../lib/api";
-import { useAuth, useEvents } from "../lib/store";
+import { useAuth, useEvents, useLiveRound } from "../lib/store";
 import Avatar from "./Avatar";
 
 function normalizeOrder(text) {
@@ -109,6 +109,7 @@ function OrderList({ round, compact = false }) {
 export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, onOpenOther }) {
   const { user } = useAuth();
   const { subscribe } = useEvents();
+  const { open: openLiveRound } = useLiveRound();
   const [round, setRound] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -174,12 +175,17 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
       // ordering). If they don't have a usual yet the tally opens empty
       // and they can type it in.
       const usualText = (user?.coffee || "").trim();
+      let latestRound = data;
       if (usualText) {
         try {
           const { data: withOrder } = await api.post(`/rides/${ride.id}/round/order`, { text: usualText });
+          latestRound = withOrder;
           setRound(withOrder);
         } catch (_) { /* soft-fail: round is up, user can tap usual manually */ }
       }
+      // Force-open the global barista tally splash so the buyer lands on
+      // the tally instead of just seeing the inline block.
+      try { openLiveRound(latestRound); } catch (_) { /* ignore */ }
       toast("Round on ☕", { description: `${cafeName} — 5 min to order.` });
     } catch (e) { toast.error(formatDetail(e)); }
     finally { setBusy(false); }

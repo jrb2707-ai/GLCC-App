@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { api, formatDetail } from "../lib/api";
-import { useAuth, useEvents } from "../lib/store";
+import { useAuth, useEvents, useLiveRound } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import RideRoundBlock from "../components/RideRoundBlock";
@@ -95,6 +95,7 @@ function RoundRow({ round, onPress }) {
 export default function CoffeeTab() {
   const { user, refreshMe } = useAuth();
   const { subscribe } = useEvents();
+  const { open: openLiveRound, hasHidden, round: liveRound } = useLiveRound();
   const [active, setActive] = useState([]);
   const [history, setHistory] = useState([]);
   const [nextRide, setNextRide] = useState(null);
@@ -178,6 +179,24 @@ export default function CoffeeTab() {
           <Text style={s.meta}>{active.length} LIVE · {history.length} PAST</Text>
         </View>
       )}
+
+      {/* Re-open chip — appears whenever a live round exists but has been
+          dismissed. One tap re-opens the barista tally splash. */}
+      {hasHidden && liveRound ? (
+        <TouchableOpacity
+          onPress={() => openLiveRound(liveRound)}
+          style={s.reopenChip}
+          testID="reopen-live-tally"
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={s.reopenChipEye}>☕ LIVE ROUND · {(liveRound.buyer_name || "").toUpperCase()}</Text>
+            <Text style={s.reopenChipSub} numberOfLines={1}>
+              {liveRound.orders.length} ORDER{liveRound.orders.length === 1 ? "" : "S"} · {(liveRound.cafe_name || "").toUpperCase()}
+            </Text>
+          </View>
+          <Text style={s.reopenChipCta}>OPEN TALLY →</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Hoist live rounds to the very top when present — nobody should
           have to scroll past the CTA to see who's shouting right now.
@@ -332,10 +351,14 @@ const s = StyleSheet.create({
   noUpcomingEyebrow: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "900", marginBottom: 10 },
   noUpcomingBtn: { flex: 1, backgroundColor: colors.bgSecondary, borderColor: colors.borderSubtle, borderWidth: 1, borderRadius: radius.md, paddingVertical: 14, alignItems: "center", opacity: 0.55 },
   noUpcomingBtnTxt: { color: colors.textMuted, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
+  reopenChip: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(201,152,106,0.20)", borderColor: "rgba(201,152,106,0.60)", borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  reopenChipEye: { color: colors.accentCoffee, fontSize: 10, letterSpacing: 2, fontWeight: "900" },
+  reopenChipSub: { color: colors.textPrimary, fontSize: 12, marginTop: 2 },
+  reopenChipCta: { color: colors.accentPink, fontSize: 10, letterSpacing: 2, fontWeight: "900" },
   noUpcomingHint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", textAlign: "center", marginTop: 8 },
 });
 
-function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
+export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
   const { user } = useAuth();
   const [orderText, setOrderText] = useState("");
   const [busy, setBusy] = useState(false);

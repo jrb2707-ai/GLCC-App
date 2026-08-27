@@ -246,3 +246,41 @@ export function useTheme() {
   if (!ctx) throw new Error("useTheme must be inside <ThemeProvider>");
   return ctx;
 }
+
+
+// ---- Live coffee round overlay ----
+// Cross-tab/screen barista tally splash. Any screen can force-open, and
+// dismissal is scoped to round.id so a fresh shout resurfaces the splash.
+const LiveRoundContext = createContext(null);
+
+export function LiveRoundProvider({ children }) {
+  const [round, setRound] = useState(null);
+  const [dismissedIds, setDismissedIds] = useState(() => new Set());
+  const open = useCallback((r) => {
+    if (!r) return;
+    setRound(r);
+    setDismissedIds((prev) => {
+      if (!prev.has(r.id)) return prev;
+      const next = new Set(prev); next.delete(r.id); return next;
+    });
+  }, []);
+  const dismiss = useCallback(() => {
+    setDismissedIds((prev) => {
+      if (!round) return prev;
+      const next = new Set(prev); next.add(round.id); return next;
+    });
+  }, [round]);
+  const isVisible = !!round && !dismissedIds.has(round.id);
+  const hasHidden = !!round && dismissedIds.has(round.id);
+  const value = useMemo(
+    () => ({ round, setRound, open, dismiss, isVisible, hasHidden }),
+    [round, open, dismiss, isVisible, hasHidden],
+  );
+  return <LiveRoundContext.Provider value={value}>{children}</LiveRoundContext.Provider>;
+}
+
+export function useLiveRound() {
+  const ctx = useContext(LiveRoundContext);
+  if (!ctx) throw new Error("useLiveRound must be inside <LiveRoundProvider>");
+  return ctx;
+}

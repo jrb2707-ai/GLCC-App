@@ -20,10 +20,9 @@ Backend seeded these accounts on startup. All passwords are for development only
 - `leo@glcc.club` / `cycle123` — Member
 
 ## App Store Reviewer (Apple)
-Both accounts are re-seeded on every backend startup so credentials are always live.
+Single reviewer account with admin powers — the whole rider + moderator surface is demoable from one login. Re-seeded on every backend startup.
 
-- **Regular member**: `apple-review@glcc.club` / `GreyLynn2026!` — approved, is_admin=false. Use this to demo the day-to-day rider experience + Apple 1.2 report/block flows.
-- **Admin**: `apple-review-admin@glcc.club` / `GreyLynn2026!` — approved, is_admin=true, Ride Captain. Use this to demo announce/moderate/delete flows.
+- **Reviewer** (admin, Ride Captain): `reviewer@greylynncc.com` / `ReviewerGLCC` — approved, is_admin=true. Use for the full demo: chat, RSVP rides, view riders, order coffee, plus admin flows (announce, moderate, delete riders, Apple 1.2 report/block).
 
 ## Auth Endpoints
 - `POST /api/auth/register` — new rider signup (starts in `pending` status)
