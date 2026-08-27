@@ -2852,21 +2852,42 @@ async def seed():
     await db.chat_reports.create_index("created_at")
     await db.password_reset_requests.create_index("email")
 
-    admin_email = os.environ.get("ADMIN_EMAIL", "jb@greylynncc.com").lower()
+    admin_email = os.environ.get("ADMIN_EMAIL", "bryantj@xtra.co.nz").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Roenick2707")
     admin_name = os.environ.get("ADMIN_NAME", "Jason Bryant")
 
-    # One-time migration: rename the legacy admin email so JB's history
-    # (rides, coffee rounds, chat) carries over onto the new email.
-    legacy_admin_email = "jb@glcc.club"
-    if admin_email != legacy_admin_email:
+    # One-time migration: rename previous El Prez emails onto the current
+    # master email so JB's history (rides, coffee rounds, chat) carries over.
+    for legacy_admin_email in ("jb@glcc.club", "jb@greylynncc.com"):
+        if admin_email == legacy_admin_email:
+            continue
         legacy = await db.users.find_one({"email": legacy_admin_email})
         target = await db.users.find_one({"email": admin_email})
         if legacy and not target:
             await db.users.update_one({"_id": legacy["_id"]}, {"$set": {"email": admin_email}})
         elif legacy and target:
-            # Both exist — delete the legacy row, keep the new one.
-            await db.users.delete_one({"_id": legacy["_id"]})
+            # Both exist — keep the row with real activity (usually the
+            # legacy El Prez), drop the empty duplicate, then rename.
+            async def _activity(uid_str, oid):
+                total = 0
+                for coll, key in (
+                    ("coffee_rounds", "buyer_user_id"),
+                    ("chat_messages", "user_id"),
+                    ("ride_rsvps", "user_id"),
+                    ("strava_activities", "user_id"),
+                ):
+                    try:
+                        total += await db[coll].count_documents({key: uid_str})
+                    except Exception:
+                        pass
+                return total
+            legacy_activity = await _activity(str(legacy["_id"]), legacy["_id"])
+            target_activity = await _activity(str(target["_id"]), target["_id"])
+            if legacy_activity >= target_activity:
+                await db.users.delete_one({"_id": target["_id"]})
+                await db.users.update_one({"_id": legacy["_id"]}, {"$set": {"email": admin_email}})
+            else:
+                await db.users.delete_one({"_id": legacy["_id"]})
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({

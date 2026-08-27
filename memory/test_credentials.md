@@ -3,10 +3,10 @@
 Backend seeded these accounts on startup. All passwords are for development only.
 
 ## Admin (President — Jason Bryant)
-- Email: `jb@greylynncc.com`  (was `jb@glcc.club` prior to 2026-08-26 migration)
+- Email: `bryantj@xtra.co.nz`  (migrated 2026-02-27 from `jb@greylynncc.com`, previously `jb@glcc.club`)
 - Password: `Roenick2707`
 - Name: Jason Bryant
-- Role: El Presidente (is_admin=true, is_president=true)
+- Role: El Presidente (is_admin=true, is_president=true, member_no=1)
 - Special powers: can make/remove admins, delete riders, send password reset links.
 
 ## Ride Captain (Admin)

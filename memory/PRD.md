@@ -44,6 +44,11 @@ Apple App Store 1.2 compliance (block/report/moderate).
   coffee" button that opens the global Barista Tally overlay instead of
   starting a competing shout. Uses `useLiveRound()` context, so Rides tab
   and Coffee tab share the same funnel. Ported to Web + Mobile.
+- **2026-02-27 — El Prez email migrated to `bryantj@xtra.co.nz`**: Master
+  admin credentials moved to `bryantj@xtra.co.nz` / `Roenick2707`. Seeder
+  auto-migrates the legacy `jb@greylynncc.com` (and older `jb@glcc.club`)
+  row onto the new email, preserving El Prez's rides / coffee / chat
+  history and `member_no=1`. `.env` `ADMIN_EMAIL` updated to match.
 
 ## Backlog / Roadmap
 - **P0 — Private DMs (Rider → Rider)**: conversations + dm_messages
