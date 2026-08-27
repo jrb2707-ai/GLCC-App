@@ -117,9 +117,20 @@ function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
   const { theme, cycleTheme, setTheme } = useTheme();
   const ref = useRef(null);
   useEffect(() => {
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    // Ignore taps on the cog button itself — its onClick already toggles
+    // the popover, so treating this click as "outside" would close-then-
+    // reopen and cog-tap would appear to do nothing.
+    const onDown = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('[data-testid="header-cog"]')) return;
+      onClose();
+    };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
   }, [onClose]);
 
   const toggle = async (key) => {
@@ -196,9 +207,19 @@ function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
 function NotificationsPopover({ items, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    // Same story as the settings popover — tapping the bell should close
+    // via its own onClick, not via the outside-click listener.
+    const onDown = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('[data-testid="header-bell"]')) return;
+      onClose();
+    };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
   }, [onClose]);
 
   const iconFor = (kind) => {
