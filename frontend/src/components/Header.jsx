@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Settings, Bell, Mail, LogOut, Wrench, Coffee, MessageCircle } from "lucide-react";
-import { useAuth, useTheme, useEvents, browserPushPermission, requestBrowserPush } from "../lib/store";
+import { Settings, Bell, Mail, Wrench, Coffee, MessageCircle, Users, Trash2 } from "lucide-react";
+import { useAuth, useTheme, useEvents, useLiveRound, browserPushPermission, requestBrowserPush } from "../lib/store";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 
@@ -9,8 +9,9 @@ import { toast } from "sonner";
 // Right: mail (DMs), bell (notification feed), Exit.
 // Both popovers use the same pink 1px border language established in the
 // Coffee tab.
-export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange }) {
+export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, onNavigate }) {
   const { user, logout } = useAuth();
+  const { open: openLiveRound } = useLiveRound();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [feed, setFeed] = useState({ items: [], unread: 0 });
@@ -43,6 +44,35 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange }
     if (!bellOpen) {
       try { await api.post("/notifications/read"); } catch (_) { /* ignore */ }
       setFeed((f) => ({ ...f, unread: 0 }));
+    }
+  }
+
+  async function clearFeed() {
+    try {
+      await api.post("/notifications/clear");
+      setFeed({ items: [], unread: 0 });
+    } catch (_) { toast.error("Couldn't clear notifications"); }
+  }
+
+  // Route to the corresponding tab (and force-open the live coffee splash
+  // when it's a coffee ping so the rider lands right on the tally).
+  async function onFeedItemTap(item) {
+    setBellOpen(false);
+    if (item.kind === "coffee") {
+      onNavigate?.("coffee");
+      try {
+        const { data } = await api.get("/coffee/rounds/active");
+        const first = (data.rounds || [])[0];
+        if (first) openLiveRound(first);
+      } catch (_) { /* ignore */ }
+      return;
+    }
+    if (item.kind === "mechanical" || item.kind === "mention") {
+      onNavigate?.("chat");
+      return;
+    }
+    if (item.kind === "rider") {
+      onNavigate?.("riders");
     }
   }
 
@@ -107,7 +137,12 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange }
         />
       )}
       {bellOpen && (
-        <NotificationsPopover items={feed.items} onClose={() => setBellOpen(false)} />
+        <NotificationsPopover
+          items={feed.items}
+          onClose={() => setBellOpen(false)}
+          onTap={onFeedItemTap}
+          onClear={clearFeed}
+        />
       )}
     </div>
   );
@@ -204,7 +239,7 @@ function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
   );
 }
 
-function NotificationsPopover({ items, onClose }) {
+function NotificationsPopover({ items, onClose, onTap, onClear }) {
   const ref = useRef(null);
   useEffect(() => {
     // Same story as the settings popover — tapping the bell should close
@@ -225,6 +260,7 @@ function NotificationsPopover({ items, onClose }) {
   const iconFor = (kind) => {
     if (kind === "mechanical") return { icon: Wrench, cls: "bg-status-cant/15 text-status-cant" };
     if (kind === "coffee") return { icon: Coffee, cls: "bg-accent-pink/15 text-accent-pink" };
+    if (kind === "rider") return { icon: Users, cls: "bg-brand-accent/15 text-brand-accent" };
     return { icon: MessageCircle, cls: "bg-[#007AFF]/15 text-[#007AFF]" };
   };
 
@@ -235,7 +271,19 @@ function NotificationsPopover({ items, onClose }) {
       data-testid="notifications-popover"
     >
       <div className="absolute -top-1.5 right-4 w-3 h-3 bg-bg-secondary border-l border-t border-accent-pink rotate-45" />
-      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink mb-1 px-2 py-1">Notifications</div>
+      <div className="flex items-center justify-between px-2 py-1">
+        <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink">Notifications</div>
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="flex items-center gap-1 text-[9px] font-mono-stat uppercase tracking-widest text-text-muted hover:text-status-cant"
+            data-testid="notif-clear"
+          >
+            <Trash2 className="w-3 h-3" /> Clear
+          </button>
+        )}
+      </div>
       <div className="max-h-[360px] overflow-y-auto no-scrollbar">
         {items.length === 0 && (
           <div className="px-3 py-6 text-center text-[11px] text-text-muted font-mono-stat uppercase tracking-widest">All quiet</div>
@@ -243,7 +291,13 @@ function NotificationsPopover({ items, onClose }) {
         {items.map((it) => {
           const { icon: Icon, cls } = iconFor(it.kind);
           return (
-            <div key={it.id} className="relative flex gap-2.5 px-2 py-2 border-b border-border-subtle last:border-b-0">
+            <button
+              type="button"
+              key={it.id}
+              onClick={() => onTap && onTap(it)}
+              className="relative w-full flex gap-2.5 px-2 py-2 border-b border-border-subtle last:border-b-0 text-left hover:bg-bg-primary/60 transition"
+              data-testid={`notif-item-${it.kind}`}
+            >
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${cls}`}>
                 <Icon className="w-3.5 h-3.5" />
               </div>
@@ -254,7 +308,7 @@ function NotificationsPopover({ items, onClose }) {
                 <div className="text-[10px] text-text-muted font-mono-stat mt-0.5">{fmtRelative(it.created_at)}</div>
               </div>
               {it.unread && <div className="absolute right-2 top-3 w-1.5 h-1.5 rounded-full bg-accent-pink" />}
-            </div>
+            </button>
           );
         })}
       </div>

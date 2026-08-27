@@ -11,6 +11,7 @@ import PendingBanner from "./PendingBanner";
 import DMDrawer from "./DMDrawer";
 import Header from "./Header";
 import NotificationPrompt from "./NotificationPrompt";
+import Watermarks from "./Watermarks";
 
 // Global overlay: mirrors the shared LiveRoundContext state. Any tab can
 // force-open (via `useLiveRound().open()`) or dismiss. Dismissal is scoped
@@ -155,19 +156,21 @@ export default function HomeShell() {
         dmUnread={dmUnread}
         notifPrefs={notifPrefs}
         onPrefsChange={setNotifPrefs}
+        onNavigate={setTab}
       />
 
       {/* Content */}
       <div
-        className="flex-1 overflow-y-auto no-scrollbar"
+        className="flex-1 overflow-y-auto no-scrollbar relative"
         data-testid="tab-content"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
+        <Watermarks tab={tab} />
         <PendingBanner />
         <div
           key={tab}
-          className={tab === "chat" ? "h-full" : "min-h-full"}
+          className={`relative z-[1] ${tab === "chat" ? "h-full" : "min-h-full"}`}
         >
           {tab === "rides" && <RidesTab onNavigate={setTab} />}
           {tab === "coffee" && <CoffeeTab onNavigate={setTab} />}

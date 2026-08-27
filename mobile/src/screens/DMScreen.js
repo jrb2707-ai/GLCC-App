@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal, View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Alert, PanResponder,
 } from "react-native";
+import { GestureHandlerRootView, Swipeable, RectButton } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
 import { colors, radius } from "../constants/theme";
 import Avatar from "../components/Avatar";
+import { TrashIcon } from "../components/Icons";
 
 // Full-screen DM modal — the "overlay drawer" reachable from the mail
 // icon in the header. Three internal views: inbox / rider-picker / thread.
@@ -36,10 +38,20 @@ export default function DMScreen({ visible, onClose }) {
 
   function openThread(p) { setPeer(p); setView("thread"); }
 
+  // Swipe-down anywhere on the DM chrome dismisses the screen — matches
+  // the modal-sheet convention on iOS. Guarded by pixel + angle thresholds
+  // so vertical scrolling inside a thread doesn't accidentally fire it.
+  const dismissPan = PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 14 && Math.abs(g.dy) > Math.abs(g.dx) * 1.6,
+    onPanResponderRelease: (_, g) => { if (g.dy > 90 && Math.abs(g.dy) > Math.abs(g.dx) * 1.6) onClose(); },
+  });
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
-        <View style={s.header}>
+        <View style={s.header} {...dismissPan.panHandlers}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {view !== "list" ? (
               <TouchableOpacity onPress={() => setView("list")} testID="dm-back">
@@ -60,6 +72,7 @@ export default function DMScreen({ visible, onClose }) {
         {view === "pick" && <PickRider onPick={openThread} />}
         {view === "thread" && peer && <Thread peer={peer} onMutate={refresh} />}
       </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -200,6 +213,10 @@ function Thread({ peer, onMutate }) {
   }, [peer.id]);
 
   useEffect(() => subscribe((evt) => {
+    if (evt.type === "dm.deleted") {
+      setMessages((cur) => cur.filter((m) => m.id !== evt.message_id));
+      return;
+    }
     if (evt.type !== "dm.message") return;
     const msg = evt.message;
     if (!msg) return;
@@ -231,6 +248,18 @@ function Thread({ peer, onMutate }) {
     finally { setBusy(false); }
   }
 
+  async function removeMessage(msg) {
+    const prev = messages;
+    setMessages((cur) => cur.filter((m) => m.id !== msg.id));
+    try {
+      await api.delete(`/dm/messages/${msg.id}`);
+      onMutate?.();
+    } catch (e) {
+      setMessages(prev);
+      Alert.alert("DM", formatDetail(e));
+    }
+  }
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
       {loading ? (
@@ -244,13 +273,34 @@ function Thread({ peer, onMutate }) {
           ListEmptyComponent={() => <Text style={s.empty}>SAY HI 👋</Text>}
           renderItem={({ item }) => {
             const mine = item.sender_id === user?.id;
-            return (
+            const bubble = (
               <View style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }} testID={`dm-msg-${item.id}`}>
                 <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
                   <Text style={mine ? s.bubbleMineTxt : s.bubbleTheirsTxt}>{item.text}</Text>
                   <Text style={[s.bubbleTs, mine ? { color: "rgba(255,255,255,0.75)" } : { color: colors.textMuted }]}>{formatTs(item.created_at)}</Text>
                 </View>
               </View>
+            );
+            if (!mine) return bubble;
+            const renderRightActions = () => (
+              <RectButton
+                style={s.swipeDeleteBtn}
+                onPress={() => removeMessage(item)}
+                testID={`dm-msg-${item.id}-delete`}
+              >
+                <TrashIcon color="#fff" size={18} />
+                <Text style={s.swipeDeleteTxt}>DELETE</Text>
+              </RectButton>
+            );
+            return (
+              <Swipeable
+                renderRightActions={renderRightActions}
+                friction={2}
+                rightThreshold={40}
+                overshootRight={false}
+              >
+                {bubble}
+              </Swipeable>
             );
           }}
         />

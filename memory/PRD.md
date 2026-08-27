@@ -114,15 +114,43 @@ Apple App Store 1.2 compliance (block/report/moderate).
   (`_filter_users_by_pref`). First-time riders see a full-screen
   "Stay in the Loop" prompt (`NotificationPrompt.jsx`) before they
   land in the app.
+- **2026-02-28 — Mockup Slice 2/3/4 shipped**: Mobile Parity for the new
+  Header (cog / mail / bell / Exit) landed via `/app/mobile/src/components/Header.js`
+  + `Icons.js` (react-native-svg cog/bell/mail glyphs). NotificationPrompt
+  now surfaces on mobile too. **Per-Tab Watermarks** rendered on all 4 tabs
+  on both web + mobile: Coffee (real cup photo), Rides (GLCC poster art —
+  both extracted verbatim base64 from mockup), Riders ("1021" dossard SVG),
+  Chat (rotated GLCC wordmark). New helpers: `Watermarks.jsx` (web) /
+  `Watermarks.js` (mobile), `assets/watermarks.js` (shared 54KB base64
+  bundle). **Rides Card Redesign**: pace chip (Social/Tempo/Race —
+  inferred client-side by `inferRidePaceClass(ride)` regex on
+  name+route+description+pace, default Social), Strava chip, km +
+  elevation stats row, overlapping avatar stack with "N going" label.
+  **Swipe-to-Delete on DMs**: web uses touch SwipeRow + hover trash pill
+  for desktop mouse users; mobile uses `react-native-gesture-handler`
+  `Swipeable` with a red RectButton. Mobile also gets swipe-down-to-close
+  on the DM modal via `PanResponder`. WS event `dm.deleted` fans out to
+  the peer so their thread updates live.
+- **2026-02-28 — Notification click-through + Clear**: bell popover items
+  now route on tap — coffee → Coffee tab (auto-opens live-round splash
+  when one is active), mechanical/mention → Chat tab, rider → Riders.
+  New `POST /api/notifications/clear` stamps `notifications_cleared_at`
+  on the user and the aggregate feed filters older items; a "Clear"
+  button on both web + mobile popovers wipes on demand.
+- **2026-02-28 — Popover tap-toggle fix**: cog/bell buttons were losing
+  their close-on-second-tap behaviour because the outside-click listener
+  fired first and re-closed the popover before onClick could toggle it.
+  Fixed by short-circuiting the outside-click handler when the tap
+  target is the toggle button itself.
 
 ## Backlog / Roadmap
-- **P0 — Private DMs (Rider → Rider)**: conversations + dm_messages
-  collections, unread counts, blocking, push notifications, mobile + web UI
-- **P1 — Backend monolith refactor**: split `/app/backend/server.py` (~3k
+- **P1 — Backend monolith refactor**: split `/app/backend/server.py` (~3.6k
   lines) into `/routes`, `/models`, `/services`
 - **P1 — Production VAPID key**: user to update Deployment Panel secrets
   with valid PEM (RCA already provided by deployer agent)
 - **P1 — www → apex redirect**: prevent geolocation/push split-origin issue
+- **P2 — Phone bezel on real mobile viewports**: drop the phone-frame
+  chrome when the web app is opened on a genuine mobile device viewport
 - **P2 — Chat archive**: downloadable JSON of chat before 7-day TTL wipe
 - **P2 — 60s-left coffee push**: auto-nudge riders who haven't ordered yet
 - **P2 — In-chat round chip**: compact "☕ Dave's shout · 3:42 left" chip

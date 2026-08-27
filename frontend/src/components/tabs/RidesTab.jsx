@@ -2,10 +2,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import { api, formatDetail } from "../../lib/api";
 import { useAuth, useEvents } from "../../lib/store";
 import Avatar from "../Avatar";
-import { ArrowLeft, MapPin, Coffee, ChevronRight, Mountain, Route } from "lucide-react";
+import { ArrowLeft, MapPin, Coffee, Mountain, Route } from "lucide-react";
 import { toast } from "sonner";
 import StravaPanel from "../StravaPanel";
 import RideRoundBlock from "../RideRoundBlock";
+import { inferRidePaceClass, PACE_CHIP_LABEL, PACE_CHIP_CLS } from "../../lib/ride";
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: "bg-status-going/20 text-status-going border-status-going/40" },
@@ -56,6 +57,42 @@ function goingList(ride, riders) {
     .filter(([, v]) => v === "going")
     .map(([id]) => id);
   return ids.map((id) => riders.find((r) => r.id === id)).filter(Boolean);
+}
+
+// Overlapping avatar chip stack — up to 4 riders, then "+N" pill. Colours
+// cycle so identical rows don't look like the same person twice.
+const STACK_COLORS = ["#3a5a8c", "#8c6a3a", "#2b8f6b", "#6a3a8c", "#8c3a5a"];
+function AvatarStack({ riders, total }) {
+  const shown = riders.slice(0, 3);
+  const extra = Math.max(0, total - shown.length);
+  return (
+    <div className="flex items-center gap-2" data-testid="going-stack">
+      <div className="flex -space-x-2">
+        {shown.map((r, i) => (
+          <div
+            key={r.id}
+            className="w-6 h-6 rounded-full border-2 border-bg-secondary flex items-center justify-center text-[10px] font-black text-white overflow-hidden"
+            style={{ background: STACK_COLORS[i % STACK_COLORS.length] }}
+            title={r.name}
+          >
+            {r.photo ? (
+              <img src={r.photo} alt="" className="w-full h-full object-cover" />
+            ) : (
+              (r.name || "?").slice(0, 1).toUpperCase()
+            )}
+          </div>
+        ))}
+        {extra > 0 && (
+          <div className="w-6 h-6 rounded-full border-2 border-bg-secondary bg-bg-primary flex items-center justify-center text-[9px] font-black text-text-secondary">
+            +{extra}
+          </div>
+        )}
+      </div>
+      <span className="text-[10px] uppercase tracking-widest font-mono-stat text-text-muted">
+        {total} going
+      </span>
+    </div>
+  );
 }
 
 export default function RidesTab({ onNavigate }) {
@@ -158,6 +195,19 @@ export default function RidesTab({ onNavigate }) {
           {open.day} · {open.date} · {open.time}
         </div>
         <h2 className="font-heading text-3xl font-black uppercase leading-tight mt-1">{open.name}</h2>
+        <div className="mt-2">
+          {(() => {
+            const paceCls = inferRidePaceClass(open);
+            return (
+              <span
+                className={`inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${PACE_CHIP_CLS[paceCls]}`}
+                data-testid="ride-detail-pace"
+              >
+                {PACE_CHIP_LABEL[paceCls]}
+              </span>
+            );
+          })()}
+        </div>
         {open.route && (
           <button
             type="button"
@@ -265,7 +315,14 @@ export default function RidesTab({ onNavigate }) {
 
       <div className="space-y-3">
         {rides.map((r) => {
-          const going = Object.values(r.rsvps || {}).filter((v) => v === "going").length;
+          const goingIds = Object.entries(r.rsvps || {})
+            .filter(([, v]) => v === "going")
+            .map(([id]) => id);
+          const goingRiders = goingIds
+            .map((id) => riders.find((rd) => rd.id === id))
+            .filter(Boolean);
+          const going = goingIds.length;
+          const paceCls = inferRidePaceClass(r);
           return (
             <button
               key={r.id}
@@ -273,27 +330,39 @@ export default function RidesTab({ onNavigate }) {
               className="w-full text-left bg-bg-secondary border border-border-subtle hover:border-accent-volt/40 rounded-2xl p-4 transition"
               data-testid={`ride-card-${r.id}`}
             >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <div className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-brand-accent flex items-center gap-2 flex-wrap">
-                    <span>{[r.day, r.date, r.time].filter(Boolean).join(" · ") || "TBC"}</span>
-                    {r.source === "strava" && (
-                      <span className="text-[9px] uppercase tracking-widest font-bold bg-[#FC4C02]/20 text-[#FC4C02] border border-[#FC4C02]/40 px-1.5 rounded normal-case">
-                        Strava
-                      </span>
-                    )}
-                  </div>
-                  <div className="font-heading text-xl font-bold uppercase mt-1 leading-tight">{r.name}</div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-text-muted flex-none" />
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-mono-stat text-[10px] uppercase tracking-[0.3em] text-brand-accent">
+                  {[r.day, r.date, r.time].filter(Boolean).join(" · ") || "TBC"}
+                </span>
+                {r.source === "strava" && (
+                  <span
+                    className="text-[9px] uppercase tracking-widest font-bold bg-[#FC4C02]/20 text-[#FC4C02] border border-[#FC4C02]/40 px-1.5 rounded normal-case"
+                    data-testid={`ride-strava-${r.id}`}
+                  >
+                    Strava
+                  </span>
+                )}
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Route className="w-3.5 h-3.5 text-brand-accent flex-none" /> {r.distance || "—"}
-                </div>
-                <div className="flex items-center gap-1 text-xs text-text-secondary">
-                  <Mountain className="w-3.5 h-3.5 text-accent-orange flex-none" /> {r.elevation || "—"}
-                </div>
+              <div className="font-heading text-xl font-bold uppercase mt-1 leading-tight">
+                {r.name}
+              </div>
+              <div className="mt-2">
+                <span
+                  className={`inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${PACE_CHIP_CLS[paceCls]}`}
+                  data-testid={`ride-pace-${r.id}`}
+                >
+                  {PACE_CHIP_LABEL[paceCls]}
+                </span>
+              </div>
+              <div className="mt-2.5 flex items-center gap-4 text-[13px] text-text-secondary font-mono-stat">
+                <span className="flex items-center gap-1">
+                  <Route className="w-3.5 h-3.5 text-brand-accent flex-none" />
+                  {r.distance || "—"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Mountain className="w-3.5 h-3.5 text-accent-orange flex-none" />
+                  {r.elevation || "—"}
+                </span>
               </div>
               {r.cafe && (
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-accent-coffee">
@@ -302,11 +371,12 @@ export default function RidesTab({ onNavigate }) {
                 </div>
               )}
               <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-[10px] uppercase tracking-widest font-mono-stat text-text-muted">
-                  {going} going
-                </div>
+                <AvatarStack riders={goingRiders} total={going} />
                 <div className="text-[10px] text-text-secondary flex items-center gap-1 truncate">
-                  <MapPin className="w-3 h-3 flex-none" /> <span className="truncate">{(r.location || "").split(",")[0] || "Location TBC"}</span>
+                  <MapPin className="w-3 h-3 flex-none" />
+                  <span className="truncate">
+                    {(r.location || "").split(",")[0] || "Location TBC"}
+                  </span>
                 </div>
               </div>
             </button>

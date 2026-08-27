@@ -11,6 +11,15 @@ import StravaPanel from "../components/StravaPanel";
 import RouteMap from "../components/RouteMap";
 import RideRoundBlock from "../components/RideRoundBlock";
 import { readCache, writeCache } from "../lib/cache";
+import { inferRidePaceClass, PACE_CHIP_LABEL } from "../lib/ride";
+
+const PACE_TINTS = {
+  social: { bg: "rgba(34,197,94,0.15)", fg: colors.statusGoing, border: "rgba(34,197,94,0.35)" },
+  tempo: { bg: "rgba(251,191,36,0.15)", fg: colors.statusMaybe, border: "rgba(251,191,36,0.35)" },
+  race: { bg: "rgba(239,68,68,0.15)", fg: colors.statusCant, border: "rgba(239,68,68,0.35)" },
+};
+
+const STACK_COLORS = ["#3a5a8c", "#8c6a3a", "#2b8f6b", "#6a3a8c", "#8c3a5a"];
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: colors.statusGoing },
@@ -142,6 +151,15 @@ export default function RidesTab() {
 
         <Text style={s.detailEyebrow}>{[open.day, open.date, open.time].filter(Boolean).join(" · ") || "TBC"}</Text>
         <Text style={s.detailTitle}>{open.name}</Text>
+        {(() => {
+          const pc = inferRidePaceClass(open);
+          const pt = PACE_TINTS[pc];
+          return (
+            <View style={[s.paceChip, { backgroundColor: pt.bg, borderColor: pt.border, marginTop: 8 }]} testID="ride-detail-pace">
+              <Text style={[s.paceChipTxt, { color: pt.fg }]}>{PACE_CHIP_LABEL[pc].toUpperCase()}</Text>
+            </View>
+          );
+        })()}
         {!!open.route && (
           <TouchableOpacity
             onPress={() => setRouteExpanded((v) => !v)}
@@ -235,7 +253,15 @@ export default function RidesTab() {
       )}
 
       {rides.map((r) => {
-        const going = Object.values(r.rsvps || {}).filter((v) => v === "going").length;
+        const goingIds = Object.entries(r.rsvps || {})
+          .filter(([, v]) => v === "going")
+          .map(([id]) => id);
+        const goingRiders = goingIds
+          .map((id) => riders.find((rd) => rd.id === id))
+          .filter(Boolean);
+        const going = goingIds.length;
+        const paceCls = inferRidePaceClass(r);
+        const pt = PACE_TINTS[paceCls];
         return (
           <TouchableOpacity
             key={r.id}
@@ -250,13 +276,16 @@ export default function RidesTab() {
               )}
             </View>
             <Text style={s.cardTitle}>{r.name}</Text>
+            <View style={[s.paceChip, { backgroundColor: pt.bg, borderColor: pt.border }]} testID={`ride-pace-${r.id}`}>
+              <Text style={[s.paceChipTxt, { color: pt.fg }]}>{PACE_CHIP_LABEL[paceCls].toUpperCase()}</Text>
+            </View>
             <View style={s.metaGrid}>
               <Text style={s.metaLine}>🛣  {r.distance || "—"}</Text>
               <Text style={s.metaLine}>⛰  {r.elevation || "—"}</Text>
             </View>
             {!!r.cafe && <Text style={s.cafeLine}>☕ {r.cafe}</Text>}
             <View style={s.cardFooter}>
-              <Text style={s.footerStat}>{going} GOING</Text>
+              <AvatarStack riders={goingRiders} total={going} />
               <Text style={s.footerLoc} numberOfLines={1}>📍 {(r.location || "").split(",")[0] || "Location TBC"}</Text>
             </View>
           </TouchableOpacity>
@@ -271,6 +300,47 @@ function StatCell({ label, value }) {
     <View style={s.statCell}>
       <Text style={s.statLabel}>{label.toUpperCase()}</Text>
       <Text style={s.statVal}>{value}</Text>
+    </View>
+  );
+}
+
+function AvatarStack({ riders, total }) {
+  const shown = riders.slice(0, 3);
+  const extra = Math.max(0, total - shown.length);
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }} testID="going-stack">
+      <View style={{ flexDirection: "row" }}>
+        {shown.map((r, i) => (
+          <View
+            key={r.id}
+            style={{
+              width: 24, height: 24, borderRadius: 12,
+              borderColor: colors.bgSecondary, borderWidth: 2,
+              backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
+              alignItems: "center", justifyContent: "center",
+              marginLeft: i === 0 ? 0 : -8, overflow: "hidden",
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>
+              {(r.name || "?").slice(0, 1).toUpperCase()}
+            </Text>
+          </View>
+        ))}
+        {extra > 0 && (
+          <View style={{
+            width: 24, height: 24, borderRadius: 12,
+            borderColor: colors.bgSecondary, borderWidth: 2,
+            backgroundColor: colors.bgPrimary,
+            alignItems: "center", justifyContent: "center",
+            marginLeft: shown.length === 0 ? 0 : -8,
+          }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: "900" }}>+{extra}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={{ color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700" }}>
+        {total} GOING
+      </Text>
     </View>
   );
 }
@@ -299,6 +369,8 @@ const s = StyleSheet.create({
   stravaBadge: { backgroundColor: "rgba(252,76,2,0.20)", borderColor: "rgba(252,76,2,0.40)", borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 3 },
   stravaBadgeTxt: { color: colors.stravaOrange, fontSize: 9, fontWeight: "700" },
   cardTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: "900", letterSpacing: -0.2, textTransform: "uppercase", marginTop: 6 },
+  paceChip: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginTop: 8 },
+  paceChipTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 1.6 },
   metaGrid: { flexDirection: "row", gap: 16, marginTop: 8 },
   metaLine: { color: colors.textSecondary, fontSize: 12 },
   cafeLine: { color: colors.accentCoffee, fontSize: 12, marginTop: 6 },

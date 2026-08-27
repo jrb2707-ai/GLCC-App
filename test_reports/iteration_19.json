@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 19 regression on Header rework (cog/mail/bell/exit), Settings + Notifications popovers, per-tab watermarks, redesigned Rides card (pace chip + AvatarStack), ride-detail pace chip, DMDrawer swipe-to-delete, and new POST /notifications/clear. Backend: 6/6 pytest cases pass (rides/riders/dm-conversations list, prefs merge PUT, notifications GET + clear + re-check empty, DM send + delete). Frontend: full flow verified — 4 header testids present; cog toggles/dismisses settings-popover; bell switches from settings to notifications-popover and closes on 2nd tap; pref-coffee toggle fires PUT /users/me/notification-prefs -> 200; theme picker rows present. All 4 watermarks (wm-coffee/rides/riders/chat) render on their tabs with pointer-events:none. Rides list: 12 cards, 12 ride-pace chips — 'GLCC Jail Break' -> RACE PACE, 'Gentle Sunday Spin' -> SOCIAL PACE (matches inferRidePaceClass). going-stack renders on every card. Ride detail pace chip (ride-detail-pace) visible. DMDrawer opens, thread opens, message sends -> 200 and appears. One frontend bug found: on desktop web the mine-message delete affordance is invisible/unclickable (see rca).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "DMDrawer.jsx SwipeRow",
+        "issue": "On desktop web there is NO way to delete your own DM message. The swipe-to-reveal button (dm-msg-<id>-delete) is rendered with `opacity-0 pointer-events-none` and only becomes clickable after the touch-swipe arms it — but mouse events never trigger onTouchStart/Move/End, so armed stays false. The alternative desktop-delete button (dm-msg-<id>-desktop-delete) uses class `hidden sm:group-hover:flex opacity-0 hover:opacity-100`, but its parent wrapper div is `relative select-none` — it is MISSING the `group` class, so `sm:group-hover:flex` never activates. Result: the button stays `display:none` on hover and is unclickable. Playwright click with force=true against the swipe-delete button does not fire the delete because pointer-events:none is respected. Backend DELETE /api/dm/messages/{id} itself works fine (verified via pytest).",
+        "selector": "[data-testid^='dm-msg-'] [data-testid$='-desktop-delete']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_19_header_prefs.py",
+    "/app/test_reports/pytest/iteration_19.xml"
+  ],
+  "action_items": [
+    "DMDrawer.jsx SwipeRow: add `group` to the outer wrapper `<div className='relative select-none group'>` so the `sm:group-hover:flex` desktop delete button becomes visible on hover on web. OR replace the swipe/hover pattern with a small always-visible trash icon on the mine bubble for desktop viewports (mouse users have no touch swipe)."
+  ],
+  "critical_code_review_comments": [
+    "DMDrawer.jsx L406-441: The two delete-affordance strategies (swipe-reveal and hover-reveal) are both broken for the mouse/desktop path. The swipe-reveal element has `pointer-events-none` until armed via touchend; the desktop-reveal element requires a `group` class on the ancestor that never exists. Adding the `group` class OR removing the touch-only gate on click fixes the whole desktop path.",
+    "Header.jsx L242-266 NotificationsPopover: notif-clear only renders when items.length > 0 — that's per spec, but the test couldn't exercise the button because the seeded/live feed was empty after backend clear. Not a bug; documenting for the next agent so they can seed a mechanical message to test the clear button end-to-end in the browser.",
+    "server.py L3117 dm_delete_message: recipient can hard-delete the sender's message too — this deviates from the iMessage semantics stated in the docstring only slightly (iMessage lets recipient delete for-me but keeps sender's copy). Backend intent is documented in the docstring so not a bug, but if 'delete for everyone' should be sender-only, tighten to `if me_id != str(msg.get('sender_id')): raise 403`. Confirm with product.",
+    "Watermarks.jsx: all four testids render with pointer-events:none and z-0 — clicks pass through correctly. Chat variant uses a rotated span rather than an image; validated visually."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_19_header_prefs.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (6 passed, 1 skipped for env)",
+    "frontend": "~93% — all header/popover/watermark/pace-chip/DM-send flows pass; only desktop DM message delete is unreachable via mouse"
+  },
+  "test_credentials": "bryantj@xtra.co.nz / Roenick2707 (El Prez, admin). sam@glcc.club / cycle123 used as DM peer in pytest.",
+  "seed_data_creation": "None — used seeded rides + existing DM peers. Created (and deleted) TEST_iter19 DM messages during the run; the last TEST_iter19_playwright + TEST_del_iter19 messages to Graeme Bean are still present because desktop delete failed — main agent can remove them by cleaning db.dm_messages where text starts with 'TEST_iter19'.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file: /app/backend/tests/test_iteration_19_header_prefs.py. Frontend Playwright script inline in iteration_19 report; when re-running, note the notif-clear button only appears when the feed has items — seed a mechanical message (POST /api/messages {text:'front derailleur snapped', mechanical:true}) as El Prez before opening the bell if you want to exercise POST /notifications/clear from the UI (the direct API call is already tested). DM desktop delete needs the `group` class fix in SwipeRow before it can be verified via Playwright on a desktop viewport.",
+  "rca of the issue": "DM desktop delete unreachable. Repro on 1280x900 viewport: (1) login as bryantj@xtra.co.nz, (2) header mail icon → pick any convo, (3) send a message, (4) hover over the mine bubble. Expected: a small trash icon appears top-right of the bubble. Actual: nothing appears and DOM inspection shows the desktop-delete button retains `display:none` because Tailwind `sm:group-hover:flex` requires an ancestor with class `group`. In DMDrawer.jsx L407 the wrapper is `<div className='relative select-none' …>` — no `group`. The swipe-reveal button has `opacity-0 pointer-events-none` until armed by touchend; mouse users never arm it. Fix: change L407 wrapper className to include `group` (e.g. `relative select-none group`) so the hover reveal works on ≥sm breakpoints. This is a one-token change."
+}

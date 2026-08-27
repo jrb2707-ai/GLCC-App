@@ -2762,6 +2762,7 @@ async def notifications_feed(user: dict = Depends(get_current_user)):
     day_ago = now - timedelta(hours=24)
     six_ago = now - timedelta(hours=6)
     last_read = user.get("notifications_last_read_at") or (now - timedelta(days=30))
+    cleared_at = user.get("notifications_cleared_at")
     items = []
 
     async for m in db.messages.find({
@@ -2801,6 +2802,10 @@ async def notifications_feed(user: dict = Depends(get_current_user)):
             "meta": {"message_id": str(m["_id"])},
         })
     items.sort(key=lambda x: x.get("created_at") or now, reverse=True)
+    # Rider-initiated "clear" hides everything up to that moment. Newer
+    # events flow back in as they happen.
+    if cleared_at:
+        items = [it for it in items if it.get("created_at") and it["created_at"] > cleared_at]
     # Cap total & tag unread state.
     items = items[:25]
     for it in items:
@@ -2815,6 +2820,19 @@ async def mark_notifications_read(user: dict = Depends(get_current_user)):
     """Stamp `notifications_last_read_at = now` so the bell dot clears."""
     await db.users.update_one(
         {"_id": user["_id"]}, {"$set": {"notifications_last_read_at": now_utc()}},
+    )
+    return {"ok": True}
+
+
+@api.post("/notifications/clear")
+async def clear_notifications(user: dict = Depends(get_current_user)):
+    """Rider-initiated wipe of the bell feed. Stores `notifications_cleared_at`
+    so the aggregate feed hides anything up to now while still surfacing
+    fresh events as they arrive."""
+    now = now_utc()
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"notifications_cleared_at": now, "notifications_last_read_at": now}},
     )
     return {"ok": True}
 

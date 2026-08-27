@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { X, ArrowLeft, Send, Search, MessageSquarePlus } from "lucide-react";
+import { X, ArrowLeft, Send, Search, MessageSquarePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents } from "../lib/store";
@@ -249,6 +249,10 @@ function Thread({ peer, onMutate }) {
 
   useEffect(() => {
     return subscribe((evt) => {
+      if (evt.type === "dm.deleted") {
+        setMessages((cur) => cur.filter((m) => m.id !== evt.message_id));
+        return;
+      }
       if (evt.type !== "dm.message") return;
       const msg = evt.message;
       if (!msg) return;
@@ -283,6 +287,21 @@ function Thread({ peer, onMutate }) {
     } finally { setBusy(false); }
   }
 
+  async function removeMessage(msg) {
+    // Optimistic — the WS `dm.message.deleted` event will re-sync everyone
+    // else's thread. If the server rejects (e.g. someone else's message)
+    // we roll back and surface the reason.
+    const prev = messages;
+    setMessages((cur) => cur.filter((m) => m.id !== msg.id));
+    try {
+      await api.delete(`/dm/messages/${msg.id}`);
+      onMutate?.();
+    } catch (e) {
+      setMessages(prev);
+      toast.error(formatDetail(e));
+    }
+  }
+
   return (
     <div className="h-full flex flex-col" data-testid="dm-thread">
       <div className="px-4 py-2 border-b border-border-subtle flex items-center gap-2">
@@ -300,12 +319,19 @@ function Thread({ peer, onMutate }) {
         {messages.map((m) => {
           const mine = m.sender_id === user?.id;
           return (
-            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`dm-msg-${m.id}`}>
-              <div className={`max-w-[78%] px-3 py-2 rounded-2xl text-[14px] leading-snug ${mine ? "bg-accent-pink text-white rounded-br-sm" : "bg-bg-secondary text-text-primary rounded-bl-sm border border-border-subtle"}`}>
-                {m.text}
-                <div className={`text-[9px] mt-0.5 font-mono-stat uppercase tracking-widest ${mine ? "text-white/70" : "text-text-muted"}`}>{formatTs(m.created_at)}</div>
+            <SwipeRow
+              key={m.id}
+              mine={mine}
+              onDelete={mine ? () => removeMessage(m) : null}
+              testId={`dm-msg-${m.id}`}
+            >
+              <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[78%] px-3 py-2 rounded-2xl text-[14px] leading-snug ${mine ? "bg-accent-pink text-white rounded-br-sm" : "bg-bg-secondary text-text-primary rounded-bl-sm border border-border-subtle"}`}>
+                  {m.text}
+                  <div className={`text-[9px] mt-0.5 font-mono-stat uppercase tracking-widest ${mine ? "text-white/70" : "text-text-muted"}`}>{formatTs(m.created_at)}</div>
+                </div>
               </div>
-            </div>
+            </SwipeRow>
           );
         })}
       </div>
@@ -342,4 +368,78 @@ function formatTs(iso) {
   const diff = (now - d) / (1000 * 60 * 60 * 24);
   if (diff < 7) return d.toLocaleDateString(undefined, { weekday: "short" });
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// Swipe-left (on my own messages) or the desktop-friendly hover-and-tap
+// path reveals a red delete button. On mobile, dragging past 60px arms
+// the tap-to-confirm state; a second tap on the button commits. Anywhere
+// else in the app cancels.
+function SwipeRow({ children, mine, onDelete, testId }) {
+  const [dx, setDx] = useState(0);
+  const [armed, setArmed] = useState(false);
+  const startRef = useRef({ x: 0, y: 0, active: false });
+  const swipable = !!onDelete;
+
+  const onTouchStart = (e) => {
+    if (!swipable) return;
+    const t = e.touches[0];
+    startRef.current = { x: t.clientX, y: t.clientY, active: true };
+  };
+  const onTouchMove = (e) => {
+    if (!startRef.current.active) return;
+    const t = e.touches[0];
+    const rawDx = t.clientX - startRef.current.x;
+    const rawDy = t.clientY - startRef.current.y;
+    // Only claim the gesture when it's clearly horizontal-left.
+    if (Math.abs(rawDy) > Math.abs(rawDx)) return;
+    if (rawDx > 0) return;
+    setDx(Math.max(-72, rawDx));
+  };
+  const onTouchEnd = () => {
+    if (!startRef.current.active) return;
+    startRef.current.active = false;
+    if (dx < -50) { setDx(-72); setArmed(true); }
+    else { setDx(0); setArmed(false); }
+  };
+
+  return (
+    <div
+      className="relative select-none group"
+      data-testid={testId}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onMouseLeave={() => { if (armed) { setDx(0); setArmed(false); } }}
+    >
+      {swipable && (
+        <button
+          type="button"
+          onClick={() => { onDelete(); setArmed(false); setDx(0); }}
+          className={`absolute inset-y-0 right-0 flex items-center justify-center gap-1 px-3 rounded-2xl bg-status-cant text-white text-[11px] font-black uppercase tracking-widest transition-opacity ${armed ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          data-testid={`${testId}-delete`}
+        >
+          <Trash2 className="w-3.5 h-3.5" /> Delete
+        </button>
+      )}
+      <div
+        style={{ transform: `translateX(${dx}px)`, transition: startRef.current.active ? "none" : "transform 120ms ease-out" }}
+      >
+        {children}
+      </div>
+      {/* Desktop affordance: a tiny trash pill lives on the bubble for mouse
+          users (no touch → no swipe). Hidden on touch/small screens where
+          swipe is the primary path. */}
+      {swipable && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className={`hidden sm:flex absolute top-1 ${mine ? "right-1" : "left-1"} items-center justify-center w-6 h-6 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-status-cant transition`}
+          aria-label="Delete message"
+          data-testid={`${testId}-desktop-delete`}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
 }
