@@ -546,13 +546,25 @@ export function RoundDetailModal({ round, onClose, onChange, usual }) {
               </ul>
             </div>
             {round.closed && (
-              <button
-                onClick={copyList}
-                className="mt-3 w-full text-sm font-black uppercase tracking-widest bg-accent-coffee text-black py-4 rounded-2xl active:scale-95 shadow-2xl"
-                data-testid="modal-copy"
-              >
-                Copy list for barista
-              </button>
+              <div className="mt-3 space-y-2">
+                {!myOrder && usual && (
+                  <button
+                    onClick={() => submitOrder(usual)}
+                    disabled={busy}
+                    className="w-full text-sm font-black uppercase tracking-widest bg-accent-pink text-white py-4 rounded-2xl active:scale-95 shadow-pink"
+                    data-testid="modal-add-late"
+                  >
+                    ☕ Add my coffee — {usual}
+                  </button>
+                )}
+                <button
+                  onClick={copyList}
+                  className="w-full text-sm font-black uppercase tracking-widest bg-accent-coffee text-black py-4 rounded-2xl active:scale-95 shadow-2xl"
+                  data-testid="modal-copy"
+                >
+                  Copy list for barista
+                </button>
+              </div>
             )}
           </div>
         ) : (
@@ -590,7 +602,7 @@ export function RoundDetailModal({ round, onClose, onChange, usual }) {
                   >
                     <Coffee className="w-5 h-5 shrink-0" />
                     <div className="flex-1 min-w-0 text-left">
-                      <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Tap to order my usual</div>
+                      <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
                       <div className="text-sm font-bold truncate">{usual}</div>
                     </div>
                   </button>

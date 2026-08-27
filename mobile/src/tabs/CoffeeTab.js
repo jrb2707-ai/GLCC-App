@@ -430,10 +430,20 @@ export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) 
         </View>
       )}
 
-      {round.closed && round.orders.length > 0 && (
-        <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
-          <Text style={styleCopyBarTxt}>COPY LIST FOR BARISTA</Text>
-        </TouchableOpacity>
+      {round.closed && (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          {!myOrder && usual ? (
+            <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-add-late">
+              <Text style={styleUsualPillLbl}>ADD MY COFFEE</Text>
+              <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {usual}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {round.orders.length > 0 ? (
+            <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
+              <Text style={styleCopyBarTxt}>COPY LIST FOR BARISTA</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       )}
 
       {!round.closed && (
@@ -452,7 +462,7 @@ export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) 
             <View>
               {usual ? (
                 <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-usual">
-                  <Text style={styleUsualPillLbl}>TAP TO ORDER MY USUAL</Text>
+                  <Text style={styleUsualPillLbl}>ADD MY COFFEE</Text>
                   <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {usual}</Text>
                 </TouchableOpacity>
               ) : null}

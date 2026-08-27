@@ -2195,7 +2195,19 @@ async def submit_ride_round_order(
     body: RideRoundOrderIn,
     user: dict = Depends(require_approved),
 ):
+    """Add or replace the rider's line in the tally. Accepts orders while
+    the round is live and, as a grace window, for 30 minutes after it
+    closes — riders who arrive at the counter late can still add their
+    coffee instead of having to start a fresh shout."""
     active = await _active_round_for_ride(ride_id)
+    if not active:
+        # Grace window: latest round for this ride within the last 30 min,
+        # even if manually closed or auto-expired.
+        thirty_ago = now_utc() - timedelta(minutes=30)
+        active = await db.coffee_rounds.find_one(
+            {"ride_id": ride_id, "started_at": {"$gt": thirty_ago}},
+            sort=[("started_at", -1)],
+        )
     if not active:
         raise HTTPException(status_code=404, detail="No open round on this ride")
     uid = str(user["_id"])

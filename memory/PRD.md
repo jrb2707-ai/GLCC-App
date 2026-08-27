@@ -46,9 +46,57 @@ Apple App Store 1.2 compliance (block/report/moderate).
   and Coffee tab share the same funnel. Ported to Web + Mobile.
 - **2026-02-27 — El Prez email migrated to `bryantj@xtra.co.nz`**: Master
   admin credentials moved to `bryantj@xtra.co.nz` / `Roenick2707`. Seeder
-  auto-migrates the legacy `jb@greylynncc.com` (and older `jb@glcc.club`)
+  auto-migrates legacy `jb@greylynncc.com` (and older `jb@glcc.club`)
   row onto the new email, preserving El Prez's rides / coffee / chat
   history and `member_no=1`. `.env` `ADMIN_EMAIL` updated to match.
+- **2026-02-27 — Bell icon + Riders tab colour**: Bell (top header) turns
+  pink `text-accent-pink` when notifications granted. Riders bottom-tab
+  active tint flips to `text-status-cant` (red) whenever effective theme
+  is dark (respects both theme picker and OS auto-dark).
+- **2026-02-27 — Private DMs shipped (v1)**: `GET/POST /api/dm/…`
+  endpoints (list conversations, get thread, send message, mark read,
+  unread badge count, delete message). Web `DMDrawer` + Mobile
+  `DMScreen` modals reachable from mail icon in header. Two collections
+  `dm_conversations` (with `pair_key` unique index) + `dm_messages`.
+  WS-driven live updates via `dm.message` / `dm.read` / `dm.deleted`.
+  Recipient-not-focused push skipping via `dm.focus`/`dm.blur` WS
+  presence events. Blocking reuses `blocks` collection — blocked riders
+  hidden from inbox both directions. Delete endpoint recomputes latest
+  preview + unread counts from source of truth.
+- **2026-02-27 — DM index bug fix**: Legacy `participants` unique index
+  was multikey (rejected any second convo for a rider). Replaced with
+  `pair_key` sorted-string unique index; migration drops the old index
+  on startup.
+- **2026-02-27 — ChatTab dark mode parity**: Weather header, message
+  scroller, system pill, peer bubble, mention picker, and input row all
+  now use theme-aware `bg-bg-*` / `text-text-*` / `border-border-subtle`.
+  iMessage-y bubble aesthetic preserved.
+- **2026-02-27 — Coffee cafe locked per ride per day**: New
+  `_todays_cafe_for_ride` helper anchors all subsequent shouts on the
+  same ride to the first cafe chosen that day (NZ local). Backend
+  silently overrides any drift. New `GET /rides/{id}/round/today-cafe`
+  exposes the lock for UI hints.
+- **2026-02-27 — Any rider can end a round**: `POST /round/close` no
+  longer restricted to buyer/admin. Web + mobile "Close early" button
+  is always visible; label flips to "End round" for non-buyers.
+- **2026-02-27 — Late "Add my coffee" grace window**: Order endpoint
+  accepts orders on rounds within 30 min of `started_at` even after
+  auto-expiry or manual close. Web + mobile tally overlay and
+  RideRoundBlock close-view now show "Add my coffee" primary CTA when
+  the viewer hasn't ordered; Copy list stays as secondary. "Tap to
+  order my usual" renamed to "Add my coffee" everywhere.
+- **2026-02-27 — PWA / Home Screen refresh snap**: CoffeeTab now
+  refetches on `pageshow` + `focus` + `visibilitychange` (with an
+  in-flight guard). Store proactively reconnects the WebSocket on
+  resume — suspended PWAs often die silently without an `onclose`, so
+  live coffee-round events were stalling until the 30s polling caught
+  up. Now they fire within ms of foreground return.
+- **2026-02-27 — Invite a rider label**: theme-aware
+  `text-text-primary` (white in dark, black in light) on both web +
+  mobile.
+- **2026-02-27 — EL PREZ badge pink**: header badge now
+  `bg-accent-pink/15 text-accent-pink border-accent-pink/40` for
+  president; regular admin keeps volt yellow.
 
 ## Backlog / Roadmap
 - **P0 — Private DMs (Rider → Rider)**: conversations + dm_messages

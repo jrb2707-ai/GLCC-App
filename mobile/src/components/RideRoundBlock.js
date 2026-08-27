@@ -268,9 +268,17 @@ export default function RideRoundBlock({ ride }) {
             ))}
             {round.orders.length === 0 && <Text style={s.hint}>No orders in.</Text>}
           </ScrollView>
-          <TouchableOpacity onPress={copyList} style={s.copyBtn} testID="round-copy">
-            <Text style={s.copyBtnTxt}>COPY LIST</Text>
-          </TouchableOpacity>
+          {!myOrder && usual ? (
+            <TouchableOpacity onPress={() => submitOrder(usual)} disabled={busy} style={s.usualBtn} testID="round-add-late">
+              <Text style={s.usualLbl}>ADD MY COFFEE</Text>
+              <Text style={s.usualTxt} numberOfLines={2}>☕  {usual}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {round.orders.length > 0 ? (
+            <TouchableOpacity onPress={copyList} style={s.copyBtn} testID="round-copy">
+              <Text style={s.copyBtnTxt}>COPY LIST</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : (
         <View style={{ marginTop: 14 }}>
@@ -293,7 +301,7 @@ export default function RideRoundBlock({ ride }) {
                   style={s.usualBtn}
                   testID="round-usual"
                 >
-                  <Text style={s.usualLbl}>TAP TO ORDER MY USUAL</Text>
+                  <Text style={s.usualLbl}>ADD MY COFFEE</Text>
                   <Text style={s.usualTxt} numberOfLines={2}>☕  {usual}</Text>
                 </TouchableOpacity>
               ) : null}

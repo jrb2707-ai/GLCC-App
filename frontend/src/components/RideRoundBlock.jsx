@@ -347,39 +347,59 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
             </summary>
             <OrderList round={round} compact />
           </details>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                // Tally-first format so the barista sees "2× flat white" not names.
-                const groups = new Map();
-                for (const o of round.orders) {
-                  const key = normalizeOrder(o.text);
-                  if (!key) continue;
-                  const g = groups.get(key) || { display: o.text.trim(), n: 0 };
-                  g.n += 1;
-                  groups.set(key, g);
-                }
-                const tally = Array.from(groups.values())
-                  .sort((a, b) => b.n - a.n)
-                  .map((g) => `${g.n}× ${g.display}`)
-                  .join("\n");
-                const detail = round.orders.map((o) => `- ${o.name}: ${o.text}`).join("\n");
-                const text = `☕ ${round.cafe_name}\n${tally}\n\n(by rider:\n${detail})`;
-                navigator.clipboard?.writeText(text);
-                toast("Copied for the barista 📋");
-              }}
-              className="text-[10px] font-black uppercase tracking-widest bg-accent-coffee/20 border border-accent-coffee/40 text-accent-coffee py-2 rounded-lg active:scale-95"
-              data-testid="round-copy"
-            >
-              Copy list
-            </button>
-            <button
-              onClick={() => { setShowCloseView(false); setRound(null); }}
-              className="text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-border-subtle text-text-secondary py-2 rounded-lg active:scale-95"
-              data-testid="round-dismiss"
-            >
-              Dismiss
-            </button>
+          {/* Primary CTA depends on whether the viewer has ordered.
+              If they haven't, they can still late-add during a 30-min
+              grace window — so "Add my coffee" is the natural action.
+              If they have, Copy list is the buyer's / room's payoff. */}
+          <div className="mt-3">
+            {!myOrder && usual && (
+              <button
+                onClick={() => submitOrder(usual)}
+                disabled={busy}
+                className="w-full mb-2 px-4 py-3.5 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
+                data-testid="round-add-late"
+              >
+                <Coffee className="w-5 h-5 shrink-0" />
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
+                  <div className="text-sm font-bold truncate">{usual}</div>
+                </div>
+              </button>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  // Tally-first format so the barista sees "2× flat white" not names.
+                  const groups = new Map();
+                  for (const o of round.orders) {
+                    const key = normalizeOrder(o.text);
+                    if (!key) continue;
+                    const g = groups.get(key) || { display: o.text.trim(), n: 0 };
+                    g.n += 1;
+                    groups.set(key, g);
+                  }
+                  const tally = Array.from(groups.values())
+                    .sort((a, b) => b.n - a.n)
+                    .map((g) => `${g.n}× ${g.display}`)
+                    .join("\n");
+                  const detail = round.orders.map((o) => `- ${o.name}: ${o.text}`).join("\n");
+                  const text = `☕ ${round.cafe_name}\n${tally}\n\n(by rider:\n${detail})`;
+                  navigator.clipboard?.writeText(text);
+                  toast("Copied for the barista 📋");
+                }}
+                className="text-[10px] font-black uppercase tracking-widest bg-accent-coffee/20 border border-accent-coffee/40 text-accent-coffee py-2 rounded-lg active:scale-95"
+                data-testid="round-copy"
+              >
+                Copy list
+              </button>
+              <button
+                onClick={() => { setShowCloseView(false); setRound(null); }}
+                className="text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-border-subtle text-text-secondary py-2 rounded-lg active:scale-95"
+                data-testid="round-dismiss"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -412,7 +432,7 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
                 >
                   <Coffee className="w-5 h-5 shrink-0" />
                   <div className="flex-1 min-w-0 text-left">
-                    <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Tap to order my usual</div>
+                    <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
                     <div className="text-base font-bold truncate">{usual}</div>
                   </div>
                   <Send className="w-5 h-5 shrink-0" />
