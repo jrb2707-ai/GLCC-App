@@ -57,14 +57,39 @@ function LiveRoundOverlay() {
 const TABS = [
   { id: "rides", label: "Rides", icon: Bike, activeClass: "text-accent-strava" },
   { id: "coffee", label: "Coffee", icon: Coffee, activeClass: "text-accent-pink" },
-  { id: "riders", label: "Riders", icon: Users, activeClass: "text-black dark:text-white" },
+  // Riders active tint is derived at render time from the effective theme
+  // so it flips to red when the app is in dark mode (either via the admin
+  // theme picker or OS auto-dark).
+  { id: "riders", label: "Riders", icon: Users, activeClass: null },
   { id: "chat", label: "Chat", icon: MessageSquare, activeClass: "text-[#007AFF]" },
 ];
+
+// Resolve the theme picker's setting (auto/light/dark) into a concrete
+// boolean so tab tints can react to both explicit choice and OS preference.
+function useEffectiveDark(theme) {
+  const [prefersDark, setPrefersDark] = useState(() => (
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+      : false
+  ));
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e) => setPrefersDark(e.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+  if (theme === "dark") return true;
+  if (theme === "light") return false;
+  return prefersDark;
+}
 
 export default function HomeShell() {
   const [tab, setTab] = useState("coffee");
   const { user, logout } = useAuth();
   const { theme, cycleTheme } = useTheme();
+  const isDark = useEffectiveDark(theme);
+  const ridersActiveCls = isDark ? "text-status-cant" : "text-black";
   const [perm, setPerm] = useState(browserPushPermission());
   const swipeRef = React.useRef({ x: 0, y: 0, active: false });
 
@@ -145,7 +170,7 @@ export default function HomeShell() {
             title={bellEnabled ? "Notifications on" : "Enable notifications"}
             className={`p-1.5 rounded-full transition ${
               bellEnabled
-                ? "text-brand-accent bg-accent-volt/10 border border-accent-volt/30"
+                ? "text-accent-pink bg-accent-pink/10 border border-accent-pink/30"
                 : "text-text-secondary hover:text-brand-accent border border-transparent"
             }`}
             data-testid="notifications-toggle"
@@ -194,7 +219,7 @@ export default function HomeShell() {
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
-            const activeCls = t.activeClass || "text-brand-accent";
+            const activeCls = (t.id === "riders" ? ridersActiveCls : t.activeClass) || "text-brand-accent";
             return (
               <button
                 key={t.id}
