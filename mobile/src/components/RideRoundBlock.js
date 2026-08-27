@@ -333,11 +333,10 @@ export default function RideRoundBlock({ ride }) {
             </View>
           ))}
 
-          {isBuyer && (
-            <TouchableOpacity onPress={closeRound} disabled={busy} style={s.closeEarly} testID="round-close-early">
-              <Text style={s.closeEarlyTxt}>CLOSE EARLY</Text>
-            </TouchableOpacity>
-          )}
+          {/* Any rider can end the round early. */}
+          <TouchableOpacity onPress={closeRound} disabled={busy} style={s.closeEarly} testID="round-close-early">
+            <Text style={s.closeEarlyTxt}>{isBuyer ? "CLOSE EARLY" : "END ROUND"}</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>

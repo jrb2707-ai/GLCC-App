@@ -448,16 +448,16 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
             </div>
             <OrderList round={round} />
           </div>
-          {isBuyer && (
-            <button
-              onClick={closeRound}
-              disabled={busy}
-              className="mt-3 w-full text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-status-cant/40 text-status-cant py-2 rounded-xl active:scale-95"
-              data-testid="round-close-early"
-            >
-              Close early
-            </button>
-          )}
+          {/* Any rider can end the round early — if the buyer's already
+              at the counter, stragglers shouldn't hold the tally open. */}
+          <button
+            onClick={closeRound}
+            disabled={busy}
+            className="mt-3 w-full text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-status-cant/40 text-status-cant py-2 rounded-xl active:scale-95"
+            data-testid="round-close-early"
+          >
+            {isBuyer ? "Close early" : "End round"}
+          </button>
         </div>
       )}
     </div>

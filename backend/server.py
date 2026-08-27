@@ -2095,6 +2095,34 @@ async def _active_round_for_ride(ride_id: str) -> Optional[dict]:
     return doc
 
 
+async def _todays_cafe_for_ride(ride_id: str) -> Optional[Dict[str, Optional[str]]]:
+    """Return the {name, address} of the last cafe chosen for this ride
+    today (NZ local), so subsequent rounds default to the same venue and
+    the group doesn't split across two shops after the first buyer picks."""
+    nz = ZoneInfo("Pacific/Auckland")
+    now_nz = datetime.now(nz)
+    day_start = now_nz.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    doc = await db.coffee_rounds.find_one(
+        {
+            "ride_id": ride_id,
+            "started_at": {"$gte": day_start},
+            "cafe_name": {"$exists": True, "$nin": [None, ""]},
+        },
+        sort=[("started_at", -1)],
+    )
+    if not doc:
+        return None
+    return {"name": doc.get("cafe_name"), "address": doc.get("cafe_address")}
+
+
+@api.get("/rides/{ride_id}/round/today-cafe")
+async def get_todays_cafe(ride_id: str, user: dict = Depends(require_approved)):
+    """Locked-in cafe for today's rounds on this ride. UI uses this to
+    pre-fill and lock the cafe field on subsequent shouts."""
+    cafe = await _todays_cafe_for_ride(ride_id)
+    return {"cafe": cafe}
+
+
 @api.post("/rides/{ride_id}/round")
 async def start_ride_round(
     ride_id: str,
@@ -2105,6 +2133,13 @@ async def start_ride_round(
     existing = await _active_round_for_ride(ride_id)
     if existing:
         raise HTTPException(status_code=409, detail="A round is already open on this ride")
+    # Lock the cafe to the first venue chosen for this ride today. If a
+    # rider tries to start a new round at a different cafe later the same
+    # day, we silently redirect them to the group's original spot.
+    todays = await _todays_cafe_for_ride(ride_id)
+    cafe_name = (todays["name"] if todays else body.cafe_name).strip()
+    cafe_address = (todays["address"] if todays else body.cafe_address) or ""
+    cafe_address = cafe_address.strip() or None
     now = now_utc()
     close_at = now + timedelta(seconds=body.close_in_seconds)
     doc = {
@@ -2113,8 +2148,8 @@ async def start_ride_round(
         "buyer_user_id": str(user["_id"]),
         "buyer_name": user.get("name"),
         "buyer_photo": user.get("photo"),
-        "cafe_name": body.cafe_name.strip(),
-        "cafe_address": (body.cafe_address or "").strip() or None,
+        "cafe_name": cafe_name,
+        "cafe_address": cafe_address,
         "started_at": now,
         "close_at": close_at,
         "orders": [],
@@ -2204,16 +2239,20 @@ async def retract_ride_round_order(ride_id: str, user: dict = Depends(require_ap
 
 @api.post("/rides/{ride_id}/round/close")
 async def close_ride_round(ride_id: str, user: dict = Depends(require_approved)):
+    """Close the round early. Any approved rider can end the round so
+    stragglers aren't held up if the buyer's already at the counter."""
     active = await _active_round_for_ride(ride_id)
     if not active:
         raise HTTPException(status_code=404, detail="No open round on this ride")
-    is_buyer = str(active.get("buyer_user_id")) == str(user["_id"])
-    if not is_buyer and not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Only the buyer or an admin can close")
     now = now_utc()
     await db.coffee_rounds.update_one(
         {"_id": active["_id"]},
-        {"$set": {"closed_manually_at": now, "close_at": now}},
+        {"$set": {
+            "closed_manually_at": now,
+            "close_at": now,
+            "closed_by_user_id": str(user["_id"]),
+            "closed_by_name": user.get("name"),
+        }},
     )
     updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
     payload = serialize_round(updated)
