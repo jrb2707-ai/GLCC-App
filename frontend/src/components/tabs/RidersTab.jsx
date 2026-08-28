@@ -339,7 +339,11 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
             <div className="flex items-center gap-1.5 mt-1">
               <span className="text-[10px] uppercase font-mono-stat tracking-widest text-text-secondary">{rider.role}</span>
               {rider.is_admin && (
-                <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30 px-1.5 rounded">
+                <span className={`text-[9px] uppercase tracking-widest font-bold border px-1.5 rounded ${
+                  rider.is_president
+                    ? "bg-accent-pink/15 text-accent-pink border-accent-pink/40"
+                    : "bg-accent-volt/15 text-brand-accent border-accent-volt/30"
+                }`}>
                   {rider.is_president ? "El Prez" : "Admin"}
                 </span>
               )}
@@ -962,7 +966,7 @@ export default function RidersTab() {
       {user.is_admin && (
         <button
           onClick={() => setRegisterOpen(true)}
-          className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-brand-accent uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
+          className="w-full flex items-center justify-center gap-2 bg-bg-secondary border border-dashed border-accent-volt/40 text-text-primary uppercase tracking-widest text-xs font-bold py-3 rounded-xl mb-3"
           data-testid="register-rider-button"
         >
           <UserPlus className="w-4 h-4" /> Invite a rider
@@ -1075,7 +1079,11 @@ export default function RidersTab() {
               <div className="flex items-center gap-1.5">
                 <div className="text-sm font-semibold truncate">{r.name}</div>
                 {r.is_admin && (
-                  <span className="text-[9px] uppercase tracking-widest font-bold bg-accent-volt/15 text-brand-accent border border-accent-volt/30 px-1.5 rounded">
+                  <span className={`text-[9px] uppercase tracking-widest font-bold border px-1.5 rounded ${
+                    r.is_president
+                      ? "bg-accent-pink/15 text-accent-pink border-accent-pink/40"
+                      : "bg-accent-volt/15 text-brand-accent border-accent-volt/30"
+                  }`}>
                     {r.is_president ? "El Prez" : "Admin"}
                   </span>
                 )}

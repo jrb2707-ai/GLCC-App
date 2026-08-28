@@ -179,7 +179,11 @@ export default function RidersTab() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Text style={s.name}>{r.name}</Text>
               {r.is_admin && (
-                <View style={s.badge}><Text style={s.badgeTxt}>{r.is_president ? "EL PREZ" : "ADMIN"}</Text></View>
+                <View style={r.is_president ? s.badgePrez : s.badge}>
+                  <Text style={r.is_president ? s.badgePrezTxt : s.badgeTxt}>
+                    {r.is_president ? "EL PREZ" : "ADMIN"}
+                  </Text>
+                </View>
               )}
               {r.status === "invited" && (
                 <View style={s.invitedBadge} testID={`invited-badge-${r.id}`}><Text style={s.invitedTxt}>INVITED</Text></View>
@@ -388,7 +392,11 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
                 <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
                   <Text style={s.pRole}>{rider.role}</Text>
                   {rider.is_admin && (
-                    <View style={s.badge}><Text style={s.badgeTxt}>{rider.is_president ? "EL PREZ" : "ADMIN"}</Text></View>
+                    <View style={rider.is_president ? s.badgePrez : s.badge}>
+                      <Text style={rider.is_president ? s.badgePrezTxt : s.badgeTxt}>
+                        {rider.is_president ? "EL PREZ" : "ADMIN"}
+                      </Text>
+                    </View>
                   )}
                   {rider.status === "invited" && (
                     <View style={s.invitedBadge}><Text style={s.invitedTxt}>INVITED</Text></View>
@@ -732,7 +740,7 @@ const s = StyleSheet.create({
   sub: { color: colors.textMuted, fontSize: 10, letterSpacing: 3, fontWeight: "700" },
 
   inviteBtn: { alignItems: "center", justifyContent: "center", backgroundColor: colors.bgSecondary, borderColor: "rgba(212,255,0,0.40)", borderWidth: 1, borderStyle: "dashed", borderRadius: radius.md, paddingVertical: 12, marginBottom: 12 },
-  inviteTxt: { color: colors.accentVolt, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
+  inviteTxt: { color: colors.textPrimary, fontWeight: "900", letterSpacing: 2, fontSize: 12 },
 
   pendingBlock: { backgroundColor: "rgba(251,191,36,0.10)", borderColor: "rgba(251,191,36,0.30)", borderWidth: 1, borderRadius: radius.md, padding: 12, marginBottom: 12 },
   pendingEyebrow: { color: colors.statusMaybe, fontSize: 10, letterSpacing: 2, fontWeight: "700", marginBottom: 8 },
@@ -748,6 +756,9 @@ const s = StyleSheet.create({
   memberNo: { color: colors.textMuted, fontSize: 10, letterSpacing: 1 },
   badge: { backgroundColor: "rgba(212,255,0,0.15)", borderColor: "rgba(212,255,0,0.30)", borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
   badgeTxt: { color: colors.accentVolt, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
+  // El Prez badge — pink to distinguish the head honcho from the regular admin roll-call.
+  badgePrez: { backgroundColor: "rgba(255,45,149,0.15)", borderColor: "rgba(255,45,149,0.40)", borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+  badgePrezTxt: { color: colors.accentPink, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
   invitedBadge: { backgroundColor: "rgba(251,191,36,0.15)", borderColor: "rgba(251,191,36,0.30)", borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
   invitedTxt: { color: colors.statusMaybe, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
 
