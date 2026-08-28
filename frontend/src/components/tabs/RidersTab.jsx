@@ -293,12 +293,12 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
 
   return (
     <div
-      className="absolute inset-0 z-30 bg-black/60 flex items-end"
+      className="fixed inset-0 z-50 bg-black/60 flex flex-col justify-end"
       data-testid="profile-modal"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-full max-h-[85%] overflow-y-auto no-scrollbar bg-bg-secondary border-t border-border-subtle rounded-t-3xl p-5 pb-8 animate-slide-down"
+        className="w-full max-w-[430px] mx-auto flex-none h-[92%] flex flex-col bg-bg-secondary border-t border-border-subtle rounded-t-3xl animate-slide-down"
         style={{
           transform: dx || dy ? `translate(${dx}px, ${dy}px)` : undefined,
           transition: dragging ? "none" : "transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1)",
@@ -306,11 +306,14 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
       >
         <div
           {...dragHandlers}
-          className="pt-1 pb-3 -mx-5 px-5 -mt-5 mb-1 select-none"
+          className="pt-2 pb-2 select-none flex-none"
           data-testid="profile-drag-handle"
         >
           <div className="w-10 h-1 rounded-full bg-border-subtle mx-auto" />
         </div>
+        {/* Body: everything that can scroll. Save/Close is pinned to the
+            sticky footer below so it's always reachable without hunting. */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-1 pb-4">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar name={rider.name} photo={photo} size="lg" testId="profile-avatar" />
@@ -439,25 +442,6 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
             )}
           </div>
         )}
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          {canEditAll && (
-            <button
-              onClick={save}
-              className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl"
-              data-testid="profile-save"
-            >
-              Save
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2.5 rounded-xl"
-            data-testid="profile-close"
-          >
-            Close
-          </button>
-        </div>
 
         <div className="mt-3">
           <button
@@ -622,6 +606,27 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
             )}
           </div>
         )}
+        </div>{/* /scroll body */}
+        {/* Sticky footer — always in view so Save/Close never require a scroll,
+            on any viewport (phone, PWA, or desktop browser). */}
+        <div className="flex-none border-t border-border-subtle bg-bg-secondary/95 backdrop-blur px-5 py-3 flex gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {canEditAll && (
+            <button
+              onClick={save}
+              className="flex-1 bg-accent-volt text-black font-bold uppercase tracking-widest text-xs py-2.5 rounded-xl"
+              data-testid="profile-save"
+            >
+              Save
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="flex-1 border border-border-subtle text-text-secondary uppercase tracking-widest text-xs py-2.5 rounded-xl"
+            data-testid="profile-close"
+          >
+            Close
+          </button>
+        </div>
       </div>
       {cardOpen && <MemberCard rider={rider} onClose={() => setCardOpen(false)} />}
       {confirmDeleteRider && (

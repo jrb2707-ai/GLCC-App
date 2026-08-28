@@ -21,7 +21,10 @@ export default function PhoneFrame({ children }) {
 
   if (!isDesktop) {
     return (
-      <div className="fixed inset-0 bg-bg-primary text-text-primary flex flex-col overflow-hidden" data-testid="app-shell">
+      // `transform-gpu` establishes this as a containing block so any
+      // `fixed` descendants (member card, profile modal) scope to the
+      // app shell instead of the raw viewport.
+      <div className="fixed inset-0 bg-bg-primary text-text-primary flex flex-col overflow-hidden transform-gpu" data-testid="app-shell">
         {children}
       </div>
     );
@@ -29,7 +32,7 @@ export default function PhoneFrame({ children }) {
 
   return (
     <div
-      className="relative w-[402px] max-w-full h-[860px] max-h-[92vh] rounded-[46px] bg-black shadow-2xl overflow-hidden border-[6px]"
+      className="relative w-[402px] max-w-full h-[860px] max-h-[92vh] rounded-[46px] bg-black shadow-2xl overflow-hidden border-[6px] transform-gpu"
       style={{ borderColor: "var(--glcc-frame-bezel)" }}
       data-testid="app-shell"
     >
