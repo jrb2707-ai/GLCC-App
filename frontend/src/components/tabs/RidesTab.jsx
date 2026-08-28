@@ -6,7 +6,7 @@ import { ArrowLeft, MapPin, Coffee, Mountain, Route } from "lucide-react";
 import { toast } from "sonner";
 import StravaPanel from "../StravaPanel";
 import RideRoundBlock from "../RideRoundBlock";
-import { inferRidePaceClass, PACE_CHIP_LABEL, PACE_CHIP_CLS } from "../../lib/ride";
+import { inferRidePaceClass, PACE_CHIP_LABEL, PACE_CHIP_CLS, PACE_STAT_LABEL } from "../../lib/ride";
 
 const RSVP_OPTIONS = [
   { key: "going", label: "Going", color: "bg-status-going/20 text-status-going border-status-going/40" },
@@ -246,7 +246,9 @@ export default function RidesTab({ onNavigate }) {
           </div>
           <div className="bg-bg-secondary border border-border-subtle rounded-xl p-3">
             <div className="text-[10px] uppercase tracking-widest text-text-muted font-mono-stat">Pace</div>
-            <div className="font-heading text-xl font-bold mt-1">{open.pace}</div>
+            <div className="font-heading text-xl font-bold mt-1" data-testid="ride-detail-pace-value">
+              {open.pace || PACE_STAT_LABEL[inferRidePaceClass(open)]}
+            </div>
           </div>
         </div>
 

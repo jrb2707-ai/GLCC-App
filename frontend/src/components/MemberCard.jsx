@@ -46,13 +46,13 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
       {/* Top bar (also acts as pull-to-dismiss handle) */}
       <div
         {...dragHandlers}
-        className="relative z-10 flex-none flex items-center justify-between px-5 pt-6 pb-3 select-none"
+        className="relative z-10 flex-none flex items-center justify-between px-5 pt-3 pb-1 select-none"
         data-testid="member-card-drag-handle"
       >
         <button
           onClick={onClose}
           onPointerDown={(e) => e.stopPropagation()}
-          className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-95"
+          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-95"
           data-testid="member-card-close"
         >
           <X className="w-4 h-4" />
@@ -60,29 +60,29 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
         <span className="font-mono-stat text-[10px] uppercase tracking-[0.35em] text-white/40">
           Pull down · Member Card
         </span>
-        <div className="w-9" />
+        <div className="w-8" />
       </div>
 
-      {/* Scrollable body */}
-      <div className="relative z-10 flex-1 overflow-y-auto no-scrollbar" data-testid="member-card-scroll">
-        {/* Card */}
-        <div className="flex items-center justify-center px-6 py-8">
+      {/* No-scroll body: card at top, grid + actions pack the rest */}
+      <div className="relative z-10 flex-1 flex flex-col overflow-hidden" data-testid="member-card-scroll">
+        {/* Card — top-aligned, compact so the whole layout lands on one screen */}
+        <div className="flex-none flex items-start justify-center px-6 pt-2 pb-3">
           <div
-            className="w-full max-w-[280px] aspect-[3/4.4] rounded-2xl bg-white shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] p-6 flex flex-col items-center text-black -rotate-3"
+            className="w-full max-w-[220px] aspect-[3/4] rounded-2xl bg-white shadow-[0_30px_60px_-20px_rgba(0,0,0,0.7)] p-4 flex flex-col items-center text-black -rotate-3"
             data-testid="member-card"
           >
-            <div className="text-[10px] font-mono-stat uppercase tracking-[0.35em] text-black/50 self-start">
+            <div className="text-[9px] font-mono-stat uppercase tracking-[0.35em] text-black/50 self-start">
               GLCC ·
             </div>
-            <h2 className="font-heading text-3xl font-black uppercase tracking-tight leading-none mt-1 self-start">
+            <h2 className="font-heading text-xl font-black uppercase tracking-tight leading-none mt-1 self-start">
               {displayName}
             </h2>
 
-            <div className="flex-1 flex items-center justify-center py-4">
+            <div className="flex-1 flex items-center justify-center py-2">
               {rider.photo ? (
-                <img src={rider.photo} alt={rider.name} className="w-28 h-28 rounded-full object-cover border-4 border-black" />
+                <img src={rider.photo} alt={rider.name} className="w-20 h-20 rounded-full object-cover border-[3px] border-black" />
               ) : (
-                <div className="w-28 h-28 rounded-full bg-black text-white flex items-center justify-center font-heading text-3xl font-black">
+                <div className="w-20 h-20 rounded-full bg-black text-white flex items-center justify-center font-heading text-2xl font-black">
                   {initials}
                 </div>
               )}
@@ -90,76 +90,73 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
 
             <div className="w-full flex items-end justify-between">
               <div>
-                <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-black/50">Member</div>
-                <div className="font-heading text-xl font-black tabular-nums leading-none" data-testid="member-card-number">
+                <div className="text-[8px] font-mono-stat uppercase tracking-[0.3em] text-black/50">Member</div>
+                <div className="font-heading text-base font-black tabular-nums leading-none" data-testid="member-card-number">
                   #{memberNo}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-black/50">Chapter</div>
-                <div className="font-heading text-sm font-black uppercase leading-none tracking-tight">Grey Lynn</div>
+                <div className="text-[8px] font-mono-stat uppercase tracking-[0.3em] text-black/50">Chapter</div>
+                <div className="font-heading text-[11px] font-black uppercase leading-none tracking-tight">Grey Lynn</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Meta rows */}
-        <div className="grid grid-cols-2 gap-3 px-5 pb-10 pt-2">
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Member No.</div>
-            <div className="font-heading text-2xl font-black tabular-nums text-white mt-1">#{memberNo}</div>
-          </div>
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Role</div>
-            <div className="font-heading text-sm font-bold uppercase text-white mt-1 leading-tight truncate">
-              {rider.is_president ? "El Presidente" : rider.role || "Member"}
+        {/* Meta grid + actions — packed tight right under the card */}
+        <div className="flex-none flex flex-col gap-2 px-5 pb-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+              <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Role</div>
+              <div className="font-heading text-xs font-bold uppercase text-white mt-0.5 leading-tight truncate">
+                {rider.is_president ? "El Presidente" : rider.role || "Member"}
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+              <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Since</div>
+              <div className="font-heading text-xs font-bold uppercase text-white mt-0.5 leading-tight" data-testid="member-card-since">{joinedLabel}</div>
+            </div>
+            <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 col-span-2">
+              <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Coffee</div>
+              <div className="text-xs text-white mt-0.5 truncate">{rider.coffee || "—"}</div>
             </div>
           </div>
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Since</div>
-            <div className="font-heading text-sm font-bold uppercase text-white mt-1 leading-tight" data-testid="member-card-since">{joinedLabel}</div>
+          {/* Actions row — both fit side-by-side when both present */}
+          <div className={`${onEditProfile && canBlock ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2"}`}>
+            {onEditProfile && (
+              <button
+                onClick={onEditProfile}
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent-volt text-black uppercase tracking-widest text-[11px] font-bold py-2.5"
+                data-testid="member-card-edit"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Edit
+              </button>
+            )}
+            {canBlock && (
+              <button
+                onClick={async () => {
+                  try {
+                    if (isBlocked) {
+                      await api.delete(`/blocks/${rider.id}`);
+                      toast("Unblocked");
+                    } else {
+                      if (!window.confirm("Block this rider? You won't see their chat messages and they can't @mention you.")) return;
+                      await api.post("/blocks", { target_id: rider.id });
+                      toast("Blocked");
+                    }
+                    await onBlockChange?.();
+                    if (!isBlocked) onClose?.();
+                  } catch (e) { toast.error(formatDetail(e)); }
+                }}
+                className={`flex items-center justify-center gap-2 rounded-xl uppercase tracking-widest text-[11px] font-bold py-2.5 border ${
+                  isBlocked ? "bg-status-cant text-white border-status-cant" : "bg-status-cant/10 text-status-cant border-status-cant/40"
+                }`}
+                data-testid={isBlocked ? "member-card-unblock" : "member-card-block"}
+              >
+                <Ban className="w-3.5 h-3.5" /> {isBlocked ? "Unblock" : "Block"}
+              </button>
+            )}
           </div>
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Chapter</div>
-            <div className="font-heading text-sm font-bold uppercase text-white mt-1 leading-tight">Grey Lynn</div>
-          </div>
-          <div className="rounded-xl bg-white/5 border border-white/10 p-3 col-span-2">
-            <div className="text-[10px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Coffee</div>
-            <div className="text-sm text-white mt-1">{rider.coffee || "—"}</div>
-          </div>
-          {onEditProfile && (
-            <button
-              onClick={onEditProfile}
-              className="col-span-2 flex items-center justify-center gap-2 rounded-xl bg-accent-volt text-black uppercase tracking-widest text-xs font-bold py-3 mt-1"
-              data-testid="member-card-edit"
-            >
-              <Pencil className="w-3.5 h-3.5" /> Edit profile
-            </button>
-          )}
-          {canBlock && (
-            <button
-              onClick={async () => {
-                try {
-                  if (isBlocked) {
-                    await api.delete(`/blocks/${rider.id}`);
-                    toast("Unblocked");
-                  } else {
-                    if (!window.confirm("Block this rider? You won't see their chat messages and they can't @mention you.")) return;
-                    await api.post("/blocks", { target_id: rider.id });
-                    toast("Blocked");
-                  }
-                  await onBlockChange?.();
-                  if (!isBlocked) onClose?.();
-                } catch (e) { toast.error(formatDetail(e)); }
-              }}
-              className={`col-span-2 flex items-center justify-center gap-2 rounded-xl uppercase tracking-widest text-xs font-bold py-3 mt-1 border ${
-                isBlocked ? "bg-status-cant text-white border-status-cant" : "bg-status-cant/10 text-status-cant border-status-cant/40"
-              }`}
-              data-testid={isBlocked ? "member-card-unblock" : "member-card-block"}
-            >
-              <Ban className="w-3.5 h-3.5" /> {isBlocked ? "Blocked · tap to unblock" : "Block this rider"}
-            </button>
-          )}
         </div>
       </div>
     </div>

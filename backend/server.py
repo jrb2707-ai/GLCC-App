@@ -174,6 +174,7 @@ def serialize_ride(doc: dict) -> dict:
         "source": doc.get("source", "manual"),
         "strava_event_id": doc.get("strava_event_id"),
         "strava_url": doc.get("strava_url"),
+        "strava_format": doc.get("strava_format"),  # Race | Workout | GroupRide (or None for manual rides)
         "map_url": doc.get("map_url"),
         "polyline": doc.get("polyline"),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
@@ -1382,9 +1383,40 @@ def _event_to_ride(ev: dict, route_stats: Optional[dict] = None) -> dict:
         route_description = route_stats["description"]
     elif ev.get("description"):
         route_description = str(ev["description"]).strip() or None
+    # Strava doesn't expose the "Format" picker (Group Ride / Race / Workout)
+    # in the public API today, but three future-proof paths cover it:
+    #  1. `event_type` / `sub_type` / `format` — direct field if Strava
+    #     ever ships it.
+    #  2. `skill_levels` — Strava's own bitmask that appears on the event
+    #     creation form (Casual=1, Tempo=2, Hammerfest=4). Maps cleanly to
+    #     social / tempo / race.
+    #  3. A `[format: race|workout|social|tempo]` tag inside the description
+    #     so club admins can annotate manually today.
+    fmt_raw = (
+        ev.get("event_type") or ev.get("sub_type") or ev.get("format")
+    )
+    if not fmt_raw:
+        sl = ev.get("skill_levels")
+        try:
+            sl_int = int(sl) if sl is not None else 0
+        except (TypeError, ValueError):
+            sl_int = 0
+        if sl_int & 4:
+            fmt_raw = "race"       # Hammerfest
+        elif sl_int & 2:
+            fmt_raw = "workout"    # Tempo
+        elif sl_int & 1:
+            fmt_raw = "groupride"  # Casual → social
+    if not fmt_raw and ev.get("description"):
+        m = re.search(r"\[(?:format|pace):\s*([a-z_ ]+)\]", str(ev["description"]), re.I)
+        if m:
+            fmt_raw = m.group(1).strip()
     return {
         "strava_event_id": event_id,
         "source": "strava",
+        # See fmt_raw above — persisted so the client's pace helper can
+        # short-circuit its regex fallback.
+        "strava_format": fmt_raw,
         "day": day,
         "date": date_str,
         "time": time_str,

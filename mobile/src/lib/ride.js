@@ -1,7 +1,13 @@
-// Mirror of /app/frontend/src/lib/ride.js — infers pace class from free
-// text fields on a ride so mobile and web render the same pace chip.
+// Mirror of /app/frontend/src/lib/ride.js — infers pace class from a
+// Strava `event_type` (Race / Workout / GroupRide) when present, otherwise
+// regexes over free text. Kept in lockstep so mobile and web render the
+// same pace chip for the same ride.
 export function inferRidePaceClass(ride) {
   if (!ride) return "social";
+  const fmt = String(ride.strava_format || "").toLowerCase().replace(/[\s_-]/g, "");
+  if (fmt === "race") return "race";
+  if (fmt === "workout" || fmt === "tempo") return "tempo";
+  if (fmt === "groupride" || fmt === "social") return "social";
   const haystack = [
     ride.name,
     ride.route,
@@ -20,4 +26,10 @@ export const PACE_CHIP_LABEL = {
   social: "Social pace",
   tempo: "Tempo pace",
   race: "Race pace",
+};
+
+export const PACE_STAT_LABEL = {
+  social: "Social",
+  tempo: "Tempo",
+  race: "Race",
 };

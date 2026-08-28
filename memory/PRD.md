@@ -142,6 +142,21 @@ Apple App Store 1.2 compliance (block/report/moderate).
   fired first and re-closed the popover before onClick could toggle it.
   Fixed by short-circuiting the outside-click handler when the tap
   target is the toggle button itself.
+- **2026-02-28 — Strava pace + I'm Buying guard + MemberCard fit**:
+  Ride pace chip now sources from three cascading signals: Strava
+  `event_type` / `sub_type` / `format` (if the future API ships it),
+  `skill_levels` bitmask (Casual=1 → social, Tempo=2 → tempo,
+  Hammerfest=4 → race), or a `[format: race|workout|social|tempo]`
+  tag inside the event description. Regex over ride title stays as a
+  final fallback. Empty PACE stat tile now shows the inferred label
+  ("Social" / "Tempo" / "Race") instead of "—". `I'M BUYING` on a ride
+  card now checks `/coffee/rounds/active` first — if a round is live
+  anywhere in the club it routes the rider into that tally instead of
+  trying to open a competing round. MemberCard peer view redesigned:
+  card is top-anchored, Role/Since side-by-side, Coffee wide, and
+  EDIT + BLOCK sit side-by-side — everything fits one screen with
+  zero scroll. Riders bottom-nav active tint now inherits the same red
+  as the dossard watermark on that tab (was black in light mode).
 
 ## Backlog / Roadmap
 - **P1 — Backend monolith refactor**: split `/app/backend/server.py` (~3.6k

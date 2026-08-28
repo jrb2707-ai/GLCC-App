@@ -163,6 +163,23 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
   async function startRound() {
     setBusy(true);
     try {
+      // Guard: if a round is already live anywhere in the club, funnel the
+      // rider into that round's tally instead of trying (and failing) to
+      // open a competing one. The backend blocks duplicates, but the
+      // client should route to the existing tally so the rider can add
+      // their coffee in a single tap.
+      try {
+        const { data: active } = await api.get("/coffee/rounds/active");
+        const live = (active?.rounds || []).find((r) => !r.closed);
+        if (live) {
+          openLiveRound(live);
+          toast(`Round in progress · ${live.buyer_name}'s shout`, {
+            description: "Opening the barista tally so you can add yours.",
+          });
+          return;
+        }
+      } catch (_) { /* if the check fails, fall through and try to start */ }
+
       const cafeName = ride.cafe || initialCafe || "Café";
       const { data } = await api.post(`/rides/${ride.id}/round`, {
         cafe_name: cafeName,

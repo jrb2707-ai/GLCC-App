@@ -121,6 +121,15 @@ export default function RideRoundBlock({ ride }) {
   async function startRound() {
     setBusy(true);
     try {
+      // Guard: if a round is already live anywhere in the club, funnel the
+      // rider into that round's tally instead of trying (and failing) to
+      // open a competing one.
+      try {
+        const { data: active } = await api.get("/coffee/rounds/active");
+        const live = (active?.rounds || []).find((r) => !r.closed);
+        if (live) { openLiveRound(live); return; }
+      } catch (_) { /* fall through and try to start */ }
+
       const cafeName = ride.cafe || "Café";
       const { data } = await api.post(`/rides/${ride.id}/round`, {
         cafe_name: cafeName, close_in_seconds: 300,

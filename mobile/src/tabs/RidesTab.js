@@ -11,7 +11,7 @@ import StravaPanel from "../components/StravaPanel";
 import RouteMap from "../components/RouteMap";
 import RideRoundBlock from "../components/RideRoundBlock";
 import { readCache, writeCache } from "../lib/cache";
-import { inferRidePaceClass, PACE_CHIP_LABEL } from "../lib/ride";
+import { inferRidePaceClass, PACE_CHIP_LABEL, PACE_STAT_LABEL } from "../lib/ride";
 
 const PACE_TINTS = {
   social: { bg: "rgba(34,197,94,0.15)", fg: colors.statusGoing, border: "rgba(34,197,94,0.35)" },
@@ -184,7 +184,7 @@ export default function RidesTab() {
         <View style={s.statsRow}>
           <StatCell label="Distance" value={open.distance || "—"} />
           <StatCell label="Elevation" value={open.elevation || "—"} />
-          <StatCell label="Pace" value={open.pace || "—"} />
+          <StatCell label="Pace" value={open.pace || PACE_STAT_LABEL[inferRidePaceClass(open)]} />
         </View>
 
         <Text style={s.locLine}>📍 {open.location ? `Depart ${open.location}` : "Location TBC"}</Text>
