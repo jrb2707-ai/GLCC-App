@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import Avatar from "../Avatar";
 import { Coffee, ChevronRight } from "lucide-react";
 import RideRoundBlock from "../RideRoundBlock";
+import { StatsCard, TopBuyersCard, YourHistoryCard } from "../CoffeeStats";
 
 function normalizeOrder(text) {
   return String(text || "")
@@ -75,26 +76,21 @@ function RoundRow({ round, onOpen }) {
 }
 
 export default function CoffeeTab({ onNavigate }) {
-  const { user, refreshMe } = useAuth();
+  const { user } = useAuth();
   const { subscribe } = useEvents();
   const { open: openLiveRound, hasHidden, round: liveRound } = useLiveRound();
   const [active, setActive] = useState([]);
-  const [history, setHistory] = useState([]);
   const [nextRide, setNextRide] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [usual, setUsual] = useState(user?.coffee || "Medium Flat White");
-  const [savingUsual, setSavingUsual] = useState(false);
   const [detail, setDetail] = useState(null); // round object to preview
 
   const load = async () => {
     try {
-      const [a, h, r] = await Promise.all([
+      const [a, r] = await Promise.all([
         api.get("/coffee/rounds/active"),
-        api.get("/coffee/rounds/history"),
         api.get("/rides"),
       ]);
       setActive(a.data.rounds || []);
-      setHistory(h.data.rounds || []);
       // Only attach the CTA to an actually-upcoming ride so a stale/past ride
       // can't hide the buttons. If nothing upcoming → nextRide stays null and
       // the tab shows a greyed "sync Strava" prompt.
@@ -108,7 +104,6 @@ export default function CoffeeTab({ onNavigate }) {
   };
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { setUsual(user?.coffee || "Medium Flat White"); }, [user?.coffee]);
 
   // Pull-to-refresh on mobile web. Triggers a manual load() when the user
   // drags down more than ~80px from the top of the tab content. Works around
@@ -189,29 +184,9 @@ export default function CoffeeTab({ onNavigate }) {
       }
       if (evt.type === "coffee.round.closed") {
         setActive((prev) => prev.filter((r) => r.id !== evt.round.id));
-        setHistory((prev) => [evt.round, ...prev.filter((r) => r.id !== evt.round.id)].slice(0, 20));
       }
     });
   }, [subscribe]);
-
-  async function saveUsual() {
-    if (savingUsual) return;
-    const trimmed = usual.trim();
-    if (!trimmed) { toast.error("Give me your usual first."); return; }
-    setSavingUsual(true);
-    try {
-      await api.patch("/riders/me", { coffee: trimmed });
-      await refreshMe?.();
-      // If a live round is already flashing, jump straight into it instead of
-      // sending a "saved" toast — one-tap into the peloton's shout.
-      if (active.length > 0) {
-        setDetail(active[0]);
-      } else {
-        toast("Usual saved ☕", { description: "Tap 'Usual' next time a round drops." });
-      }
-    } catch (e) { toast.error(formatDetail(e)); }
-    finally { setSavingUsual(false); }
-  }
 
   function openRound(round) {
     // Always show the modal with the live orders + inline order input so the
@@ -242,7 +217,7 @@ export default function CoffeeTab({ onNavigate }) {
         <div className="flex items-baseline justify-between mb-3 px-1">
           <h2 className="font-heading text-3xl font-black uppercase text-text-primary">Coffee</h2>
           <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted">
-            {active.length} live · {history.length} past
+            {active.length} live
           </span>
         </div>
       )}
@@ -306,35 +281,11 @@ export default function CoffeeTab({ onNavigate }) {
         </div>
       )}
 
-      {/* Usual order */}
-      <div className="bg-bg-secondary border border-border-subtle rounded-2xl p-4" data-testid="usual-card">
-        <div className="flex items-center gap-2 text-accent-pink">
-          <Coffee className="w-4 h-4" />
-          <span className="text-[10px] uppercase tracking-widest font-mono-stat font-bold">Your usual</span>
-        </div>
-        <div className="mt-2 flex gap-2">
-          <input
-            value={usual}
-            onChange={(e) => setUsual(e.target.value)}
-            placeholder="Flat white, no sugar…"
-            className="flex-1 bg-bg-primary border border-border-subtle rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-pink outline-none"
-            data-testid="usual-input"
-            maxLength={140}
-          />
-          <button
-            onClick={saveUsual}
-            disabled={savingUsual || !usual.trim()}
-            className="bg-accent-pink text-white rounded-xl px-3 py-2.5 disabled:opacity-40 active:scale-95 shadow-pink"
-            data-testid="usual-save"
-            aria-label="Save usual order"
-          >
-            <Coffee className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="mt-2 text-[10px] text-text-muted font-mono-stat uppercase tracking-widest">
-          Pre-fills when someone starts a round. One tap and you&apos;re in.
-        </div>
-      </div>
+      {/* Your Stats — jersey progress + rounds bought / joined (Phase 2). */}
+      <StatsCard />
+
+      {/* Top Buyers leaderboard (Phase 2). */}
+      <TopBuyersCard />
 
       {/* Other live rounds (that aren't on the pinned nextRide the
           RideRoundBlock already renders). Only visible when there's more
@@ -376,22 +327,8 @@ export default function CoffeeTab({ onNavigate }) {
         </div>
       )}
 
-      {/* History */}
-      <div className="mt-6" data-testid="history-section">
-        <div className="flex items-center gap-2 mb-2 px-1">
-          <span className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted font-bold">Past rounds</span>
-          <div className="flex-1 h-px bg-border-subtle" />
-        </div>
-        {history.length === 0 ? (
-          <div className="text-[12px] text-text-muted italic px-1" data-testid="history-empty">
-            Nothing here yet — history keeps the last 7 days.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {history.map((r) => <RoundRow key={r.id} round={r} onOpen={openRound} />)}
-          </div>
-        )}
-      </div>
+      {/* Your last 5 — hard-capped per spec (no pagination). */}
+      <YourHistoryCard />
 
       {/* Round preview modal — full orders list + inline order input so the
           rider can slot into any live round without leaving the Coffee tab. */}

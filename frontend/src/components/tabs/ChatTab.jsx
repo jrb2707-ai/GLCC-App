@@ -268,7 +268,7 @@ export default function ChatTab() {
             disabled={isPending}
             aria-pressed={announcement}
             className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black uppercase tracking-[0.2em] text-xs active:scale-[0.98] ${announcement ? "bg-brand-accent text-black shadow-[0_4px_14px_rgba(212,255,0,0.4)]" : "bg-bg-secondary text-text-primary border border-border-subtle"}`}
-            data-testid="chat-announce-btn"
+            data-testid="announce-toggle"
           >
             <Megaphone className="w-3.5 h-3.5" />
             {announcement ? "Announcement ON — next message pushes to all" : "Announce to all"}

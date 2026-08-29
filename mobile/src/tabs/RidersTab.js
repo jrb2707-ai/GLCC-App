@@ -754,8 +754,8 @@ const s = StyleSheet.create({
   name: { color: colors.textPrimary, fontWeight: "700", fontSize: 14 },
   meta: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
   memberNo: { color: colors.textMuted, fontSize: 10, letterSpacing: 1 },
-  badge: { backgroundColor: "rgba(212,255,0,0.15)", borderColor: "rgba(212,255,0,0.30)", borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
-  badgeTxt: { color: colors.accentVolt, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
+  badge: { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.40)", borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+  badgeTxt: { color: colors.statusCant, fontSize: 9, letterSpacing: 2, fontWeight: "700" },
   // El Prez badge — pink to distinguish the head honcho from the regular admin roll-call.
   badgePrez: { backgroundColor: "rgba(255,45,149,0.15)", borderColor: "rgba(255,45,149,0.40)", borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
   badgePrezTxt: { color: colors.accentPink, fontSize: 9, letterSpacing: 2, fontWeight: "700" },

@@ -142,6 +142,18 @@ Apple App Store 1.2 compliance (block/report/moderate).
   fired first and re-closed the popover before onClick could toggle it.
   Fixed by short-circuiting the outside-click handler when the tap
   target is the toggle button itself.
+- **2026-02-29 — Coffee System Phase 2 shipped**:
+  Backend: `jersey_achievements` collection + insert-once auto-mint when
+  a rider crosses 25/50/100 rounds bought on any round close. Milestone
+  triggers a club-wide chat auto-post (once per tier per rider — never
+  re-fires). New endpoints: `GET /coffee/stats/me`, `GET /coffee/leaderboard?period=year|month`,
+  `GET /coffee/history/me` (hard-capped 5, no pagination), `PUT /profile/coffee-orders`,
+  `GET /coffee/jerseys/{rider_id}`. `secondary_coffee` field added to user
+  model. Frontend: replaced YourUsualCard + PastRoundsList with StatsCard
+  (jersey badge + progress bar always visible even when collapsed),
+  TopBuyersCard (month/year toggle, gold/silver/bronze medals),
+  YourHistoryCard (5-row cap). Verified end-to-end: Jason crossed 25 →
+  Ruby Roaster auto-minted + chat post + card renders correctly.
 - **2026-02-28 — Strava pace + I'm Buying guard + MemberCard fit**:
   Ride pace chip now sources from three cascading signals: Strava
   `event_type` / `sub_type` / `format` (if the future API ships it),

@@ -86,7 +86,7 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
         aria-label="Settings"
         data-testid="header-cog"
       >
-        <Settings className="w-5 h-5" />
+        <Settings className="w-7 h-7" />
       </button>
 
       {/* Right — mail · bell · Exit */}
@@ -98,10 +98,10 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
           aria-label="Messages"
           data-testid="dm-open"
         >
-          <Mail className="w-[18px] h-[18px]" />
+          <Mail className="w-[26px] h-[26px]" />
           {dmUnread > 0 && (
             <span
-              className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent-pink text-white text-[9px] font-black flex items-center justify-center leading-none"
+              className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent-pink text-white text-[10px] font-black flex items-center justify-center leading-none"
               data-testid="dm-badge"
             >
               {dmUnread > 9 ? "9+" : dmUnread}
@@ -115,9 +115,9 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
           aria-label="Notifications"
           data-testid="header-bell"
         >
-          <Bell className="w-[18px] h-[18px]" />
+          <Bell className="w-[26px] h-[26px]" />
           {feed.unread > 0 && !bellOpen && (
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent-pink ring-2 ring-bg-primary" />
+            <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-accent-pink ring-2 ring-bg-primary" />
           )}
         </button>
         <button
@@ -194,11 +194,11 @@ function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
   return (
     <div
       ref={ref}
-      className="absolute top-12 left-3 w-[240px] z-50 bg-bg-secondary border border-accent-pink rounded-2xl shadow-2xl p-3.5 animate-in fade-in zoom-in-95 duration-150"
+      className="absolute top-14 left-3 w-[320px] max-w-[calc(100vw-24px)] z-50 bg-bg-secondary border border-accent-pink rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in-95 duration-150"
       data-testid="settings-popover"
     >
       <div className="absolute -top-1.5 left-4 w-3 h-3 bg-bg-secondary border-l border-t border-accent-pink rotate-45" />
-      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-accent-pink mb-2.5 px-1">Settings</div>
+      <div className="text-[11px] font-mono-stat uppercase tracking-widest text-accent-pink mb-3 px-1">Settings</div>
       <div className="rounded-xl bg-bg-primary border border-border-subtle overflow-hidden">
         {rows.map((r, i) => {
           const Icon = r.icon;
@@ -207,28 +207,28 @@ function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
             <button
               key={r.key}
               onClick={() => toggle(r.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left ${i > 0 ? "border-t border-border-subtle" : ""}`}
+              className={`w-full flex items-center gap-3 px-3.5 py-3 text-left ${i > 0 ? "border-t border-border-subtle" : ""}`}
               data-testid={`pref-${r.key}`}
             >
-              <Icon className="w-3.5 h-3.5 text-text-muted shrink-0" />
+              <Icon className="w-4 h-4 text-text-muted shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-text-primary truncate">{r.label}</div>
-                {r.sub && <div className="text-[10px] font-mono-stat text-text-muted uppercase tracking-widest">{r.sub}</div>}
+                <div className="text-[14px] font-semibold text-text-primary truncate">{r.label}</div>
+                {r.sub && <div className="text-[10px] font-mono-stat text-text-muted uppercase tracking-widest mt-0.5">{r.sub}</div>}
               </div>
-              <div className={`relative w-9 h-5 rounded-full transition ${on ? "bg-accent-pink" : "bg-bg-secondary border border-border-subtle"}`}>
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+              <div className={`relative w-11 h-6 rounded-full transition ${on ? "bg-accent-pink" : "bg-bg-secondary border border-border-subtle"}`}>
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
               </div>
             </button>
           );
         })}
       </div>
-      <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mt-3 mb-1.5 px-1">Display</div>
+      <div className="text-[11px] font-mono-stat uppercase tracking-widest text-text-muted mt-4 mb-2 px-1">Display</div>
       <div className="flex bg-bg-primary rounded-xl p-1 gap-1">
         {["auto", "dark", "light"].map((opt) => (
           <button
             key={opt}
             onClick={() => setTheme(opt)}
-            className={`flex-1 text-[12px] font-semibold capitalize py-1.5 rounded-lg ${theme === opt ? "bg-accent-pink text-white" : "text-text-secondary"}`}
+            className={`flex-1 text-[13px] font-semibold capitalize py-2 rounded-lg ${theme === opt ? "bg-accent-pink text-white" : "text-text-secondary"}`}
             data-testid={`theme-${opt}`}
           >
             {opt}
@@ -267,7 +267,7 @@ function NotificationsPopover({ items, onClose, onTap, onClear }) {
   return (
     <div
       ref={ref}
-      className="absolute top-12 right-16 w-[264px] z-50 bg-bg-secondary border border-accent-pink rounded-2xl shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150"
+      className="absolute top-14 right-4 w-[340px] max-w-[calc(100vw-32px)] z-50 bg-bg-secondary border border-accent-pink rounded-2xl shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-150"
       data-testid="notifications-popover"
     >
       <div className="absolute -top-1.5 right-4 w-3 h-3 bg-bg-secondary border-l border-t border-accent-pink rotate-45" />

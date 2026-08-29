@@ -345,7 +345,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
                 <span className={`text-[9px] uppercase tracking-widest font-bold border px-1.5 rounded ${
                   rider.is_president
                     ? "bg-accent-pink/15 text-accent-pink border-accent-pink/40"
-                    : "bg-accent-volt/15 text-brand-accent border-accent-volt/30"
+                    : "bg-status-cant/15 text-status-cant border-status-cant/40"
                 }`}>
                   {rider.is_president ? "El Prez" : "Admin"}
                 </span>
@@ -1087,7 +1087,7 @@ export default function RidersTab() {
                   <span className={`text-[9px] uppercase tracking-widest font-bold border px-1.5 rounded ${
                     r.is_president
                       ? "bg-accent-pink/15 text-accent-pink border-accent-pink/40"
-                      : "bg-accent-volt/15 text-brand-accent border-accent-volt/30"
+                      : "bg-status-cant/15 text-status-cant border-status-cant/40"
                   }`}>
                     {r.is_president ? "El Prez" : "Admin"}
                   </span>

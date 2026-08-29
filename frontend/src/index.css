@@ -58,6 +58,18 @@ html[data-theme="light"] {
   --glcc-frame-bezel: #1E2126;
 }
 
+/* Announce-to-all toggle: forced full-white in dark mode so the CTA sings
+   against the near-black chat canvas. In light mode the default themed
+   text colour (black) already carries enough weight. */
+html[data-theme="dark"] [data-testid="announce-toggle"][aria-pressed="false"] {
+  color: #FFFFFF !important;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) [data-testid="announce-toggle"][aria-pressed="false"] {
+    color: #FFFFFF !important;
+  }
+}
+
 html,
 body,
 #root {

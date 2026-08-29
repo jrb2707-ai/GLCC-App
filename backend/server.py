@@ -8,6 +8,7 @@ import json
 import secrets
 import hashlib
 import logging
+import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Annotated
 from urllib.parse import urlencode
@@ -19,7 +20,7 @@ import jwt
 import resend
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -140,6 +141,7 @@ def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
         "role": doc.get("role", "Member"),
         "bio": doc.get("bio", ""),
         "coffee": doc.get("coffee", "Medium Flat White"),
+        "secondary_coffee": doc.get("secondary_coffee"),
         "photo": doc.get("photo"),
         "is_admin": doc.get("is_admin", False),
         "is_president": doc.get("is_president", False),
@@ -2360,6 +2362,14 @@ async def close_ride_round(ride_id: str, user: dict = Depends(require_approved))
     )
     updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
     payload = serialize_round(updated)
+    # Phase 2 — jersey milestone check + chat auto-post on first crossing.
+    try:
+        buyer_id = updated.get("buyer_user_id")
+        buyer_name = updated.get("buyer_name") or "A rider"
+        if buyer_id:
+            await _mint_jerseys_if_earned(buyer_id, buyer_name)
+    except Exception:
+        pass
     await manager.broadcast({"type": "coffee.round.closed", "round": payload})
     return payload
 
@@ -2390,6 +2400,179 @@ async def coffee_rounds_history(user: dict = Depends(require_approved), limit: i
         ],
     }).sort("started_at", -1).limit(max(1, min(50, limit))).to_list(None)
     return {"rounds": [serialize_round(d) for d in docs]}
+
+
+# =============================================================================
+# Phase 2 — Jerseys, Stats, Leaderboard, History (per GLCC Coffee System Spec)
+# =============================================================================
+
+# Lifetime rounds-bought thresholds that mint each jersey tier. Immutable —
+# once earned a jersey never expires. Order matters: lowest threshold first
+# so the loop stops at the highest tier crossed.
+JERSEY_TIERS = [
+    {"tier": "red",    "threshold": 25,  "label": "Ruby Roaster"},
+    {"tier": "pink",   "threshold": 50,  "label": "Pink Peloton"},
+    {"tier": "yellow", "threshold": 100, "label": "Yellow Jersey"},
+]
+
+
+async def _rounds_bought_lifetime(uid: str) -> int:
+    """A rider's lifetime rounds-bought count — counts closed rounds only so
+    a still-live round they just kicked off doesn't inflate the number."""
+    now = now_utc()
+    return await db.coffee_rounds.count_documents({
+        "buyer_user_id": uid,
+        "$or": [
+            {"close_at": {"$lte": now}},
+            {"closed_manually_at": {"$exists": True}},
+        ],
+    })
+
+
+async def _mint_jerseys_if_earned(uid: str, user_name: str) -> None:
+    """Insert-once jersey awards. Called on round close for the buyer.
+    Auto-posts a club-wide chat message the first time each tier is crossed
+    — never re-fires, even if the same rider closes another round at the
+    same tier later. Mechanicals still use their own channel; this is the
+    only other auto-post pattern per spec Section 6."""
+    bought = await _rounds_bought_lifetime(uid)
+    for tier in JERSEY_TIERS:
+        if bought < tier["threshold"]:
+            continue
+        already = await db.jersey_achievements.find_one({"rider_id": uid, "tier": tier["tier"]})
+        if already:
+            continue
+        now = now_utc()
+        await db.jersey_achievements.insert_one({
+            "rider_id": uid,
+            "tier": tier["tier"],
+            "threshold": tier["threshold"],
+            "achieved_at": now,
+        })
+        # One-time chat post — spec says once per tier, never per round.
+        msg = {
+            "id": str(uuid.uuid4()),
+            "user_id": "system",
+            "user_name": "GLCC",
+            "text": f"🏆 {user_name} just earned the {tier['label']} — {tier['threshold']} rounds bought. Legend.",
+            "system": True,
+            "announcement": True,
+            "kind": "jersey",
+            "jersey_tier": tier["tier"],
+            "jersey_rider_id": uid,
+            "created_at": now,
+        }
+        await db.chat_messages.insert_one(msg)
+        broadcast_msg = {**msg, "created_at": now.isoformat()}
+        await manager.broadcast({"type": "chat.message", "message": broadcast_msg})
+
+
+@api.get("/coffee/stats/me")
+async def coffee_stats_me(user: dict = Depends(require_approved)):
+    """Rider-facing Coffee stats. Rounds bought is authoritative (used for
+    jersey thresholds); rounds joined is the "you turned up" metric."""
+    uid = str(user["_id"])
+    bought = await db.coffee_rounds.count_documents({"buyer_user_id": uid})
+    joined = await db.coffee_rounds.count_documents({
+        "orders.user_id": uid,
+        "buyer_user_id": {"$ne": uid},
+    })
+    current_tier = None
+    next_tier = None
+    for tier in JERSEY_TIERS:
+        if bought >= tier["threshold"]:
+            current_tier = tier
+        elif next_tier is None:
+            next_tier = tier
+    return {
+        "bought": bought,
+        "joined": joined,
+        "current_tier": current_tier["tier"] if current_tier else None,
+        "current_tier_label": current_tier["label"] if current_tier else None,
+        "next_tier": next_tier["tier"] if next_tier else None,
+        "next_threshold": next_tier["threshold"] if next_tier else None,
+        "progress_pct": min(100, int((bought / next_tier["threshold"]) * 100)) if next_tier else 100,
+    }
+
+
+@api.get("/coffee/leaderboard")
+async def coffee_leaderboard(period: str = "year", user: dict = Depends(require_approved)):
+    """Top buyers this period (year or month, NZT-aligned). Buyer name is
+    projected off the round doc so a renamed rider doesn't ghost."""
+    now = now_utc()
+    if period == "month":
+        start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    else:
+        period = "year"
+        start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+    pipeline = [
+        {"$match": {"buyer_user_id": {"$exists": True}, "started_at": {"$gte": start}}},
+        {"$group": {
+            "_id": "$buyer_user_id",
+            "name": {"$last": "$buyer_name"},
+            "rounds": {"$sum": 1},
+        }},
+        {"$sort": {"rounds": -1}},
+        {"$limit": 10},
+    ]
+    rows = []
+    async for r in db.coffee_rounds.aggregate(pipeline):
+        rows.append({
+            "rider_id": r["_id"],
+            "name": r.get("name") or "Rider",
+            "rounds": r["rounds"],
+        })
+    return {"period": period, "rows": rows}
+
+
+@api.get("/coffee/history/me")
+async def coffee_history_me(user: dict = Depends(require_approved)):
+    """Last 5 rounds this rider was involved in — buyer OR ordering. Hard
+    capped at 5 per spec (no pagination)."""
+    uid = str(user["_id"])
+    cursor = db.coffee_rounds.find({
+        "$or": [{"buyer_user_id": uid}, {"orders.user_id": uid}],
+    }).sort("started_at", -1).limit(5)
+    rows = []
+    async for r in cursor:
+        my_order = next((o for o in r.get("orders", []) if o.get("user_id") == uid), None)
+        rows.append({
+            "id": r.get("id") or str(r["_id"]),
+            "cafe": r.get("cafe_name"),
+            "buyer_name": r.get("buyer_name"),
+            "was_buyer": r.get("buyer_user_id") == uid,
+            "my_drink": (my_order or {}).get("text"),
+            "started_at": r.get("started_at").isoformat() if r.get("started_at") else None,
+        })
+    return {"rows": rows}
+
+
+@api.put("/profile/coffee-orders")
+async def update_coffee_orders(payload: dict = Body(...), user: dict = Depends(require_approved)):
+    """Set the rider's saved coffee orders. `default_coffee` is the pre-fill;
+    `secondary_coffee` (optional) drives the Barista Tally's Secondary toggle."""
+    update = {}
+    if "default_coffee" in payload:
+        update["coffee"] = payload["default_coffee"] or None
+    if "secondary_coffee" in payload:
+        update["secondary_coffee"] = payload["secondary_coffee"] or None
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.users.update_one({"_id": user["_id"]}, {"$set": update})
+    fresh = await db.users.find_one({"_id": user["_id"]})
+    return {
+        "default_coffee": fresh.get("coffee"),
+        "secondary_coffee": fresh.get("secondary_coffee"),
+    }
+
+
+@api.get("/coffee/jerseys/{rider_id}")
+async def coffee_jerseys_for(rider_id: str, user: dict = Depends(require_approved)):
+    """All jersey tiers a rider has earned — for the roster/profile chip."""
+    tiers = []
+    async for j in db.jersey_achievements.find({"rider_id": rider_id}).sort("achieved_at", 1):
+        tiers.append({"tier": j["tier"], "threshold": j["threshold"], "achieved_at": j["achieved_at"].isoformat()})
+    return {"rider_id": rider_id, "tiers": tiers}
 
 @api.post("/admin/send-ride-reminders")
 async def admin_send_ride_reminders(admin: dict = Depends(require_admin)):
