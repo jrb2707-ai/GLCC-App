@@ -2498,13 +2498,28 @@ async def coffee_stats_me(user: dict = Depends(require_approved)):
 @api.get("/coffee/leaderboard")
 async def coffee_leaderboard(period: str = "year", user: dict = Depends(require_approved)):
     """Top buyers this period (year or month, NZT-aligned). Buyer name is
-    projected off the round doc so a renamed rider doesn't ghost."""
+    projected off the round doc so a renamed rider doesn't ghost. If El
+    Presidente has hit "reset" for this scope, only rounds after the reset
+    timestamp are counted."""
     now = now_utc()
     if period == "month":
         start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        scope = "month"
     else:
         period = "year"
         start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        scope = "year"
+    # Honour the latest admin reset for this scope (or global "all").
+    reset = await db.coffee_leaderboard_resets.find_one(
+        {"scope": {"$in": [scope, "all"]}},
+        sort=[("reset_at", -1)],
+    )
+    if reset and reset.get("reset_at"):
+        rat = reset["reset_at"]
+        if rat.tzinfo is None:
+            rat = rat.replace(tzinfo=timezone.utc)
+        if rat > start:
+            start = rat
     pipeline = [
         {"$match": {"buyer_user_id": {"$exists": True}, "started_at": {"$gte": start}}},
         {"$group": {
@@ -2522,7 +2537,26 @@ async def coffee_leaderboard(period: str = "year", user: dict = Depends(require_
             "name": r.get("name") or "Rider",
             "rounds": r["rounds"],
         })
-    return {"period": period, "rows": rows}
+    return {"period": period, "rows": rows, "reset_at": reset["reset_at"].isoformat() if reset and reset.get("reset_at") else None}
+
+
+@api.post("/admin/coffee/leaderboard/reset")
+async def coffee_leaderboard_reset(payload: dict = Body(default={}), admin: dict = Depends(require_admin)):
+    """El Presidente only. Zeroes the Top Buyers leaderboard from now on
+    for the given scope (`month` | `year` | `all`). Historical rounds are
+    kept — the endpoint just filters them out. Undoable by pushing a new
+    reset back in time, but from the UI this is a hard reset."""
+    scope = (payload.get("scope") or "all").lower()
+    if scope not in ("month", "year", "all"):
+        raise HTTPException(status_code=400, detail="scope must be month, year or all")
+    doc = {
+        "scope": scope,
+        "reset_at": now_utc(),
+        "by_user_id": str(admin["_id"]),
+        "by_name": admin.get("name"),
+    }
+    await db.coffee_leaderboard_resets.insert_one(doc)
+    return {"ok": True, "scope": scope, "reset_at": doc["reset_at"].isoformat()}
 
 
 @api.get("/coffee/history/me")
@@ -3375,6 +3409,28 @@ async def dm_delete_message(message_id: str, user: dict = Depends(get_current_us
     evt = {"type": "dm.deleted", "message_id": message_id, "conversation_id": convo_id}
     await manager.send_user(me_id, evt)
     await manager.send_user(peer_id, evt)
+    return {"ok": True}
+
+
+@api.delete("/dm/conversations/{peer_id}")
+async def dm_delete_conversation(peer_id: str, user: dict = Depends(get_current_user)):
+    """Delete an entire DM thread with `peer_id`. Removes the conversation
+    doc + every message. Both parties get a `dm.convo.deleted` event so
+    inboxes stay in sync in real time."""
+    me_id = str(user["_id"])
+    parts = _dm_participants(me_id, peer_id)
+    convo = await db.dm_conversations.find_one({"participants": parts})
+    if not convo:
+        return {"ok": True}
+    convo_id = str(convo["_id"])
+    await db.dm_messages.delete_many({"conversation_id": convo_id})
+    await db.dm_conversations.delete_one({"_id": convo["_id"]})
+    evt = {"type": "dm.convo.deleted", "conversation_id": convo_id, "peer_id": peer_id}
+    await manager.send_user(me_id, evt)
+    # Mirror to the other participant so their inbox drops the row too.
+    other = next((p for p in parts if p != me_id), None)
+    if other:
+        await manager.send_user(other, {"type": "dm.convo.deleted", "conversation_id": convo_id, "peer_id": me_id})
     return {"ok": True}
 
 

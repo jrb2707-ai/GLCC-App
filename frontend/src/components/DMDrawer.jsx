@@ -14,6 +14,7 @@ export default function DMDrawer({ open, onClose }) {
   const [convos, setConvos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [peer, setPeer] = useState(null);
+  const { subscribe } = useEvents();
 
   // Reset back to inbox whenever the drawer re-opens fresh.
   useEffect(() => {
@@ -25,6 +26,17 @@ export default function DMDrawer({ open, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Cross-tab / cross-device inbox sync — if the other party deletes the
+  // convo or we delete it on another device, drop the row here too.
+  useEffect(() => {
+    return subscribe((evt) => {
+      if (evt.type !== "dm.convo.deleted") return;
+      setConvos((cur) => cur.filter((c) => c.id !== evt.conversation_id));
+      // If we were staring at that thread when it died, bounce back.
+      setView((v) => (v === "thread" && peer && String(peer.id) === String(evt.peer_id) ? "list" : v));
+    });
+  }, [subscribe, peer]);
+
   async function refresh() {
     setLoading(true);
     try {
@@ -34,10 +46,50 @@ export default function DMDrawer({ open, onClose }) {
     finally { setLoading(false); }
   }
 
+  async function deleteConvo(convoId, peerId) {
+    // Optimistic — pull row now, rollback on failure.
+    const prev = convos;
+    setConvos((cur) => cur.filter((c) => c.id !== convoId));
+    try {
+      await api.delete(`/dm/conversations/${peerId}`);
+      toast.success("Conversation deleted");
+    } catch (e) {
+      setConvos(prev);
+      toast.error(formatDetail(e));
+    }
+  }
+
   function openThread(p) {
     setPeer(p);
     setView("thread");
   }
+
+  // Pull-down-to-close. Only active on the drawer surface (backdrop already
+  // closes on tap), disabled while inside a thread's scrolled message list.
+  const [dragY, setDragY] = useState(0);
+  const dragStartRef = useRef({ y: 0, active: false });
+  const onDragStart = (e) => {
+    // Only start when the user grabs the header/grabber area at the top of
+    // the drawer — prevents fighting with the message list scroll.
+    const t = e.touches ? e.touches[0] : e;
+    dragStartRef.current = { y: t.clientY, active: true };
+  };
+  const onDragMove = (e) => {
+    if (!dragStartRef.current.active) return;
+    const t = e.touches ? e.touches[0] : e;
+    const dy = t.clientY - dragStartRef.current.y;
+    if (dy > 0) setDragY(Math.min(dy, 320));
+  };
+  const onDragEnd = () => {
+    if (!dragStartRef.current.active) return;
+    dragStartRef.current.active = false;
+    if (dragY > 90) {
+      setDragY(0);
+      onClose?.();
+    } else {
+      setDragY(0);
+    }
+  };
 
   if (!open) return null;
   return (
@@ -47,8 +99,34 @@ export default function DMDrawer({ open, onClose }) {
         onClick={onClose}
         data-testid="dm-drawer-backdrop"
       />
-      <div className="ml-auto relative w-full sm:w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+      <div
+        className="ml-auto relative w-full sm:w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col shadow-2xl animate-in slide-in-from-right duration-200"
+        style={{
+          transform: `translateY(${dragY}px)`,
+          transition: dragStartRef.current.active ? "none" : "transform 180ms ease-out",
+        }}
+      >
+        {/* Grabber strip — the whole thing is the drag handle so a natural
+            "pull down" from the top edge dismisses the drawer. */}
+        <div
+          className="w-full pt-2 pb-1 flex justify-center cursor-grab active:cursor-grabbing touch-pan-y"
+          onTouchStart={onDragStart}
+          onTouchMove={onDragMove}
+          onTouchEnd={onDragEnd}
+          onMouseDown={onDragStart}
+          onMouseMove={(e) => dragStartRef.current.active && onDragMove(e)}
+          onMouseUp={onDragEnd}
+          onMouseLeave={onDragEnd}
+          data-testid="dm-drawer-grabber"
+        >
+          <div className="w-10 h-1 rounded-full bg-border-subtle" />
+        </div>
+        <div
+          className="flex items-center justify-between px-4 py-2 border-b border-border-subtle"
+          onTouchStart={onDragStart}
+          onTouchMove={onDragMove}
+          onTouchEnd={onDragEnd}
+        >
           <div className="flex items-center gap-2">
             {view !== "list" && (
               <button
@@ -81,6 +159,7 @@ export default function DMDrawer({ open, onClose }) {
               loading={loading}
               onPick={openThread}
               onNew={() => setView("pick")}
+              onDelete={deleteConvo}
             />
           )}
           {view === "pick" && (
@@ -95,7 +174,7 @@ export default function DMDrawer({ open, onClose }) {
   );
 }
 
-function InboxList({ convos, loading, onPick, onNew }) {
+function InboxList({ convos, loading, onPick, onNew, onDelete }) {
   return (
     <div className="h-full overflow-y-auto">
       <button
@@ -121,29 +200,140 @@ function InboxList({ convos, loading, onPick, onNew }) {
         </div>
       )}
       {convos.map((c) => (
-        <button
+        <ConvoRow
           key={c.id}
-          onClick={() => onPick(c.peer)}
-          className="w-full flex items-center gap-3 px-4 py-3 border-b border-border-subtle text-left hover:bg-bg-secondary/70 transition"
-          data-testid={`dm-convo-${c.id}`}
+          convo={c}
+          onPick={() => onPick(c.peer)}
+          onDelete={() => onDelete?.(c.id, c.peer.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Swipe-left on a conversation row surfaces a red "delete conversation"
+// icon. Past 60px the delete button locks armed; a second tap commits.
+// Desktop users get a hover-only trash icon on the right edge.
+function ConvoRow({ convo, onPick, onDelete }) {
+  const [dx, setDx] = useState(0);
+  const [armed, setArmed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const startRef = useRef({ x: 0, y: 0, active: false });
+
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    startRef.current = { x: t.clientX, y: t.clientY, active: true };
+  };
+  const onTouchMove = (e) => {
+    if (!startRef.current.active) return;
+    const t = e.touches[0];
+    const rawDx = t.clientX - startRef.current.x;
+    const rawDy = t.clientY - startRef.current.y;
+    if (Math.abs(rawDy) > Math.abs(rawDx)) return;
+    if (rawDx > 0) return;
+    setDx(Math.max(-80, rawDx));
+  };
+  const onTouchEnd = () => {
+    if (!startRef.current.active) return;
+    startRef.current.active = false;
+    if (dx < -50) { setDx(-80); setArmed(true); }
+    else { setDx(0); setArmed(false); }
+  };
+
+  function askDelete(e) {
+    e?.stopPropagation();
+    setConfirming(true);
+  }
+  function confirmDelete(e) {
+    e?.stopPropagation();
+    onDelete?.();
+    setConfirming(false);
+    setDx(0);
+    setArmed(false);
+  }
+  function cancelDelete(e) {
+    e?.stopPropagation();
+    setConfirming(false);
+    setDx(0);
+    setArmed(false);
+  }
+
+  return (
+    <div
+      className="relative select-none group border-b border-border-subtle"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onMouseLeave={() => { if (armed && !confirming) { setDx(0); setArmed(false); } }}
+      data-testid={`dm-convo-row-${convo.id}`}
+    >
+      {/* Left-of-swipe: red delete affordance */}
+      <button
+        type="button"
+        onClick={confirming ? confirmDelete : askDelete}
+        className={`absolute inset-y-0 right-0 flex items-center justify-center gap-1 px-4 bg-status-cant text-white text-[10px] font-black uppercase tracking-widest transition-opacity ${armed || confirming ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        data-testid={`dm-convo-delete-${convo.id}`}
+        aria-label="Delete conversation"
+      >
+        <Trash2 className="w-4 h-4" />
+        {confirming ? "Confirm" : ""}
+      </button>
+      <div
+        style={{ transform: `translateX(${dx}px)`, transition: startRef.current.active ? "none" : "transform 140ms ease-out" }}
+      >
+        <button
+          onClick={onPick}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-secondary/70 transition bg-bg-primary"
+          data-testid={`dm-convo-${convo.id}`}
         >
-          <Avatar name={c.peer.name} photo={c.peer.photo} size="md" />
+          <Avatar name={convo.peer.name} photo={convo.peer.photo} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2">
-              <div className="text-sm font-bold text-text-primary truncate">{c.peer.name}</div>
-              <div className="text-[10px] text-text-muted font-mono-stat uppercase tracking-widest shrink-0">{formatTs(c.last_at)}</div>
+              <div className="text-sm font-bold text-text-primary truncate">{convo.peer.name}</div>
+              <div className="text-[10px] text-text-muted font-mono-stat uppercase tracking-widest shrink-0">{formatTs(convo.last_at)}</div>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              <div className={`text-[12px] truncate flex-1 ${c.unread > 0 ? "text-text-primary font-semibold" : "text-text-muted"}`}>{c.last_text || "Say hi…"}</div>
-              {c.unread > 0 && (
-                <span className="shrink-0 px-1.5 min-w-[18px] h-[18px] rounded-full bg-accent-pink text-white text-[10px] font-black flex items-center justify-center" data-testid={`dm-unread-${c.id}`}>
-                  {c.unread}
+              <div className={`text-[12px] truncate flex-1 ${convo.unread > 0 ? "text-text-primary font-semibold" : "text-text-muted"}`}>{convo.last_text || "Say hi…"}</div>
+              {convo.unread > 0 && (
+                <span className="shrink-0 px-1.5 min-w-[18px] h-[18px] rounded-full bg-accent-pink text-white text-[10px] font-black flex items-center justify-center" data-testid={`dm-unread-${convo.id}`}>
+                  {convo.unread}
                 </span>
               )}
             </div>
           </div>
         </button>
-      ))}
+      </div>
+      {/* Desktop hover-only trash pill so mouse users can delete too. */}
+      <button
+        type="button"
+        onClick={confirming ? confirmDelete : askDelete}
+        className={`hidden sm:flex absolute top-1/2 -translate-y-1/2 right-2 items-center justify-center w-7 h-7 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-status-cant transition ${armed || confirming ? "opacity-0" : ""}`}
+        aria-label="Delete conversation"
+        data-testid={`dm-convo-desktop-delete-${convo.id}`}
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+      {confirming && (
+        <div className="absolute inset-0 bg-bg-primary/95 flex items-center justify-center gap-2 px-4">
+          <span className="text-[11px] text-text-primary font-semibold flex-1 truncate">
+            Delete convo with {convo.peer.name}?
+          </span>
+          <button
+            onClick={cancelDelete}
+            className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full border border-border-subtle text-text-secondary"
+            data-testid={`dm-convo-delete-cancel-${convo.id}`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmDelete}
+            className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full bg-status-cant text-white"
+            data-testid={`dm-convo-delete-confirm-${convo.id}`}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

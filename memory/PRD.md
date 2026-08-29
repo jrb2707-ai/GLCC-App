@@ -26,6 +26,14 @@ Apple App Store 1.2 compliance (block/report/moderate).
 - Apple App Store screenshot automation
 
 ## Implemented (dates in NZT)
+- 2026-02-29 — DM inbox: swipe-left on a conversation row reveals red
+  delete affordance; confirm-then-commit pattern. Pull-down on the drawer
+  grabber/header dismisses it. Backend: `DELETE /api/dm/conversations/{peer_id}`
+  removes the convo + messages and pushes `dm.convo.deleted` to both parties.
+- 2026-02-29 — Coffee Top Buyers reset (admin only). New endpoint
+  `POST /api/admin/coffee/leaderboard/reset` with `scope` = month|year|all
+  stamps a `coffee_leaderboard_resets` marker; the leaderboard query respects
+  the latest reset. Confirm-then-commit UI on the Top Buyers card.
 - 2026-02-29 — Dark-mode white text on Announce toggle + announcement chat
   bubbles; light-mode Top Buyers count numbers now black instead of lime
   (fixed `.text-brand-accent` to use `data-theme` selectors so an explicit

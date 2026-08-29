@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Coffee, ChevronDown, ChevronUp, Trophy, Award } from "lucide-react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/store";
 
 // GLCC Coffee System — Phase 2 UI cards (per Build Spec).
 // Rendered together at the top of the Coffee tab. Each hits its own endpoint
@@ -108,9 +109,28 @@ export function StatsCard() {
 export function TopBuyersCard() {
   const [rows, setRows] = useState([]);
   const [period, setPeriod] = useState("year");
-  useEffect(() => {
+  const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  // Admin gate — El Prez or ride captains can reset the leaderboard.
+  const { user } = useAuth();
+  const canReset = !!(user && (user.is_president || user.is_admin));
+
+  function load() {
     api.get(`/coffee/leaderboard?period=${period}`).then(({ data }) => setRows(data.rows || [])).catch(() => {});
-  }, [period]);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [period]);
+
+  async function doReset() {
+    setResetting(true);
+    try {
+      await api.post("/admin/coffee/leaderboard/reset", { scope: period });
+      setRows([]);
+      setConfirming(false);
+    } catch (e) {
+      // Silent — the card just won't clear if it fails.
+    } finally { setResetting(false); }
+  }
+
   return (
     <div className="bg-bg-secondary border border-border-subtle rounded-2xl p-4 mt-3" data-testid="leaderboard-card">
       <div className="flex items-center gap-2">
@@ -128,6 +148,17 @@ export function TopBuyersCard() {
             </button>
           ))}
         </div>
+        {canReset && (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="ml-1 text-[10px] font-mono-stat uppercase tracking-widest text-text-muted hover:text-status-cant border border-border-subtle hover:border-status-cant rounded-full px-2 py-0.5 active:scale-95"
+            title={`Reset ${period} leaderboard`}
+            data-testid="leaderboard-reset"
+          >
+            Reset
+          </button>
+        )}
       </div>
       {rows.length === 0 ? (
         <div className="mt-3 text-[12px] text-text-muted italic">No shouts yet this {period}.</div>
@@ -149,6 +180,30 @@ export function TopBuyersCard() {
             );
           })}
         </ol>
+      )}
+      {confirming && (
+        <div className="mt-3 pt-3 border-t border-border-subtle" data-testid="leaderboard-reset-confirm">
+          <div className="text-[12px] text-text-primary mb-2">
+            Zero the <b className="uppercase">{period}</b> leaderboard? History stays, counts start again from today.
+          </div>
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              onClick={() => setConfirming(false)}
+              className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-border-subtle text-text-secondary"
+              data-testid="leaderboard-reset-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={doReset}
+              disabled={resetting}
+              className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-status-cant text-white disabled:opacity-50"
+              data-testid="leaderboard-reset-confirm-btn"
+            >
+              {resetting ? "Resetting…" : "Reset"}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
