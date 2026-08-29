@@ -26,6 +26,10 @@ Apple App Store 1.2 compliance (block/report/moderate).
 - Apple App Store screenshot automation
 
 ## Implemented (dates in NZT)
+- 2026-02-29 — Dark-mode white text on Announce toggle + announcement chat
+  bubbles; light-mode Top Buyers count numbers now black instead of lime
+  (fixed `.text-brand-accent` to use `data-theme` selectors so an explicit
+  theme override wins over the system `prefers-color-scheme`)
 - 2026-02-24 — Coffee Ride Rounds refactor (rounds tied to rides, 5-min timer)
 - 2026-02-24 — Coffee tab as landing page
 - 2026-02-25 — Barista tally item-first grouping + "Split the Bill" rename

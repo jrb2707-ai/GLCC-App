@@ -58,14 +58,21 @@ html[data-theme="light"] {
   --glcc-frame-bezel: #1E2126;
 }
 
-/* Announce-to-all toggle: forced full-white in dark mode so the CTA sings
-   against the near-black chat canvas. In light mode the default themed
-   text colour (black) already carries enough weight. */
-html[data-theme="dark"] [data-testid="announce-toggle"][aria-pressed="false"] {
+/* Announce-to-all toggle + inline announcement bubbles: forced full-white
+   in dark mode so the CTA and pushed announcements sing against the
+   near-black chat canvas. In light mode the default themed text colour
+   (black) already carries enough weight. */
+html[data-theme="dark"] [data-testid="announce-toggle"],
+html[data-theme="dark"] [data-testid="announce-toggle"] *,
+html[data-theme="dark"] [data-testid^="announcement-"],
+html[data-theme="dark"] [data-testid^="announcement-"] * {
   color: #FFFFFF !important;
 }
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) [data-testid="announce-toggle"][aria-pressed="false"] {
+  html:not([data-theme="light"]) [data-testid="announce-toggle"],
+  html:not([data-theme="light"]) [data-testid="announce-toggle"] *,
+  html:not([data-theme="light"]) [data-testid^="announcement-"],
+  html:not([data-theme="light"]) [data-testid^="announcement-"] * {
     color: #FFFFFF !important;
   }
 }
@@ -134,12 +141,17 @@ body {
   box-shadow: 0 0 0 1px rgba(212, 255, 0, 0.35), 0 0 24px rgba(212, 255, 0, 0.18);
 }
 
-/* Volt-accent text — black in light mode, volt yellow in dark mode */
+/* Volt-accent text — black in light mode, volt yellow in dark mode.
+   Uses data-theme selectors so an explicit user override always wins
+   over the system prefers-color-scheme hint. */
 .text-brand-accent {
   color: #0D1117;
 }
+html[data-theme="dark"] .text-brand-accent {
+  color: #D4FF00;
+}
 @media (prefers-color-scheme: dark) {
-  .text-brand-accent {
+  html:not([data-theme="light"]) .text-brand-accent {
     color: #D4FF00;
   }
 }
