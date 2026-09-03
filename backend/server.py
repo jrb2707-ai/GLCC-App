@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, BeforeValidator, EmailStr, Field, ConfigDict
 
@@ -2426,14 +2427,11 @@ async def close_ride_round(ride_id: str, user: dict = Depends(require_approved))
     )
     updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
     payload = serialize_round(updated)
-    # Phase 2 — jersey milestone check + chat auto-post on first crossing.
-    try:
-        buyer_id = updated.get("buyer_user_id")
-        buyer_name = updated.get("buyer_name") or "A rider"
-        if buyer_id:
-            await _mint_jerseys_if_earned(buyer_id, buyer_name)
-    except Exception:
-        pass
+    # Durable counters + jersey checks happen later, in the background sweep
+    # (_settle_expired_coffee_rounds) once the 30-min late-order grace window
+    # has fully elapsed — not here. Settling immediately on manual close would
+    # miss any order added during that window, same as it would for a round
+    # that just times out naturally.
     await manager.broadcast({"type": "coffee.round.closed", "round": payload})
     return payload
 
@@ -2480,26 +2478,113 @@ JERSEY_TIERS = [
 ]
 
 
-async def _rounds_bought_lifetime(uid: str) -> int:
-    """A rider's lifetime rounds-bought count — counts closed rounds only so
-    a still-live round they just kicked off doesn't inflate the number."""
+def _nz_date_key(dt: Optional[datetime] = None) -> str:
+    """Calendar-day key (YYYY-MM-DD) in Pacific/Auckland for a UTC datetime
+    (defaults to now). Used to bucket durable leaderboard counts by day —
+    independent of coffee_rounds's 7-day TTL, since these bucket docs
+    outlive the round they were derived from."""
+    if dt is None:
+        dt = now_utc()
+    elif dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo("Pacific/Auckland")).strftime("%Y-%m-%d")
+
+
+async def _settle_coffee_round(round_id: ObjectId) -> bool:
+    """Finalize a single round exactly once: durable lifetime counters
+    (users.lifetime_rounds_bought/joined), the per-day leaderboard bucket
+    (coffee_daily_buyer_counts), and jersey checks. These all used to be
+    recomputed live from coffee_rounds, which silently broke once a round
+    aged past the 7-day TTL — bought/joined counts and "year" leaderboard
+    totals would quietly shrink as history expired. Settling once, durably,
+    at round-close time fixes that.
+
+    Race-safe: the settled_at claim below is an atomic find_one_and_update
+    filtered on settled_at not existing, so if the background sweep and a
+    manual close somehow raced on the same round, only one of them gets a
+    non-None `claimed` back and actually applies the increments. The other
+    caller sees `claimed is None` and returns immediately — no double count.
+    """
     now = now_utc()
-    return await db.coffee_rounds.count_documents({
-        "buyer_user_id": uid,
-        "$or": [
-            {"close_at": {"$lte": now}},
-            {"closed_manually_at": {"$exists": True}},
-        ],
+    claimed = await db.coffee_rounds.find_one_and_update(
+        {"_id": round_id, "settled_at": {"$exists": False}},
+        {"$set": {"settled_at": now}},
+    )
+    if not claimed:
+        return False  # already settled by another caller, or gone
+    buyer_id = claimed.get("buyer_user_id")
+    buyer_name = claimed.get("buyer_name") or "A rider"
+    if not buyer_id:
+        return True
+    try:
+        buyer_oid = ObjectId(buyer_id)
+    except InvalidId:
+        return True
+    updated_buyer = await db.users.find_one_and_update(
+        {"_id": buyer_oid},
+        {"$inc": {"lifetime_rounds_bought": 1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    day_key = _nz_date_key(claimed.get("started_at"))
+    await db.coffee_daily_buyer_counts.update_one(
+        {"rider_id": buyer_id, "date": day_key},
+        {"$inc": {"rounds": 1}, "$set": {"buyer_name": buyer_name}},
+        upsert=True,
+    )
+    joiner_ids = {
+        str(o["user_id"]) for o in (claimed.get("orders") or [])
+        if o.get("user_id") and str(o["user_id"]) != str(buyer_id)
+    }
+    joiner_oids = []
+    for jid in joiner_ids:
+        try:
+            joiner_oids.append(ObjectId(jid))
+        except InvalidId:
+            continue
+    if joiner_oids:
+        await db.users.update_many(
+            {"_id": {"$in": joiner_oids}},
+            {"$inc": {"lifetime_rounds_joined": 1}},
+        )
+    if updated_buyer:
+        try:
+            await _mint_jerseys_if_earned(buyer_id, buyer_name, updated_buyer.get("lifetime_rounds_bought", 0))
+        except Exception as exc:
+            log.warning("jersey mint failed settling round %s: %s", round_id, exc)
+    return True
+
+
+async def _settle_expired_coffee_rounds() -> int:
+    """Sweep for rounds that are done for good — closed (manually or via
+    close_at) AND past the 30-minute late-order grace window rooted at
+    started_at (the same window submit_ride_round_order honours), so we
+    never settle a round that could still legally receive an order. Runs
+    from the existing 20s coffee background loop, not on read, so a round
+    nobody ever revisits after it expires still gets settled."""
+    now = now_utc()
+    grace_cutoff = now - timedelta(minutes=30)
+    cursor = db.coffee_rounds.find({
+        "settled_at": {"$exists": False},
+        "close_at": {"$lte": now},
+        "started_at": {"$lte": grace_cutoff},
     })
+    settled = 0
+    async for r in cursor:
+        try:
+            if await _settle_coffee_round(r["_id"]):
+                settled += 1
+        except Exception as exc:
+            log.warning("coffee round settlement failed for %s: %s", r.get("_id"), exc)
+    return settled
 
 
-async def _mint_jerseys_if_earned(uid: str, user_name: str) -> None:
-    """Insert-once jersey awards. Called on round close for the buyer.
-    Auto-posts a club-wide chat message the first time each tier is crossed
-    — never re-fires, even if the same rider closes another round at the
-    same tier later. Mechanicals still use their own channel; this is the
-    only other auto-post pattern per spec Section 6."""
-    bought = await _rounds_bought_lifetime(uid)
+async def _mint_jerseys_if_earned(uid: str, user_name: str, bought: int) -> None:
+    """Insert-once jersey awards. Called from _settle_coffee_round with the
+    buyer's up-to-date durable lifetime_rounds_bought count. Auto-posts a
+    club-wide chat message the first time each tier is crossed — never
+    re-fires, even if the same rider crosses again at the same tier later.
+    Mechanicals still use their own channel; this is the only other
+    auto-post pattern per spec Section 6."""
     for tier in JERSEY_TIERS:
         if bought < tier["threshold"]:
             continue
@@ -2534,13 +2619,11 @@ async def _mint_jerseys_if_earned(uid: str, user_name: str) -> None:
 @api.get("/coffee/stats/me")
 async def coffee_stats_me(user: dict = Depends(require_approved)):
     """Rider-facing Coffee stats. Rounds bought is authoritative (used for
-    jersey thresholds); rounds joined is the "you turned up" metric."""
-    uid = str(user["_id"])
-    bought = await db.coffee_rounds.count_documents({"buyer_user_id": uid})
-    joined = await db.coffee_rounds.count_documents({
-        "orders.user_id": uid,
-        "buyer_user_id": {"$ne": uid},
-    })
+    jersey thresholds); rounds joined is the "you turned up" metric. Both
+    read the durable counters on the rider doc — not a live count against
+    coffee_rounds, which loses history after the 7-day TTL."""
+    bought = user.get("lifetime_rounds_bought", 0)
+    joined = user.get("lifetime_rounds_joined", 0)
     current_tier = None
     next_tier = None
     for tier in JERSEY_TIERS:
@@ -2561,10 +2644,14 @@ async def coffee_stats_me(user: dict = Depends(require_approved)):
 
 @api.get("/coffee/leaderboard")
 async def coffee_leaderboard(period: str = "year", user: dict = Depends(require_approved)):
-    """Top buyers this period (year or month, NZT-aligned). Buyer name is
-    projected off the round doc so a renamed rider doesn't ghost. If El
-    Presidente has hit "reset" for this scope, only rounds after the reset
-    timestamp are counted."""
+    """Top buyers this period (year or month, NZT-aligned). Reads the
+    durable coffee_daily_buyer_counts bucket collection rather than
+    aggregating coffee_rounds directly — round docs are TTL'd out after 7
+    days, so a live aggregation over them silently stopped being a real
+    "year" total once you were more than a week into the year. Buyer name
+    is denormalized onto each day's bucket (most recent bucket wins via
+    $last) so a renamed rider doesn't ghost. If El Presidente has hit
+    "reset" for this scope, only days after the reset timestamp count."""
     now = now_utc()
     if period == "month":
         start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
@@ -2584,18 +2671,20 @@ async def coffee_leaderboard(period: str = "year", user: dict = Depends(require_
             rat = rat.replace(tzinfo=timezone.utc)
         if rat > start:
             start = rat
+    start_key = _nz_date_key(start)
     pipeline = [
-        {"$match": {"buyer_user_id": {"$exists": True}, "started_at": {"$gte": start}}},
+        {"$match": {"date": {"$gte": start_key}}},
+        {"$sort": {"date": 1}},
         {"$group": {
-            "_id": "$buyer_user_id",
+            "_id": "$rider_id",
             "name": {"$last": "$buyer_name"},
-            "rounds": {"$sum": 1},
+            "rounds": {"$sum": "$rounds"},
         }},
         {"$sort": {"rounds": -1}},
         {"$limit": 10},
     ]
     rows = []
-    async for r in db.coffee_rounds.aggregate(pipeline):
+    async for r in db.coffee_daily_buyer_counts.aggregate(pipeline):
         rows.append({
             "rider_id": r["_id"],
             "name": r.get("name") or "Rider",
@@ -3756,6 +3845,14 @@ async def seed():
     await db.coffee_rounds.create_index("created_at", expireAfterSeconds=604800)
     await db.coffee_rounds.create_index("ride_id")
     await db.coffee_rounds.create_index("close_at")
+    # Speeds up the settlement sweep's "not yet settled, past close_at"
+    # candidate query — no TTL here, settled_at is permanent once set.
+    await db.coffee_rounds.create_index([("settled_at", 1), ("close_at", 1)])
+    # Durable per-day leaderboard buckets — NOT subject to the TTL above,
+    # so "year"/"month" totals stay correct long after the underlying
+    # rounds have expired. One doc per rider per NZT calendar day.
+    await db.coffee_daily_buyer_counts.create_index([("rider_id", 1), ("date", 1)], unique=True)
+    await db.coffee_daily_buyer_counts.create_index("date")
     await db.push_tokens.create_index([("user_id", 1), ("expo_push_token", 1)], unique=True)
     await db.push_tokens.create_index("expo_push_token")
     await db.web_push_subscriptions.create_index("endpoint", unique=True)
@@ -3999,6 +4096,11 @@ async def on_startup():
     # yet. We push a friendly ping to riders who RSVP'd `going` to the ride
     # but haven't ordered — so they can slip an order in before the tally
     # locks. Idempotent via `nudge_60s_sent_at`.
+    #
+    # Same loop also sweeps for rounds ready to settle (durable lifetime
+    # counters + jersey checks) — see _settle_expired_coffee_rounds. Doing
+    # this here rather than lazily on read means a round nobody ever
+    # revisits after it expires still gets settled.
     async def _coffee_60s_nudge_loop():
         await asyncio.sleep(15)
         while True:
@@ -4008,6 +4110,12 @@ async def on_startup():
                     log.info("Coffee 60s nudge: pushed for %s round(s)", sent)
             except Exception as exc:
                 log.warning("Coffee 60s nudge loop error: %s", exc)
+            try:
+                settled = await _settle_expired_coffee_rounds()
+                if settled:
+                    log.info("Coffee round settlement: settled %s round(s)", settled)
+            except Exception as exc:
+                log.warning("Coffee round settlement loop error: %s", exc)
             await asyncio.sleep(20)
     app.state.coffee_nudge_task = asyncio.create_task(_coffee_60s_nudge_loop())
 
