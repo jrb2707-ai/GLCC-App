@@ -120,6 +120,7 @@ export default function HomeShell() {
   const [dmUnread, setDmUnread] = useState(0);
   const [notifPrefs, setNotifPrefs] = useState(user?.notification_prefs || { mechanical: true, coffee: true, chat: true, dm: true });
   const [showPrompt, setShowPrompt] = useState(false);
+  const [activeTab, setActiveTab] = useState("Coffee"); // matches initialRouteName below
   const navRef = React.useRef(createNavigationContainerRef()).current;
 
   // First-time modal: show once, then let has_seen_notification_prompt stay
@@ -158,8 +159,14 @@ export default function HomeShell() {
         notifPrefs={notifPrefs}
         onPrefsChange={setNotifPrefs}
         onNavigate={(tabName) => { try { navRef.navigate(tabName); } catch (_) {} }}
+        activeTab={activeTab}
       />
-      <NavigationContainer ref={navRef} theme={NavTheme} independent>
+      <NavigationContainer
+        ref={navRef}
+        theme={NavTheme}
+        independent
+        onStateChange={() => setActiveTab(navRef.getCurrentRoute()?.name)}
+      >
         <Tab.Navigator
           initialRouteName="Coffee"
           screenOptions={{
