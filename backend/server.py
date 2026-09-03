@@ -3862,12 +3862,27 @@ async def seed():
         # rider + moderator surface is demoable from one login.
         {"email": "reviewer@greylynncc.com", "password": "ReviewerGLCC", "name": "GLCC Reviewer", "role": "Ride Captain", "coffee": "Medium Flat White", "is_admin": True, "bio": "App Store demo account. Admin powers: announce, moderate chat, delete riders, plus every regular-rider flow (RSVP, coffee rounds, mechanical alerts, reports, blocks)."},
     ]
+    # Casual demo riders only — NOT the reviewer account, which is meant to
+    # always exist for Apple. Seeded once ever (see demo_riders_seeded below).
+    DEMO_RIDER_EMAILS = {"aroha@glcc.club", "sam@glcc.club", "mika@glcc.club", "leo@glcc.club"}
 
     # Migrate away from the legacy paired reviewer accounts (member + admin)
     # if they still exist from a prior deploy. Keep the new consolidated one.
     for legacy in ("apple-review@glcc.club", "apple-review-admin@glcc.club"):
         await db.users.delete_one({"email": legacy})
+    # The four casual demo riders are seeded exactly once, ever, on a
+    # genuinely fresh database — not on every boot. `seed()` runs on every
+    # startup (every publish restarts the backend), and an `if not existing`
+    # check alone can't tell "never existed" apart from "an admin explicitly
+    # deleted this" — both look identical from a current-existence check, so
+    # deleting one of these riders got silently undone on the next restart.
+    # The reviewer@greylynncc.com account is deliberately excluded from this
+    # gate: Apple relies on that login always existing, so it keeps its
+    # existing pin-forever behaviour below.
+    demo_riders_seeded = await db.app_meta.find_one({"_id": "demo_riders_seeded"})
     for m in demo_members:
+        if demo_riders_seeded and m["email"] in DEMO_RIDER_EMAILS:
+            continue
         existing = await db.users.find_one({"email": m["email"]})
         base_doc = {
             "email": m["email"],
@@ -3900,6 +3915,12 @@ async def seed():
                     "bio": m.get("bio", existing.get("bio") or ""),
                 }},
             )
+    if not demo_riders_seeded:
+        await db.app_meta.update_one(
+            {"_id": "demo_riders_seeded"},
+            {"$set": {"seeded_at": now_utc()}},
+            upsert=True,
+        )
 
     # Rides come from Strava sync (via /api/strava/connect). No demo seed rides.
 
