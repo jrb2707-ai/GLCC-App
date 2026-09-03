@@ -8,6 +8,7 @@ import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents, useLiveRound } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "./Avatar";
+import CoffeeToggle from "./CoffeeToggle";
 
 function normalizeOrder(text) {
   return (text || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -70,6 +71,7 @@ export default function RideRoundBlock({ ride }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
+  const [orderChoice, setOrderChoice] = useState("default");
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +119,10 @@ export default function RideRoundBlock({ ride }) {
   useEffect(() => {
     if (myOrder?.text) setOrderText(myOrder.text);
   }, [myOrder?.text]);
+
+  // Resets whenever the round cycles — the toggle only affects the order
+  // it's attached to, never the saved defaults (those live in Profile).
+  useEffect(() => { setOrderChoice("default"); }, [ride.id, round?.id]);
 
   async function startRound() {
     setBusy(true);
@@ -196,7 +202,10 @@ export default function RideRoundBlock({ ride }) {
   }
 
   const isBuyer = round?.buyer_user_id === user?.id;
+  const canClose = isBuyer || !!user?.is_admin;
   const usual = user?.coffee;
+  const secondary = user?.secondary_coffee;
+  const chosenText = orderChoice === "secondary" && secondary ? secondary : usual;
 
   // No round → single-action CTA at the bottom
   if (!round || (closed && !round?.closed_manually_at)) {
@@ -278,10 +287,13 @@ export default function RideRoundBlock({ ride }) {
             {round.orders.length === 0 && <Text style={s.hint}>No orders in.</Text>}
           </ScrollView>
           {!myOrder && usual ? (
-            <TouchableOpacity onPress={() => submitOrder(usual)} disabled={busy} style={s.usualBtn} testID="round-add-late">
-              <Text style={s.usualLbl}>ADD MY COFFEE</Text>
-              <Text style={s.usualTxt} numberOfLines={2}>☕  {usual}</Text>
-            </TouchableOpacity>
+            <>
+              <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testID="round-late-toggle" />
+              <TouchableOpacity onPress={() => submitOrder(chosenText)} disabled={busy} style={s.usualBtn} testID="round-add-late">
+                <Text style={s.usualLbl}>ADD MY COFFEE</Text>
+                <Text style={s.usualTxt} numberOfLines={2}>☕  {chosenText}</Text>
+              </TouchableOpacity>
+            </>
           ) : null}
           {round.orders.length > 0 ? (
             <TouchableOpacity onPress={copyList} style={s.copyBtn} testID="round-copy">
@@ -304,15 +316,18 @@ export default function RideRoundBlock({ ride }) {
           ) : (
             <View>
               {usual ? (
-                <TouchableOpacity
-                  onPress={() => submitOrder(usual)}
-                  disabled={busy}
-                  style={s.usualBtn}
-                  testID="round-usual"
-                >
-                  <Text style={s.usualLbl}>ADD MY COFFEE</Text>
-                  <Text style={s.usualTxt} numberOfLines={2}>☕  {usual}</Text>
-                </TouchableOpacity>
+                <>
+                  <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testID="round-toggle" />
+                  <TouchableOpacity
+                    onPress={() => submitOrder(chosenText)}
+                    disabled={busy}
+                    style={s.usualBtn}
+                    testID="round-usual"
+                  >
+                    <Text style={s.usualLbl}>ADD MY COFFEE</Text>
+                    <Text style={s.usualTxt} numberOfLines={2}>☕  {chosenText}</Text>
+                  </TouchableOpacity>
+                </>
               ) : null}
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TextInput
@@ -350,10 +365,12 @@ export default function RideRoundBlock({ ride }) {
             </View>
           ))}
 
-          {/* Any rider can end the round early. */}
-          <TouchableOpacity onPress={closeRound} disabled={busy} style={s.closeEarly} testID="round-close-early">
-            <Text style={s.closeEarlyTxt}>{isBuyer ? "CLOSE EARLY" : "END ROUND"}</Text>
-          </TouchableOpacity>
+          {/* Buyer or admin only. */}
+          {canClose && (
+            <TouchableOpacity onPress={closeRound} disabled={busy} style={s.closeEarly} testID="round-close-early">
+              <Text style={s.closeEarlyTxt}>{isBuyer ? "CLOSE EARLY" : "END ROUND (ADMIN)"}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import Avatar from "../Avatar";
 import { Coffee, ChevronRight } from "lucide-react";
 import RideRoundBlock from "../RideRoundBlock";
+import CoffeeToggle from "../CoffeeToggle";
 import { StatsCard, TopBuyersCard, YourHistoryCard } from "../CoffeeStats";
 
 function normalizeOrder(text) {
@@ -349,6 +350,7 @@ export function RoundDetailModal({ round, onClose, onChange, usual }) {
   const [orderText, setOrderText] = useState("");
   const [busy, setBusy] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const [orderChoice, setOrderChoice] = useState("default");
   const dragStartRef = React.useRef(null);
   // Live-update whenever anyone submits or the round closes.
   useEffect(() => subscribe((evt) => {
@@ -360,6 +362,11 @@ export function RoundDetailModal({ round, onClose, onChange, usual }) {
   const { user } = useAuth();
   const myOrder = round.orders?.find((o) => o.user_id === user?.id);
   useEffect(() => { if (myOrder?.text) setOrderText(myOrder.text); }, [myOrder?.text]);
+  // Resets whenever a different round is shown — the toggle only affects
+  // the order it's attached to, never the saved defaults (set in Profile).
+  useEffect(() => { setOrderChoice("default"); }, [round.id]);
+  const secondary = user?.secondary_coffee;
+  const chosenText = orderChoice === "secondary" && secondary ? secondary : usual;
 
   function onTouchStart(e) {
     // Only allow drag when the touch STARTS in the top ~30% of the screen.
@@ -485,14 +492,17 @@ export function RoundDetailModal({ round, onClose, onChange, usual }) {
             {round.closed && (
               <div className="mt-3 space-y-2">
                 {!myOrder && usual && (
-                  <button
-                    onClick={() => submitOrder(usual)}
-                    disabled={busy}
-                    className="w-full text-sm font-black uppercase tracking-widest bg-accent-pink text-white py-4 rounded-2xl active:scale-95 shadow-pink"
-                    data-testid="modal-add-late"
-                  >
-                    ☕ Add my coffee — {usual}
-                  </button>
+                  <>
+                    <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testId="modal-late-toggle" />
+                    <button
+                      onClick={() => submitOrder(chosenText)}
+                      disabled={busy}
+                      className="w-full text-sm font-black uppercase tracking-widest bg-accent-pink text-white py-4 rounded-2xl active:scale-95 shadow-pink"
+                      data-testid="modal-add-late"
+                    >
+                      ☕ Add my coffee — {chosenText}
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={copyList}
@@ -531,18 +541,21 @@ export function RoundDetailModal({ round, onClose, onChange, usual }) {
             ) : (
               <>
                 {usual && (
-                  <button
-                    onClick={() => submitOrder(usual)}
-                    disabled={busy}
-                    className="w-full mb-2 px-4 py-3.5 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
-                    data-testid="modal-usual"
-                  >
-                    <Coffee className="w-5 h-5 shrink-0" />
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
-                      <div className="text-sm font-bold truncate">{usual}</div>
-                    </div>
-                  </button>
+                  <>
+                    <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testId="modal-toggle" />
+                    <button
+                      onClick={() => submitOrder(chosenText)}
+                      disabled={busy}
+                      className="w-full mb-2 px-4 py-3.5 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
+                      data-testid="modal-usual"
+                    >
+                      <Coffee className="w-5 h-5 shrink-0" />
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
+                        <div className="text-sm font-bold truncate">{chosenText}</div>
+                      </div>
+                    </button>
+                  </>
                 )}
                 <div className="flex items-center gap-2">
                   <input

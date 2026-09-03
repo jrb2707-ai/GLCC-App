@@ -2407,11 +2407,13 @@ async def retract_ride_round_order(ride_id: str, user: dict = Depends(require_ap
 
 @api.post("/rides/{ride_id}/round/close")
 async def close_ride_round(ride_id: str, user: dict = Depends(require_approved)):
-    """Close the round early. Any approved rider can end the round so
-    stragglers aren't held up if the buyer's already at the counter."""
+    """Close the round early. Buyer or admin only."""
     active = await _active_round_for_ride(ride_id)
     if not active:
         raise HTTPException(status_code=404, detail="No open round on this ride")
+    is_buyer = str(active.get("buyer_user_id")) == str(user["_id"])
+    if not is_buyer and not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only the buyer or an admin can close")
     now = now_utc()
     await db.coffee_rounds.update_one(
         {"_id": active["_id"]},
