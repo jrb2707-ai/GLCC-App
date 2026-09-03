@@ -2427,11 +2427,17 @@ async def close_ride_round(ride_id: str, user: dict = Depends(require_approved))
     )
     updated = await db.coffee_rounds.find_one({"_id": active["_id"]})
     payload = serialize_round(updated)
-    # Durable counters + jersey checks happen later, in the background sweep
-    # (_settle_expired_coffee_rounds) once the 30-min late-order grace window
-    # has fully elapsed — not here. Settling immediately on manual close would
-    # miss any order added during that window, same as it would for a round
-    # that just times out naturally.
+    # Buyer-side settlement (lifetime_rounds_bought + jersey check + the
+    # celebratory chat post) fires immediately on close — that instant kudos
+    # moment is deliberate, don't defer it. It doesn't depend on the
+    # late-order grace window since the buyer's identity never changes.
+    # Joiner-side settlement (lifetime_rounds_joined) does depend on that
+    # window, so it's left to the background sweep — see
+    # _settle_coffee_round_joiners.
+    try:
+        await _settle_coffee_round_buyer(active["_id"])
+    except Exception as exc:
+        log.warning("buyer settlement failed on manual close for round %s: %s", active["_id"], exc)
     await manager.broadcast({"type": "coffee.round.closed", "round": payload})
     return payload
 
@@ -2490,25 +2496,27 @@ def _nz_date_key(dt: Optional[datetime] = None) -> str:
     return dt.astimezone(ZoneInfo("Pacific/Auckland")).strftime("%Y-%m-%d")
 
 
-async def _settle_coffee_round(round_id: ObjectId) -> bool:
-    """Finalize a single round exactly once: durable lifetime counters
-    (users.lifetime_rounds_bought/joined), the per-day leaderboard bucket
-    (coffee_daily_buyer_counts), and jersey checks. These all used to be
-    recomputed live from coffee_rounds, which silently broke once a round
-    aged past the 7-day TTL — bought/joined counts and "year" leaderboard
-    totals would quietly shrink as history expired. Settling once, durably,
-    at round-close time fixes that.
+async def _settle_coffee_round_buyer(round_id: ObjectId) -> bool:
+    """Buyer-side settlement: lifetime_rounds_bought, the per-day
+    leaderboard bucket, and the jersey check + celebratory chat post. Fires
+    the instant a round closes — the buyer's identity is fixed the moment
+    the round starts and never changes, so unlike the joiner side this
+    doesn't need to wait for the late-order grace window. close_ride_round
+    calls this synchronously on manual close so the "kudos" chat post lands
+    immediately (a deliberate UX decision, not just a technical default);
+    the background sweep also calls it, without waiting on the grace
+    window, so a round that just times out naturally with nobody watching
+    still gets its buyer side finalized promptly.
 
-    Race-safe: the settled_at claim below is an atomic find_one_and_update
-    filtered on settled_at not existing, so if the background sweep and a
-    manual close somehow raced on the same round, only one of them gets a
-    non-None `claimed` back and actually applies the increments. The other
-    caller sees `claimed is None` and returns immediately — no double count.
+    Race-safe: the buyer_settled_at claim below is an atomic
+    find_one_and_update filtered on buyer_settled_at not existing, so if a
+    manual close and the sweep tick land on the same round at once, only
+    one caller gets a non-None round back and applies the increment. The
+    other sees None and returns immediately — no double count.
     """
-    now = now_utc()
     claimed = await db.coffee_rounds.find_one_and_update(
-        {"_id": round_id, "settled_at": {"$exists": False}},
-        {"$set": {"settled_at": now}},
+        {"_id": round_id, "buyer_settled_at": {"$exists": False}},
+        {"$set": {"buyer_settled_at": now_utc()}},
     )
     if not claimed:
         return False  # already settled by another caller, or gone
@@ -2531,6 +2539,29 @@ async def _settle_coffee_round(round_id: ObjectId) -> bool:
         {"$inc": {"rounds": 1}, "$set": {"buyer_name": buyer_name}},
         upsert=True,
     )
+    if updated_buyer:
+        try:
+            await _mint_jerseys_if_earned(buyer_id, buyer_name, updated_buyer.get("lifetime_rounds_bought", 0))
+        except Exception as exc:
+            log.warning("jersey mint failed settling round %s: %s", round_id, exc)
+    return True
+
+
+async def _settle_coffee_round_joiners(round_id: ObjectId) -> bool:
+    """Joiner-side settlement: lifetime_rounds_joined for everyone who
+    ordered but wasn't the buyer. Unlike the buyer side, this genuinely
+    depends on the 30-minute late-order grace window (the same one
+    submit_ride_round_order honours) — an order can still land after the
+    round shows as closed, so joined counts can't be finalized until that
+    window has fully elapsed. Race-safe via the same claim pattern as
+    _settle_coffee_round_buyer, on its own joiner_settled_at flag."""
+    claimed = await db.coffee_rounds.find_one_and_update(
+        {"_id": round_id, "joiner_settled_at": {"$exists": False}},
+        {"$set": {"joiner_settled_at": now_utc()}},
+    )
+    if not claimed:
+        return False
+    buyer_id = claimed.get("buyer_user_id")
     joiner_ids = {
         str(o["user_id"]) for o in (claimed.get("orders") or [])
         if o.get("user_id") and str(o["user_id"]) != str(buyer_id)
@@ -2546,41 +2577,50 @@ async def _settle_coffee_round(round_id: ObjectId) -> bool:
             {"_id": {"$in": joiner_oids}},
             {"$inc": {"lifetime_rounds_joined": 1}},
         )
-    if updated_buyer:
-        try:
-            await _mint_jerseys_if_earned(buyer_id, buyer_name, updated_buyer.get("lifetime_rounds_bought", 0))
-        except Exception as exc:
-            log.warning("jersey mint failed settling round %s: %s", round_id, exc)
     return True
 
 
 async def _settle_expired_coffee_rounds() -> int:
-    """Sweep for rounds that are done for good — closed (manually or via
-    close_at) AND past the 30-minute late-order grace window rooted at
-    started_at (the same window submit_ride_round_order honours), so we
-    never settle a round that could still legally receive an order. Runs
-    from the existing 20s coffee background loop, not on read, so a round
-    nobody ever revisits after it expires still gets settled."""
+    """Runs from the existing 20s coffee background loop, not on read, so
+    a round nobody ever revisits after it expires still gets settled on
+    both sides:
+    - Buyer-side settles as soon as a round is closed — this mostly just
+      catches naturally-timed-out rounds, since manual close already
+      settles its own buyer side synchronously (see close_ride_round).
+    - Joiner-side waits for the 30-min late-order grace window rooted at
+      started_at, so a late order can never arrive after joined counts are
+      finalized.
+    Both sides are independently race-safe (separate atomic claims), so
+    this sweep can run concurrently with a manual close without double-
+    counting either one."""
     now = now_utc()
     grace_cutoff = now - timedelta(minutes=30)
-    cursor = db.coffee_rounds.find({
-        "settled_at": {"$exists": False},
-        "close_at": {"$lte": now},
-        "started_at": {"$lte": grace_cutoff},
-    })
     settled = 0
-    async for r in cursor:
+    async for r in db.coffee_rounds.find({
+        "buyer_settled_at": {"$exists": False},
+        "close_at": {"$lte": now},
+    }):
         try:
-            if await _settle_coffee_round(r["_id"]):
+            if await _settle_coffee_round_buyer(r["_id"]):
                 settled += 1
         except Exception as exc:
-            log.warning("coffee round settlement failed for %s: %s", r.get("_id"), exc)
+            log.warning("coffee round buyer settlement failed for %s: %s", r.get("_id"), exc)
+    async for r in db.coffee_rounds.find({
+        "joiner_settled_at": {"$exists": False},
+        "close_at": {"$lte": now},
+        "started_at": {"$lte": grace_cutoff},
+    }):
+        try:
+            if await _settle_coffee_round_joiners(r["_id"]):
+                settled += 1
+        except Exception as exc:
+            log.warning("coffee round joiner settlement failed for %s: %s", r.get("_id"), exc)
     return settled
 
 
 async def _mint_jerseys_if_earned(uid: str, user_name: str, bought: int) -> None:
-    """Insert-once jersey awards. Called from _settle_coffee_round with the
-    buyer's up-to-date durable lifetime_rounds_bought count. Auto-posts a
+    """Insert-once jersey awards. Called from _settle_coffee_round_buyer with
+    the buyer's up-to-date durable lifetime_rounds_bought count. Auto-posts a
     club-wide chat message the first time each tier is crossed — never
     re-fires, even if the same rider crosses again at the same tier later.
     Mechanicals still use their own channel; this is the only other
@@ -3846,8 +3886,9 @@ async def seed():
     await db.coffee_rounds.create_index("ride_id")
     await db.coffee_rounds.create_index("close_at")
     # Speeds up the settlement sweep's "not yet settled, past close_at"
-    # candidate query — no TTL here, settled_at is permanent once set.
-    await db.coffee_rounds.create_index([("settled_at", 1), ("close_at", 1)])
+    # candidate queries — no TTL on either, both flags are permanent once set.
+    await db.coffee_rounds.create_index([("buyer_settled_at", 1), ("close_at", 1)])
+    await db.coffee_rounds.create_index([("joiner_settled_at", 1), ("close_at", 1)])
     # Durable per-day leaderboard buckets — NOT subject to the TTL above,
     # so "year"/"month" totals stay correct long after the underlying
     # rounds have expired. One doc per rider per NZT calendar day.
