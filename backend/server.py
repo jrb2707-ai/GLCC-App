@@ -3740,7 +3740,7 @@ async def seed():
     except Exception:
         pass
     await db.messages.create_index("created_at", expireAfterSeconds=604800)
-    # Coffee rounds auto-expire 1 hour after creation
+    # Coffee rounds auto-expire 7 days after creation
     try:
         idx = await db.coffee_rounds.index_information()
         for name, info in idx.items():
