@@ -1,15 +1,24 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Settings, Bell, Mail, Wrench, Coffee, MessageCircle, Users, Trash2 } from "lucide-react";
+import { Settings, Bell, Mail, Wrench, Coffee, MessageCircle, Users, Trash2, LogOut } from "lucide-react";
 import { useAuth, useTheme, useEvents, useLiveRound, browserPushPermission, requestBrowserPush } from "../lib/store";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 
-// GLCC top header — matches the Field Notes № 03 mockup.
-// Left: cog icon → Settings popover (notification toggles + display picker).
-// Right: mail (DMs), bell (notification feed), Exit.
-// Both popovers use the same pink 1px border language established in the
-// Coffee tab.
-export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, onNavigate }) {
+// GLCC top header.
+// Left: cog icon → Settings popover (notification toggles, display picker,
+// Exit). Right: mail (DMs), bell (notification feed). A centered "GLCC."
+// wordmark sits in the true middle of the bar, colored per the active tab
+// (same tokens the bottom tab bar already uses for its active icon — see
+// WORDMARK_CLASS below). Both popovers use the same pink 1px border
+// language established in the Coffee tab.
+const WORDMARK_CLASS = {
+  rides: "text-accent-strava",
+  coffee: "text-accent-pink",
+  riders: "text-status-cant",
+  chat: "text-[#007AFF]",
+};
+
+export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, onNavigate, activeTab }) {
   const { user, logout } = useAuth();
   const { open: openLiveRound } = useLiveRound();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -78,7 +87,8 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
 
   return (
     <div className="relative flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-      {/* Left — cog only (wordmark now lives on the login screen) */}
+      {/* Left — cog. Exit now lives inside its dropdown, not as a top-level
+          element. */}
       <button
         onClick={() => { setSettingsOpen((v) => !v); setBellOpen(false); }}
         className={`p-1.5 rounded-full transition ${settingsOpen ? "text-accent-pink" : "text-text-secondary hover:text-brand-accent"}`}
@@ -89,7 +99,19 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
         <Settings className="w-7 h-7" />
       </button>
 
-      {/* Right — mail · bell · Exit */}
+      {/* Centered wordmark — absolutely positioned against the whole bar
+          (not just flexed between the two icon groups) so it's truly
+          centered regardless of how wide the left/right groups are.
+          Colored per the active tab, reusing the exact same tokens the
+          bottom tab bar already uses for its active icon. */}
+      <div
+        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-heading font-black uppercase tracking-wide text-lg leading-none pointer-events-none select-none ${WORDMARK_CLASS[activeTab] || "text-brand-accent"}`}
+        data-testid="header-wordmark"
+      >
+        GLCC.
+      </div>
+
+      {/* Right — mail · bell */}
       <div className="flex items-center gap-3">
         <button
           onClick={onOpenDM}
@@ -120,19 +142,13 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
             <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-accent-pink ring-2 ring-bg-primary" />
           )}
         </button>
-        <button
-          onClick={logout}
-          className="text-[11px] text-text-muted font-mono-stat uppercase tracking-widest hover:text-status-cant"
-          data-testid="header-exit"
-        >
-          Exit ↗
-        </button>
       </div>
 
       {settingsOpen && (
         <SettingsPopover
           notifPrefs={notifPrefs}
           onPrefsChange={onPrefsChange}
+          onLogout={logout}
           onClose={() => setSettingsOpen(false)}
         />
       )}
@@ -148,7 +164,7 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
   );
 }
 
-function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
+function SettingsPopover({ notifPrefs, onPrefsChange, onClose, onLogout }) {
   const { theme, cycleTheme, setTheme } = useTheme();
   const ref = useRef(null);
   useEffect(() => {
@@ -235,6 +251,13 @@ function SettingsPopover({ notifPrefs, onPrefsChange, onClose }) {
           </button>
         ))}
       </div>
+      <button
+        onClick={onLogout}
+        className="mt-4 w-full flex items-center justify-center gap-2 text-[11px] font-mono-stat uppercase tracking-widest text-text-muted hover:text-status-cant border-t border-border-subtle pt-3"
+        data-testid="header-exit"
+      >
+        <LogOut className="w-3.5 h-3.5" /> Exit
+      </button>
     </div>
   );
 }

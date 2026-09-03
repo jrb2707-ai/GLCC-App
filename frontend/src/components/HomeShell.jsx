@@ -134,6 +134,7 @@ export default function HomeShell() {
         notifPrefs={notifPrefs}
         onPrefsChange={setNotifPrefs}
         onNavigate={setTab}
+        activeTab={tab}
       />
 
       {/* Content */}

@@ -10,10 +10,20 @@ import {
   CogIcon, MailIcon, BellIcon, WrenchIcon, CoffeeIcon, ChatBubbleIcon, TrashIcon,
 } from "./Icons";
 
-// GLCC top header — parity with the web Field Notes № 03 mockup.
-// Left: cog → Settings popover (notif toggles + display picker).
-// Right: mail (DMs w/ unread badge), bell (feed popover), Exit.
-export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, onNavigate }) {
+// GLCC top header — parity with the web app.
+// Left: cog → Settings popover (notif toggles, display picker, Exit).
+// Right: mail (DMs w/ unread badge), bell (feed popover). A centered
+// "GLCC." wordmark sits in the true middle of the bar, colored per the
+// active tab — same tokens the bottom tab bar already uses for its active
+// icon (see WORDMARK_COLOR below).
+const WORDMARK_COLOR = {
+  rides: colors.stravaOrange,
+  coffee: colors.accentPink,
+  riders: colors.statusCant,
+  chat: "#007AFF",
+};
+
+export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, onNavigate, activeTab }) {
   const { user, logout } = useAuth();
   const { subscribe } = useEvents();
   const { open: openLiveRound } = useLiveRound();
@@ -90,6 +100,15 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
         <CogIcon color={cogTint} />
       </TouchableOpacity>
 
+      <View style={s.wordmarkWrap} pointerEvents="none">
+        <Text
+          style={[s.wordmark, { color: WORDMARK_COLOR[(activeTab || "").toLowerCase()] || colors.accentVolt }]}
+          testID="header-wordmark"
+        >
+          GLCC.
+        </Text>
+      </View>
+
       <View style={s.rightGroup}>
         <TouchableOpacity onPress={onOpenDM} style={s.iconBtn} testID="dm-open" accessibilityLabel="Messages">
           <MailIcon color={colors.textSecondary} />
@@ -103,9 +122,6 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
           <BellIcon color={bellTint} />
           {feed.unread > 0 && !bellOpen && <View style={s.bellDot} />}
         </TouchableOpacity>
-        <TouchableOpacity onPress={logout} testID="header-exit">
-          <Text style={s.exit}>Exit ↗</Text>
-        </TouchableOpacity>
       </View>
 
       <SettingsPopover
@@ -113,6 +129,7 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
         onClose={() => setSettingsOpen(false)}
         notifPrefs={notifPrefs}
         onPrefsChange={onPrefsChange}
+        onLogout={logout}
       />
       <NotificationsPopover
         visible={bellOpen}
@@ -125,7 +142,7 @@ export default function Header({ onOpenDM, dmUnread, notifPrefs, onPrefsChange, 
   );
 }
 
-function SettingsPopover({ visible, onClose, notifPrefs, onPrefsChange }) {
+function SettingsPopover({ visible, onClose, notifPrefs, onPrefsChange, onLogout }) {
   const { theme, setTheme } = useTheme();
 
   const toggle = async (key) => {
@@ -187,6 +204,9 @@ function SettingsPopover({ visible, onClose, notifPrefs, onPrefsChange }) {
                 </TouchableOpacity>
               ))}
             </View>
+            <TouchableOpacity onPress={onLogout} style={s.exitRow} testID="header-exit">
+              <Text style={s.exit}>Exit ↗</Text>
+            </TouchableOpacity>
           </Pressable>
         </View>
       </Pressable>
@@ -341,6 +361,15 @@ const s = StyleSheet.create({
   },
   iconBtn: { padding: 6, position: "relative" },
   rightGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
+  // Absolutely centered against the whole bar (not the flex space-between
+  // midpoint), same technique as web, so it's centered regardless of how
+  // wide the left/right icon groups are.
+  wordmarkWrap: {
+    position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: "center", justifyContent: "center",
+  },
+  wordmark: { fontSize: 17, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
+  exitRow: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderSubtle, alignItems: "center" },
   exit: { color: colors.textMuted, fontSize: 11, letterSpacing: 2, fontWeight: "900" },
   badge: {
     position: "absolute", top: -1, right: -3, minWidth: 15, height: 15, paddingHorizontal: 3,
