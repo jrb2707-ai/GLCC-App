@@ -256,10 +256,12 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
   const [role, setRole] = useState(rider.role || "Member");
   const [bio, setBio] = useState(rider.bio || "");
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
+  const [secondaryCoffee, setSecondaryCoffee] = useState(rider.secondary_coffee || "");
   const [photo, setPhoto] = useState(rider.photo || null);
   const [reminders, setReminders] = useState(rider.ride_reminders !== false);
   const [uploading, setUploading] = useState(false);
   const [coffeeOpen, setCoffeeOpen] = useState(false);
+  const [secondaryCoffeeOpen, setSecondaryCoffeeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [testingPush, setTestingPush] = useState(false);
@@ -338,6 +340,9 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
         ? { name, coffee, ride_reminders: reminders }
         : { name, role, bio, photo };
       await api.patch(url, body);
+      if (isMe && secondaryCoffee !== (rider.secondary_coffee || "")) {
+        await api.put("/profile/coffee-orders", { secondary_coffee: secondaryCoffee || null });
+      }
       await onSaved?.();
       Alert.alert("Profile", "Saved");
       onClose();
@@ -447,6 +452,24 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
                     <TouchableOpacity style={s.pInput} onPress={() => setCoffeeOpen(true)}>
                       <Text style={{ color: colors.textPrimary }}>{coffee}</Text>
                     </TouchableOpacity>
+                  </>
+                )}
+                {isMe && (
+                  <>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={s.miniLabel}>SECONDARY COFFEE (OPTIONAL)</Text>
+                      {secondaryCoffee ? (
+                        <TouchableOpacity onPress={() => setSecondaryCoffee("")} testID="profile-secondary-clear">
+                          <Text style={{ color: colors.statusCant || "#f87171", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }}>CLEAR</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity style={s.pInput} onPress={() => setSecondaryCoffeeOpen(true)} testID="profile-secondary-input">
+                      <Text style={{ color: secondaryCoffee ? colors.textPrimary : colors.textMuted }}>
+                        {secondaryCoffee || "Not set"}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={s.toggleHint}>Lets you switch to this at the Barista Tally instead of your usual.</Text>
                   </>
                 )}
                 {isMe && rider.member_no != null && (
@@ -625,6 +648,14 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
       {coffeeOpen && (
         <CoffeePicker value={coffee} onChange={setCoffee} onClose={() => setCoffeeOpen(false)} />
       )}
+      {secondaryCoffeeOpen && (
+        <CoffeePicker
+          value={secondaryCoffee}
+          onChange={setSecondaryCoffee}
+          onClose={() => setSecondaryCoffeeOpen(false)}
+          allowNone
+        />
+      )}
       {cardOpen && (
         <MemberCard rider={{ ...rider, name, coffee, role, photo }} onClose={() => setCardOpen(false)} />
       )}
@@ -679,7 +710,7 @@ function ChangePasswordBlock() {
 }
 
 // -------------------- Coffee picker (reused) --------------------
-function CoffeePicker({ value, onChange, onClose }) {
+function CoffeePicker({ value, onChange, onClose, allowNone = false }) {
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
@@ -687,6 +718,14 @@ function CoffeePicker({ value, onChange, onClose }) {
           <View style={s.handle} />
           <Text style={s.pName}>Coffee order</Text>
           <ScrollView style={{ maxHeight: 380, marginTop: 8 }}>
+            {allowNone && (
+              <TouchableOpacity
+                onPress={() => { onChange(""); onClose(); }}
+                style={[s.coffeeItem, !value && s.coffeeItemActive]}
+              >
+                <Text style={{ color: !value ? colors.accentVolt : colors.textMuted, fontStyle: "italic" }}>None</Text>
+              </TouchableOpacity>
+            )}
             {COFFEES.map((c) => (
               <TouchableOpacity
                 key={c}

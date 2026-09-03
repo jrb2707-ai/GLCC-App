@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, formatDetail } from "../lib/api";
 import { useAuth, useEvents, useLiveRound } from "../lib/store";
 import Avatar from "./Avatar";
+import CoffeeToggle from "./CoffeeToggle";
 
 function normalizeOrder(text) {
   return String(text || "")
@@ -115,6 +116,7 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
   const [busy, setBusy] = useState(false);
   const [orderText, setOrderText] = useState("");
   const [showCloseView, setShowCloseView] = useState(false);
+  const [orderChoice, setOrderChoice] = useState("default");
 
   useEffect(() => {
     let cancelled = false;
@@ -144,7 +146,9 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
 
   // Reset the "Split the Bill" dismissal whenever the round cycles or the
   // ride changes so the CTA re-appears after any round closes / expires.
-  useEffect(() => { /* round cycle no-op (kept for future hooks) */ }, [ride.id, round?.id, round?.closed]);
+  // Also resets the Default/Secondary picker — the toggle only ever
+  // affects the order it's attached to, never what pre-fills next round.
+  useEffect(() => { setOrderChoice("default"); }, [ride.id, round?.id]);
 
   const myOrder = useMemo(
     () => round?.orders?.find((o) => o.user_id === user?.id),
@@ -306,7 +310,10 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
 
   // Active round
   const isBuyer = round.buyer_user_id === user?.id;
+  const canClose = isBuyer || !!user?.is_admin;
   const usual = user?.coffee;
+  const secondary = user?.secondary_coffee;
+  const chosenText = orderChoice === "secondary" && secondary ? secondary : usual;
   const pctLeft = Math.max(0, Math.min(100, (countdown.seconds / 300) * 100));
 
   return (
@@ -370,18 +377,21 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
               If they have, Copy list is the buyer's / room's payoff. */}
           <div className="mt-3">
             {!myOrder && usual && (
-              <button
-                onClick={() => submitOrder(usual)}
-                disabled={busy}
-                className="w-full mb-2 px-4 py-3.5 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
-                data-testid="round-add-late"
-              >
-                <Coffee className="w-5 h-5 shrink-0" />
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
-                  <div className="text-sm font-bold truncate">{usual}</div>
-                </div>
-              </button>
+              <>
+                <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testId="round-late-toggle" />
+                <button
+                  onClick={() => submitOrder(chosenText)}
+                  disabled={busy}
+                  className="w-full mb-2 px-4 py-3.5 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
+                  data-testid="round-add-late"
+                >
+                  <Coffee className="w-5 h-5 shrink-0" />
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
+                    <div className="text-sm font-bold truncate">{chosenText}</div>
+                  </div>
+                </button>
+              </>
             )}
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -441,19 +451,22 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
           ) : (
             <div>
               {usual && (
-                <button
-                  onClick={() => submitOrder(usual)}
-                  disabled={busy}
-                  className="w-full mb-3 px-4 py-4 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
-                  data-testid="round-usual"
-                >
-                  <Coffee className="w-5 h-5 shrink-0" />
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
-                    <div className="text-base font-bold truncate">{usual}</div>
-                  </div>
-                  <Send className="w-5 h-5 shrink-0" />
-                </button>
+                <>
+                  <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testId="round-toggle" />
+                  <button
+                    onClick={() => submitOrder(chosenText)}
+                    disabled={busy}
+                    className="w-full mb-3 px-4 py-4 rounded-xl bg-accent-pink text-white flex items-center gap-3 active:scale-[0.98] shadow-pink"
+                    data-testid="round-usual"
+                  >
+                    <Coffee className="w-5 h-5 shrink-0" />
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="text-[10px] font-mono-stat uppercase tracking-widest opacity-90">Add my coffee</div>
+                      <div className="text-base font-bold truncate">{chosenText}</div>
+                    </div>
+                    <Send className="w-5 h-5 shrink-0" />
+                  </button>
+                </>
               )}
               <div className="text-[10px] font-mono-stat uppercase tracking-widest text-text-muted mb-1.5 text-center">
                 Or type something different
@@ -485,16 +498,18 @@ export default function RideRoundBlock({ ride, initialCafe, otherActiveRound, on
             </div>
             <OrderList round={round} />
           </div>
-          {/* Any rider can end the round early — if the buyer's already
-              at the counter, stragglers shouldn't hold the tally open. */}
-          <button
-            onClick={closeRound}
-            disabled={busy}
-            className="mt-3 w-full text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-status-cant/40 text-status-cant py-2 rounded-xl active:scale-95"
-            data-testid="round-close-early"
-          >
-            {isBuyer ? "Close early" : "End round"}
-          </button>
+          {/* Buyer or admin only — everyone else waits for the natural
+              5-minute expiry or the buyer to close it. */}
+          {canClose && (
+            <button
+              onClick={closeRound}
+              disabled={busy}
+              className="mt-3 w-full text-[10px] font-black uppercase tracking-widest bg-bg-primary border border-status-cant/40 text-status-cant py-2 rounded-xl active:scale-95"
+              data-testid="round-close-early"
+            >
+              {isBuyer ? "Close early" : "End round (admin)"}
+            </button>
+          )}
         </div>
       )}
     </div>

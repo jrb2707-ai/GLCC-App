@@ -9,6 +9,7 @@ import { useAuth, useEvents, useLiveRound } from "../lib/store";
 import { colors, radius, spacing } from "../constants/theme";
 import Avatar from "../components/Avatar";
 import RideRoundBlock from "../components/RideRoundBlock";
+import CoffeeToggle from "../components/CoffeeToggle";
 
 function normalizeOrder(text) {
   return String(text || "").toLowerCase().replace(/[.,!;\s]+$/g, "").replace(/\s+/g, " ").trim();
@@ -300,6 +301,7 @@ export default function CoffeeTab() {
                     onChange={setDetail}
                     onClose={() => setDetail(null)}
                     usual={user?.coffee}
+                    secondary={user?.secondary_coffee}
                     subscribe={subscribe}
                   />
                 )}
@@ -358,10 +360,11 @@ const s = StyleSheet.create({
   noUpcomingHint: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontWeight: "700", textAlign: "center", marginTop: 8 },
 });
 
-export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) {
+export function RoundDetailBody({ round, onChange, onClose, usual, secondary, subscribe }) {
   const { user } = useAuth();
   const [orderText, setOrderText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [orderChoice, setOrderChoice] = useState("default");
 
   useEffect(() => subscribe((evt) => {
     if (!evt.round || evt.round.id !== round.id) return;
@@ -370,6 +373,10 @@ export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) 
 
   const myOrder = round.orders?.find((o) => o.user_id === user?.id);
   useEffect(() => { if (myOrder?.text) setOrderText(myOrder.text); }, [myOrder?.text]);
+  // Resets whenever a different round is shown — the toggle only affects
+  // the order it's attached to, never the saved defaults (set in Profile).
+  useEffect(() => { setOrderChoice("default"); }, [round.id]);
+  const chosenText = orderChoice === "secondary" && secondary ? secondary : usual;
 
   async function submit(textOverride) {
     const text = (textOverride ?? orderText).trim();
@@ -433,10 +440,13 @@ export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) 
       {round.closed && (
         <View style={{ marginTop: 12, gap: 8 }}>
           {!myOrder && usual ? (
-            <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-add-late">
-              <Text style={styleUsualPillLbl}>ADD MY COFFEE</Text>
-              <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {usual}</Text>
-            </TouchableOpacity>
+            <>
+              <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testID="modal-late-toggle" />
+              <TouchableOpacity onPress={() => submit(chosenText)} disabled={busy} style={styleUsualPill} testID="modal-add-late">
+                <Text style={styleUsualPillLbl}>ADD MY COFFEE</Text>
+                <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {chosenText}</Text>
+              </TouchableOpacity>
+            </>
           ) : null}
           {round.orders.length > 0 ? (
             <TouchableOpacity onPress={copyList} style={styleCopyBar} testID="modal-copy">
@@ -461,10 +471,13 @@ export function RoundDetailBody({ round, onChange, onClose, usual, subscribe }) 
           ) : (
             <View>
               {usual ? (
-                <TouchableOpacity onPress={() => submit(usual)} disabled={busy} style={styleUsualPill} testID="modal-usual">
-                  <Text style={styleUsualPillLbl}>ADD MY COFFEE</Text>
-                  <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {usual}</Text>
-                </TouchableOpacity>
+                <>
+                  <CoffeeToggle value={orderChoice} onChange={setOrderChoice} secondary={secondary} testID="modal-toggle" />
+                  <TouchableOpacity onPress={() => submit(chosenText)} disabled={busy} style={styleUsualPill} testID="modal-usual">
+                    <Text style={styleUsualPillLbl}>ADD MY COFFEE</Text>
+                    <Text style={styleUsualPillTxt} numberOfLines={2}>☕  {chosenText}</Text>
+                  </TouchableOpacity>
+                </>
               ) : null}
               <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 10, letterSpacing: 2, fontWeight: "700", textAlign: "center", marginBottom: 6 }}>OR TYPE SOMETHING DIFFERENT</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>

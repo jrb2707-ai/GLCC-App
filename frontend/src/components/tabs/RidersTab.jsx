@@ -183,6 +183,7 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
   const [role, setRole] = useState(rider.role || "Member");
   const [bio, setBio] = useState(rider.bio || "");
   const [coffee, setCoffee] = useState(rider.coffee || "Medium Flat White");
+  const [secondaryCoffee, setSecondaryCoffee] = useState(rider.secondary_coffee || "");
   const [photo, setPhoto] = useState(rider.photo || null);
   const [memberSince, setMemberSince] = useState(() => {
     const src = rider.member_since || rider.created_at;
@@ -256,6 +257,9 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
         ? { name, coffee, photo, ...(memberSince ? { member_since: new Date(memberSince).toISOString() } : {}) }
         : { name, role, bio, photo };
       const { data } = await api.patch(url, body);
+      if (isMe && secondaryCoffee !== (rider.secondary_coffee || "")) {
+        await api.put("/profile/coffee-orders", { secondary_coffee: secondaryCoffee || null });
+      }
       if (isMe) await refreshMe();
       onSaved(data);
       toast("Profile saved");
@@ -418,6 +422,42 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
                       {c}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+            {isMe && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted">
+                    Secondary coffee (optional)
+                  </div>
+                  {secondaryCoffee && (
+                    <button
+                      onClick={() => setSecondaryCoffee("")}
+                      className="text-[10px] uppercase font-mono-stat tracking-widest text-status-cant"
+                      data-testid="profile-secondary-clear"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2" data-testid="profile-secondary-grid">
+                  {COFFEES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setSecondaryCoffee(c)}
+                      className={`text-left px-3 py-2 rounded-lg border text-xs ${
+                        secondaryCoffee === c
+                          ? "bg-accent-volt/15 border-accent-volt text-brand-accent"
+                          : "bg-bg-primary border-border-subtle text-text-secondary"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1 text-[10px] text-text-muted">
+                  Lets you switch to this at the Barista Tally instead of your usual.
                 </div>
               </div>
             )}

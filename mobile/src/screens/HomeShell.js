@@ -59,6 +59,7 @@ function LiveRoundOverlay() {
                   onChange={setRound}
                   onClose={dismiss}
                   usual={user?.coffee}
+                  secondary={user?.secondary_coffee}
                   subscribe={subscribe}
                 />
               )}
