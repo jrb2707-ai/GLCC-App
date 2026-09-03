@@ -411,6 +411,56 @@ async def _going_user_docs(ride: dict) -> list[dict]:
     return await db.users.find({"_id": {"$in": oids}}).to_list(200)
 
 
+async def _send_coffee_60s_nudges() -> int:
+    """Ping riders who RSVP'd `going` on the ride tied to a live coffee
+    round but haven't dropped an order yet, when the round's `close_at`
+    is coming up in 45-75s. Idempotent via `nudge_60s_sent_at`."""
+    now = now_utc()
+    window_start = now + timedelta(seconds=45)
+    window_end = now + timedelta(seconds=75)
+    cursor = db.coffee_rounds.find({
+        "close_at": {"$gte": window_start, "$lte": window_end},
+        "closed_manually_at": {"$exists": False},
+        "nudge_60s_sent_at": {"$exists": False},
+        "ride_id": {"$exists": True, "$ne": None},
+    })
+    count = 0
+    async for r in cursor:
+        try:
+            ride_id = r.get("ride_id")
+            if not ride_id:
+                continue
+            try:
+                ride = await db.rides.find_one({"_id": ObjectId(ride_id)})
+            except InvalidId:
+                ride = await db.rides.find_one({"id": ride_id})
+            if not ride:
+                continue
+            going = await _going_user_docs(ride)
+            already = {str(o.get("user_id")) for o in (r.get("orders") or []) if o.get("user_id")}
+            buyer_id = str(r.get("buyer_user_id") or "")
+            targets = [str(u["_id"]) for u in going if str(u["_id"]) not in already and str(u["_id"]) != buyer_id]
+            if targets:
+                buyer_name = r.get("buyer_name") or "Your peloton"
+                cafe = r.get("cafe_name") or "the café"
+                await push_to_users(
+                    targets,
+                    f"☕ 1 min left — {buyer_name}'s shout",
+                    f"Order at {cafe} before the tally locks.",
+                    data={"type": "coffee_nudge", "round_id": str(r["_id"])},
+                    category="coffee",
+                )
+            # Mark nudged even if targets was empty so we don't loop again.
+            await db.coffee_rounds.update_one(
+                {"_id": r["_id"]},
+                {"$set": {"nudge_60s_sent_at": now}},
+            )
+            count += 1
+        except Exception as exc:
+            log.warning("coffee 60s nudge failed for round %s: %s", r.get("_id"), exc)
+    return count
+
+
 async def _send_ride_reminder(ride: dict, going_users: list[dict]) -> int:
     """Email each `going` rider (with a real email + password_hash) a reminder."""
     if not RESEND_API_KEY:
@@ -1777,6 +1827,17 @@ async def list_riders(user: dict = Depends(get_current_user)):
             pending.append(serialize_rider(r, viewer=user))
         else:
             approved.append(serialize_rider(r, viewer=user))
+    # Attach each rider's highest earned Coffee jersey tier for the chip.
+    # `red` (25) → `pink` (50) → `yellow` (100) is the strict priority.
+    tier_order = {"red": 1, "pink": 2, "yellow": 3}
+    top_by_uid: dict = {}
+    async for j in db.jersey_achievements.find({}):
+        uid = str(j.get("rider_id"))
+        cur = top_by_uid.get(uid)
+        if not cur or tier_order.get(j.get("tier"), 0) > tier_order.get(cur, 0):
+            top_by_uid[uid] = j.get("tier")
+    for row in approved:
+        row["top_jersey_tier"] = top_by_uid.get(str(row.get("id"))) or None
     return {"riders": approved, "pending": pending if user.get("is_admin") else []}
 
 async def _send_invite_email(*, to_email: str, name: str, inviter_name: str, link: str) -> bool:
@@ -2271,16 +2332,17 @@ async def start_ride_round(
 async def get_ride_round(ride_id: str, user: dict = Depends(require_approved)):
     """Return the active round for this ride, or the most recent closed one
     (if it closed within the last 30 min so the buyer can still show the
-    barista). null if there's nothing to show."""
+    barista). null if there's nothing to show. `server_now` is included so
+    clients can drift-correct their countdown against the server clock."""
     active = await _active_round_for_ride(ride_id)
     if active:
-        return {"round": serialize_round(active)}
+        return {"round": serialize_round(active), "server_now": now_utc().isoformat()}
     thirty_min_ago = now_utc() - timedelta(minutes=30)
     recent = await db.coffee_rounds.find_one(
         {"ride_id": ride_id, "started_at": {"$gt": thirty_min_ago}},
         sort=[("started_at", -1)],
     )
-    return {"round": serialize_round(recent) if recent else None}
+    return {"round": serialize_round(recent) if recent else None, "server_now": now_utc().isoformat()}
 
 
 @api.post("/rides/{ride_id}/round/order")
@@ -3929,6 +3991,23 @@ async def on_startup():
                 log.warning("1h reminder loop error: %s", exc)
             await asyncio.sleep(600)
     app.state.hour_reminder_task = asyncio.create_task(_hour_reminder_loop())
+
+    # Coffee "60s left" nudge loop. Every 20 seconds we look for live rounds
+    # whose cutoff is coming up in the next 45–75s and haven't been nudged
+    # yet. We push a friendly ping to riders who RSVP'd `going` to the ride
+    # but haven't ordered — so they can slip an order in before the tally
+    # locks. Idempotent via `nudge_60s_sent_at`.
+    async def _coffee_60s_nudge_loop():
+        await asyncio.sleep(15)
+        while True:
+            try:
+                sent = await _send_coffee_60s_nudges()
+                if sent:
+                    log.info("Coffee 60s nudge: pushed for %s round(s)", sent)
+            except Exception as exc:
+                log.warning("Coffee 60s nudge loop error: %s", exc)
+            await asyncio.sleep(20)
+    app.state.coffee_nudge_task = asyncio.create_task(_coffee_60s_nudge_loop())
 
 @app.on_event("shutdown")
 async def on_shutdown():

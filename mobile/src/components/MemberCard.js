@@ -5,6 +5,28 @@ import { colors, radius, spacing } from "../constants/theme";
 import { pad4 } from "../lib/util";
 import { api, formatDetail } from "../lib/api";
 
+// Solid-fill jersey chip mirroring the web JerseyBadge. Big pill for the
+// Member Card since it lives inside a spacious meta row.
+const MEMBER_JERSEY_MAP = {
+  red:    { bg: "#EF4444", label: "RUBY ROASTER" },
+  pink:   { bg: "#EC4899", label: "PINK PELOTON" },
+  yellow: { bg: "#FBBF24", label: "YELLOW JERSEY" },
+};
+function MemberJerseyPill({ tier }) {
+  const j = MEMBER_JERSEY_MAP[tier];
+  if (!j) return null;
+  return (
+    <View
+      style={{ backgroundColor: j.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}
+      testID={`member-card-jersey-${tier}`}
+    >
+      <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900", letterSpacing: 2 }}>
+        {j.label}
+      </Text>
+    </View>
+  );
+}
+
 export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, canBlock, onBlockChange }) {
   const { width } = useWindowDimensions();
   const [busy, setBusy] = useState(false);
@@ -69,6 +91,12 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
             <MetaCell label="Role" value={rider.is_president ? "El Presidente" : rider.role || "Member"} />
             <MetaCell label="Since" value={joinedLabel} />
             <MetaCell label="Chapter" value="Grey Lynn" />
+            {rider.top_jersey_tier && (
+              <View style={[s.metaCell, { flexBasis: "100%", flexDirection: "row", alignItems: "center", gap: 8 }]} testID="member-card-jersey">
+                <Text style={s.metaLabel}>Jersey</Text>
+                <MemberJerseyPill tier={rider.top_jersey_tier} />
+              </View>
+            )}
             <MetaCell label="Coffee" value={rider.coffee || "—"} full />
             {onEditProfile && (
               <TouchableOpacity onPress={onEditProfile} style={s.editBtn} testID="member-card-edit">

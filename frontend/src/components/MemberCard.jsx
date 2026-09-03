@@ -3,6 +3,7 @@ import { X, Pencil, Ban } from "lucide-react";
 import { api, formatDetail } from "../lib/api";
 import { toast } from "sonner";
 import { usePullToDismiss } from "../lib/usePullToDismiss";
+import { JerseyBadge } from "./CoffeeStats";
 
 // Rapha-style GLCC member card. Full-screen dark modal with a floating card,
 // club watermark, and permanent member number.
@@ -116,6 +117,15 @@ export default function MemberCard({ rider, onClose, onEditProfile, isBlocked, c
             <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Since</div>
             <div className="font-heading text-xs font-bold uppercase text-white mt-0.5 leading-tight" data-testid="member-card-since">{joinedLabel}</div>
           </div>
+          {rider.top_jersey_tier && (
+            <div
+              className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 col-span-2 flex items-center gap-2"
+              data-testid="member-card-jersey"
+            >
+              <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/75 flex-none">Jersey</div>
+              <JerseyBadge tier={rider.top_jersey_tier} size="lg" />
+            </div>
+          )}
           <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 col-span-2">
             <div className="text-[9px] font-mono-stat uppercase tracking-[0.3em] text-white/75">Coffee</div>
             <div className="text-xs text-white mt-0.5 truncate">{rider.coffee || "—"}</div>

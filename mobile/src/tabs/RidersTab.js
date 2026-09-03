@@ -13,6 +13,28 @@ import { pad4 } from "../lib/util";
 import { pickAvatar } from "../lib/imagePicker";
 import { readCache, writeCache } from "../lib/cache";
 
+// Coffee jersey chip — mirrors the web JerseyBadge. Solid tier colour, small
+// pill, always uppercased. Red = 25 rounds bought, Pink = 50, Yellow = 100.
+const JERSEY_MAP = {
+  red:    { bg: "#EF4444", label: "RUBY ROASTER" },
+  pink:   { bg: "#EC4899", label: "PINK PELOTON" },
+  yellow: { bg: "#FBBF24", label: "YELLOW JERSEY" },
+};
+function JerseyPill({ tier }) {
+  const j = JERSEY_MAP[tier];
+  if (!j) return null;
+  return (
+    <View
+      style={{ backgroundColor: j.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 }}
+      testID={`jersey-${tier}`}
+    >
+      <Text style={{ color: "#fff", fontSize: 8, fontWeight: "900", letterSpacing: 1.5 }}>
+        {j.label}
+      </Text>
+    </View>
+  );
+}
+
 export default function RidersTab() {
   const { user, refreshMe, logout } = useAuth();
   const { subscribe } = useEvents();
@@ -178,6 +200,7 @@ export default function RidersTab() {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Text style={s.name}>{r.name}</Text>
+              {r.top_jersey_tier && <JerseyPill tier={r.top_jersey_tier} />}
               {r.is_admin && (
                 <View style={r.is_president ? s.badgePrez : s.badge}>
                   <Text style={r.is_president ? s.badgePrezTxt : s.badgeTxt}>
@@ -391,6 +414,7 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
                 <Text style={s.pName}>{rider.name}</Text>
                 <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
                   <Text style={s.pRole}>{rider.role}</Text>
+                  {rider.top_jersey_tier && <JerseyPill tier={rider.top_jersey_tier} />}
                   {rider.is_admin && (
                     <View style={rider.is_president ? s.badgePrez : s.badge}>
                       <Text style={rider.is_president ? s.badgePrezTxt : s.badgeTxt}>

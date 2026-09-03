@@ -8,6 +8,7 @@ import { usePullToDismiss } from "../../lib/usePullToDismiss";
 import { Check, X, Shield, Trash2, UserPlus, Camera, KeyRound, Mail, MessageCircle, CreditCard } from "lucide-react";
 import MemberCard from "../MemberCard";
 import CafeRulesAdmin from "../CafeRulesAdmin";
+import { JerseyBadge } from "../CoffeeStats";
 import { toast } from "sonner";
 
 function ChangeEmailBlock() {
@@ -339,8 +340,9 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
           </div>
           <div>
             <div className="font-heading text-2xl font-black uppercase leading-none">{rider.name}</div>
-            <div className="flex items-center gap-1.5 mt-1">
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               <span className="text-[10px] uppercase font-mono-stat tracking-widest text-text-secondary">{rider.role}</span>
+              {rider.top_jersey_tier && <JerseyBadge tier={rider.top_jersey_tier} />}
               {rider.is_admin && (
                 <span className={`text-[9px] uppercase tracking-widest font-bold border px-1.5 rounded ${
                   rider.is_president
@@ -1083,6 +1085,7 @@ export default function RidersTab() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <div className="text-sm font-semibold truncate">{r.name}</div>
+                {r.top_jersey_tier && <JerseyBadge tier={r.top_jersey_tier} />}
                 {r.is_admin && (
                   <span className={`text-[9px] uppercase tracking-widest font-bold border px-1.5 rounded ${
                     r.is_president
