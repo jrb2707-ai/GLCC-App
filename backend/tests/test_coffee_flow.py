@@ -15,7 +15,7 @@ BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or _read_env("/app/frontend/
 API = f"{BASE_URL}/api"
 
 JB_EMAIL = "jb@glcc.club"
-JB_PASSWORD = "president123"
+JB_PASSWORD = "Roenick2707"
 SAM_EMAIL = "sam@glcc.club"
 SAM_PASSWORD = "cycle123"
 
