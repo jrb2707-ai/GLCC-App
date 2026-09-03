@@ -155,6 +155,13 @@ def serialize_rider(doc: dict, *, viewer: Optional[dict] = None) -> dict:
         "has_seen_notification_prompt": bool(doc.get("has_seen_notification_prompt")),
         "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
         "member_since": (doc.get("member_since") or doc.get("created_at")).isoformat() if (doc.get("member_since") or doc.get("created_at")) else None,
+        # Admin-only in the UI (gated client-side, same as the reset control
+        # these accompany) — not sensitive data, just not relevant to a
+        # regular member's own view of another rider.
+        "lifetime_rounds_bought": doc.get("lifetime_rounds_bought", 0),
+        "lifetime_rounds_joined": doc.get("lifetime_rounds_joined", 0),
+        "bought_reset_by_name": doc.get("bought_reset_by_name"),
+        "bought_reset_at": doc.get("bought_reset_at").isoformat() if doc.get("bought_reset_at") else None,
     }
 
 def serialize_ride(doc: dict) -> dict:
@@ -274,6 +281,15 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
+
+async def require_admin_or_president(user: dict = Depends(get_current_user)) -> dict:
+    # is_president has always implied is_admin so far (only ever set together
+    # in seed()), but this checks both explicitly rather than relying on that
+    # invariant holding forever — e.g. if a presidency-transfer flow is ever
+    # added that doesn't also grant admin.
+    if not (user.get("is_admin") or user.get("is_president")):
         raise HTTPException(status_code=403, detail="Admin only")
     return user
 
@@ -2750,6 +2766,42 @@ async def coffee_leaderboard_reset(payload: dict = Body(default={}), admin: dict
     }
     await db.coffee_leaderboard_resets.insert_one(doc)
     return {"ok": True, "scope": scope, "reset_at": doc["reset_at"].isoformat()}
+
+
+@api.post("/admin/riders/{rider_id}/coffee/reset-bought")
+async def reset_rider_rounds_bought(rider_id: str, admin: dict = Depends(require_admin_or_president)):
+    """Admin/El Prez only. Zeroes a rider's lifetime_rounds_bought — a
+    correction tool for stats that drifted or were seeded wrong, not a
+    moderation action. Deliberately does NOT touch jersey_achievements:
+    jerseys already earned are insert-once and immutable by design, and
+    nothing in the minting path reads this counter to decide whether a
+    jersey should still exist, so a reset can never cost (or duplicate) an
+    earned jersey. Logged the same way a round records who closed it."""
+    try:
+        oid = ObjectId(rider_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid rider id")
+    target = await db.users.find_one({"_id": oid})
+    if not target:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    now = now_utc()
+    await db.users.update_one(
+        {"_id": oid},
+        {"$set": {
+            "lifetime_rounds_bought": 0,
+            "bought_reset_by_user_id": str(admin["_id"]),
+            "bought_reset_by_name": admin.get("name"),
+            "bought_reset_at": now,
+        }},
+    )
+    updated = await db.users.find_one({"_id": oid})
+    await manager.broadcast({"type": "rider.updated", "rider": serialize_rider(updated)})
+    return {
+        "ok": True,
+        "lifetime_rounds_bought": 0,
+        "bought_reset_by_name": admin.get("name"),
+        "bought_reset_at": now.isoformat(),
+    }
 
 
 @api.get("/coffee/history/me")
