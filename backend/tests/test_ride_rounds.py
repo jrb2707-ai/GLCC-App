@@ -93,6 +93,9 @@ def ride(jb, mongo):
     # Fallback: insert manual ride via API (admin only)
     payload = {
         "name": "TEST_ride_for_rounds",
+        "day": "MON",
+        "time": "6:00 AM",
+        "location": "Test Start Point",
         "route": "Loop",
         "distance": "30 km",
         "elevation": "300 m",
