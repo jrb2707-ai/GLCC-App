@@ -35,8 +35,8 @@ BASE_URL = (
 ).rstrip("/")
 API = f"{BASE_URL}/api"
 
-MONGO_URL = _read_env("/app/backend/.env", "MONGO_URL")
-DB_NAME = _read_env("/app/backend/.env", "DB_NAME")
+MONGO_URL = os.environ.get("MONGO_URL") or _read_env("/app/backend/.env", "MONGO_URL")
+DB_NAME = os.environ.get("DB_NAME") or _read_env("/app/backend/.env", "DB_NAME")
 
 JB = ("jb@glcc.club", "Roenick2707")
 SAM = ("sam@glcc.club", "cycle123")
