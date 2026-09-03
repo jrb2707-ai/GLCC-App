@@ -5,3 +5,7 @@ credentials.json
 *.pem
 *.key
 .credentials
+.venv/
+venv/
+__pycache__/
+*.pyc
