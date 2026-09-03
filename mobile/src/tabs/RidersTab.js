@@ -268,11 +268,43 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
   const [deletePwd, setDeletePwd] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [boughtCount, setBoughtCount] = useState(rider.lifetime_rounds_bought ?? 0);
+  const [boughtResetInfo, setBoughtResetInfo] = useState(
+    rider.bought_reset_by_name ? { name: rider.bought_reset_by_name, at: rider.bought_reset_at } : null,
+  );
+  const [resettingBought, setResettingBought] = useState(false);
   const isMe = rider.id === user?.id;
   const selfPending = isMe && user?.status === "pending";
   const canEdit = (user?.is_admin || isMe) && !selfPending;
   const canEditPhoto = user?.is_admin && !isMe; // matches web parity
   const isPresident = user?.is_president;
+  // Admin/El Prez only — never shown to a regular member, even on their own
+  // profile. This is a stats-correction tool, not a self-service control.
+  const canResetBought = user?.is_admin || user?.is_president;
+
+  function resetBought() {
+    if (resettingBought) return;
+    Alert.alert(
+      "Reset Rounds Bought?",
+      `${rider.name}'s Rounds Bought goes back to 0. Jerseys already earned are not affected.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset", style: "destructive",
+          onPress: async () => {
+            setResettingBought(true);
+            try {
+              const { data } = await api.post(`/admin/riders/${rider.id}/coffee/reset-bought`);
+              setBoughtCount(data.lifetime_rounds_bought);
+              setBoughtResetInfo({ name: data.bought_reset_by_name, at: data.bought_reset_at });
+            } catch (e) {
+              Alert.alert("Reset", formatDetail(e));
+            } finally { setResettingBought(false); }
+          },
+        },
+      ]
+    );
+  }
 
   async function toggleBlock() {
     try {
@@ -434,6 +466,28 @@ function ProfileModal({ rider, onClose, onSaved, onLogout, isBlocked }) {
                 {uploading && <Text style={s.uploadingTxt}>RESIZING…</Text>}
               </View>
             </View>
+
+            {canResetBought && (
+              <View style={[s.sinceBox, { marginTop: 16 }]} testID="admin-rounds-bought">
+                <View>
+                  <Text style={s.miniLabel}>ROUNDS BOUGHT</Text>
+                  <Text style={{ color: colors.textPrimary, fontWeight: "900", fontSize: 18 }}>{boughtCount}</Text>
+                  {boughtResetInfo && (
+                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>
+                      Last reset by {boughtResetInfo.name} · {new Date(boughtResetInfo.at).toLocaleDateString()}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={resetBought}
+                  disabled={resettingBought || boughtCount === 0}
+                  style={[s.adminBtnDanger, (resettingBought || boughtCount === 0) && { opacity: 0.4 }]}
+                  testID="admin-reset-bought"
+                >
+                  <Text style={s.adminBtnDangerTxt}>{resettingBought ? "…" : "RESET"}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {!canEdit ? (
               <Text style={s.bioView}>{rider.bio || "No bio yet."}</Text>

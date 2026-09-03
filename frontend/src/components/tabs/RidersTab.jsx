@@ -196,12 +196,34 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
   const [deleting, setDeleting] = useState(false);
   const [confirmDeleteRider, setConfirmDeleteRider] = useState(false);
   const [deletingRider, setDeletingRider] = useState(false);
+  const [boughtCount, setBoughtCount] = useState(rider.lifetime_rounds_bought ?? 0);
+  const [boughtResetInfo, setBoughtResetInfo] = useState(
+    rider.bought_reset_by_name ? { name: rider.bought_reset_by_name, at: rider.bought_reset_at } : null,
+  );
+  const [resettingBought, setResettingBought] = useState(false);
   const fileRef = useRef(null);
   const isMe = rider.id === user.id;
   const selfPending = isMe && user.status === "pending";
   const canEditAll = (user.is_admin || isMe) && !selfPending;
   const isPresident = user.is_president;
+  // Admin/El Prez only — never shown to a regular member, even on their own
+  // profile. This is a stats-correction tool, not a self-service control.
+  const canResetBought = user.is_admin || user.is_president;
   const { handlers: dragHandlers, dy, dx, dragging } = usePullToDismiss({ onDismiss: onClose });
+
+  async function resetBought() {
+    if (resettingBought) return;
+    if (!window.confirm(`Reset ${rider.name}'s Rounds Bought to 0? Jerseys already earned are not affected.`)) return;
+    setResettingBought(true);
+    try {
+      const { data } = await api.post(`/admin/riders/${rider.id}/coffee/reset-bought`);
+      setBoughtCount(data.lifetime_rounds_bought);
+      setBoughtResetInfo({ name: data.bought_reset_by_name, at: data.bought_reset_at });
+      toast("Rounds Bought reset to 0");
+    } catch (e) {
+      toast.error(formatDetail(e));
+    } finally { setResettingBought(false); }
+  }
 
   async function toggleBlock() {
     try {
@@ -374,6 +396,31 @@ function ProfileModal({ rider, onClose, onSaved, isBlocked, onLogout, onBlockCha
             )}
           </div>
         </div>
+
+        {canResetBought && (
+          <div
+            className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border-subtle bg-bg-primary px-3 py-2.5"
+            data-testid="admin-rounds-bought"
+          >
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase font-mono-stat tracking-widest text-text-muted">Rounds Bought</div>
+              <div className="font-heading text-lg font-black text-text-primary tabular-nums">{boughtCount}</div>
+              {boughtResetInfo && (
+                <div className="text-[10px] text-text-muted mt-0.5">
+                  Last reset by {boughtResetInfo.name} · {new Date(boughtResetInfo.at).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={resetBought}
+              disabled={resettingBought || boughtCount === 0}
+              className="shrink-0 text-[10px] font-black uppercase tracking-widest bg-bg-secondary border border-status-cant/40 text-status-cant px-3 py-2 rounded-lg active:scale-95 disabled:opacity-40"
+              data-testid="admin-reset-bought"
+            >
+              {resettingBought ? "…" : "Reset"}
+            </button>
+          </div>
+        )}
 
         {!canEditAll ? (
           <div className="mt-4 text-sm text-text-secondary" data-testid="profile-view-only">{rider.bio || "No bio yet."}</div>
